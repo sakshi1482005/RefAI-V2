@@ -1,0 +1,3499 @@
+:root {
+  color-scheme: light;
+  --ink: #12131a;
+  --muted: #626978;
+  --soft: #768196;
+  --line: #9ab7f6;
+  --paper: #acb2f9;
+  --wash: #b1bdfc;
+  --wash-2: #9abaf4;
+  --blue: #000000;
+  --blue-dark: #000000;
+  --green: #0e9368;
+  --amber: #a86805;
+  --violet: #6d4aff;
+  --shadow-sm: 0 8px 24px rgba(28, 33, 48, 0.08);
+  --shadow-md: 0 24px 70px rgba(34, 40, 59, 0.12);
+  --radius: 20px;
+  --radius-sm: 12px;
+  --max: 1180px;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(
+      circle at 10% 0%,
+      rgba(36, 87, 255, 0.08),
+      transparent 28rem
+    ),
+    linear-gradient(180deg, #ffffff 0%, #ffffff 34%, #ffffff 100%);
+  letter-spacing: 0;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image:
+    linear-gradient(rgba(18, 19, 26, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 19, 26, 0.09) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center top;
+  pointer-events: none;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    ellipse 90% 60% at 50% 0%,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.55) 55%,
+    #ffffff 100%
+  );
+  pointer-events: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.shell {
+  width: min(var(--max), calc(100% - 40px));
+  margin: 0 auto;
+}
+
+.nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 8px 0;
+  background: rgba(251, 252, 255, 0.82);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(231, 234, 240, 0.82);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  min-height: 48px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: 21px;
+}
+
+.mark {
+  width: 34px;
+  height: 34px;
+  display: block;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  color: #4e5563;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nav-links a {
+  position: relative;
+  padding: 4px 2px;
+  transition: color 0.2s ease;
+}
+.nav-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 100%;
+  bottom: -2px;
+  height: 2px;
+  background: var(--blue);
+  border-radius: 2px;
+  transition: right 0.25s ease;
+}
+.nav-links a:hover {
+  color: var(--ink);
+}
+.nav-links a:hover::after {
+  right: 0;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  min-height: 44px;
+  padding: 0 18px;
+  font-weight: 800;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease,
+    background 0.22s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+}
+.btn:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.btn-primary {
+  color: #fff;
+  background: #111827;
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.18);
+}
+.btn-primary:hover {
+  background: #000000;
+  box-shadow: 0 16px 42px rgba(36, 87, 255, 0.24);
+}
+.btn-secondary {
+  color: #1d2430;
+  background: #fff;
+  border-color: var(--line);
+  box-shadow: var(--shadow-sm);
+}
+.btn-secondary:hover {
+  border-color: #c7d1e3;
+}
+.btn-plain {
+  padding: 0 8px;
+  color: #404757;
+}
+.btn-plain:hover {
+  color: var(--ink);
+}
+
+.hero {
+  padding: 52px 0 66px;
+  overflow: hidden;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.98fr) minmax(400px, 0.92fr);
+  gap: 54px;
+  align-items: center;
+}
+
+.eyebrow {
+  margin-bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 1px solid #dfe5f1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #394153;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 10px 30px rgba(36, 87, 255, 0.06);
+}
+
+.eyebrow i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 5px rgba(14, 147, 104, 0.1);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+h1 {
+  margin-top: 20px;
+  max-width: 760px;
+  font-size: clamp(44px, 5vw, 64px);
+  line-height: 1;
+  font-weight: 700;
+}
+
+.hero-copy {
+  margin: 18px 0 0;
+  max-width: 620px;
+  color: #535b6b;
+  font-size: clamp(16px, 1.8vw, 19px);
+  line-height: 1.6;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 13px;
+  margin-top: 22px;
+}
+
+.mockup-stage {
+  margin-top: -30px;
+  position: relative;
+  min-height: 460px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1400px;
+}
+
+.mockup-stage::before {
+  content: "";
+  position: absolute;
+  inset: 14% -6% 8% 10%;
+  background: linear-gradient(
+    135deg,
+    rgba(36, 87, 255, 0.14),
+    rgba(14, 147, 104, 0.1)
+  );
+  filter: blur(44px);
+  transform: rotate(-8deg);
+  z-index: -1;
+}
+
+/* AFTER */
+.browser {
+  position: relative;
+  width: min(640px, 100%);
+  margin: 0 auto;
+  border: 1px solid #dde3ed;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--shadow-md);
+  transform: none;
+  transition: box-shadow 0.35s ease;
+  cursor: default;
+}
+
+.browser:hover,
+.browser.is-tilting {
+  box-shadow: 0 30px 80px rgba(34, 40, 59, 0.18);
+}
+
+.browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 13px;
+  border-bottom: 1px solid #e8ebf1;
+  background: #fbfcff;
+}
+
+.traffic {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #d8dee9;
+}
+.traffic:nth-child(1) {
+  background: #fb6a5f;
+}
+.traffic:nth-child(2) {
+  background: #f4c044;
+}
+.traffic:nth-child(3) {
+  background: #35c26b;
+}
+
+.dash {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  min-height: 340px;
+}
+
+.side {
+  border-right: 1px solid #edf0f5;
+  padding: 15px 12px;
+  background: #fbfcff;
+}
+
+.side-title {
+  font-size: 10px;
+  color: #8991a1;
+  text-transform: uppercase;
+  font-weight: 800;
+  margin-bottom: 12px;
+  letter-spacing: 0.04em;
+}
+
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  margin: 5px 0;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: #566071;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.side-item.active {
+  color: #111827;
+  background: #eef4ff;
+}
+
+.tiny-icon {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  background: #dbe5ff;
+}
+
+.dash-main {
+  padding: 16px;
+  background: #fff;
+}
+
+.dash-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.dash-kicker {
+  color: var(--soft);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dash-title {
+  margin-top: 4px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #effaf5;
+  color: #08714f;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.metric-card,
+.summary-card {
+  border: 1px solid #e8edf5;
+  border-radius: 13px;
+  padding: 12px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(25, 31, 44, 0.04);
+}
+
+.metric-label {
+  color: #727b8d;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.score {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 8px 0 10px;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.score span {
+  color: #7d8797;
+  font-size: 12px;
+}
+
+.meter {
+  height: 6px;
+  border-radius: 999px;
+  background: #edf1f7;
+  overflow: hidden;
+}
+
+.meter > i {
+  display: block;
+  height: 100%;
+  width: 86%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+}
+
+.skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.skill {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #f4f6fa;
+  color: #3f4756;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+.readiness {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 10px;
+}
+
+.summary-card {
+  background: linear-gradient(180deg, #fcfdff, #f7faff);
+}
+
+.summary-text {
+  margin: 8px 0 0;
+  color: #485164;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #2457ff, #35c26b);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+section {
+  padding: 88px 0;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 28px;
+  margin-bottom: 34px;
+}
+
+.section-head.center {
+  text-align: center;
+  display: block;
+  max-width: 760px;
+  margin: 0 auto 42px;
+}
+
+h2 {
+  margin-top: 10px;
+  font-size: clamp(34px, 4.4vw, 56px);
+  line-height: 1.02;
+  font-weight: 700;
+}
+
+.section-copy {
+  margin: 14px 0 0;
+  max-width: 620px;
+  color: #596273;
+  font-size: 17px;
+  line-height: 1.68;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.feature-card {
+  position: relative;
+  min-height: 264px;
+  border: 1px solid #e5e9f1;
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 26px;
+  box-shadow: 0 14px 34px rgba(30, 36, 52, 0.055);
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+  overflow: hidden;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+  border-color: #d7dfec;
+  box-shadow: 0 24px 56px rgba(30, 36, 52, 0.1);
+}
+
+h3 {
+  font-size: 23px;
+  line-height: 1.16;
+  font-weight: 700;
+}
+
+.feature-card p {
+  margin: 12px 0 0;
+  color: #5e6675;
+  line-height: 1.65;
+  font-size: 15px;
+}
+
+.product-panel {
+  border: 1px solid #e7ecf4;
+  border-radius: 18px;
+  background: #fbfcff;
+  padding: 18px;
+}
+
+.panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 0;
+  border-bottom: 1px solid #edf1f6;
+}
+.panel-row:last-child {
+  border-bottom: 0;
+}
+.panel-row b {
+  font-size: 13px;
+}
+.panel-row span {
+  color: #737c8b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.site-footer {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid #e6eaf2;
+  background: #fbfcff;
+  padding: 56px 0 28px;
+}
+
+.footer-watermark {
+  position: absolute;
+  right: -60px;
+  bottom: -120px;
+  width: 380px;
+  height: 380px;
+  opacity: 0.035;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.footer-grid,
+.footer-stats,
+.footer-bottom {
+  position: relative;
+  z-index: 1;
+}
+
+.footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 32px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.footer-brand .brand {
+  margin-bottom: 12px;
+}
+
+.footer-tagline {
+  margin: 0;
+  max-width: 260px;
+  color: black;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.footer-heading {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+
+.footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.footer-col a {
+  color: #626978;
+  font-size: 14px;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+.footer-col a:hover {
+  color: var(--blue);
+}
+
+.footer-stats {
+  display: flex;
+  gap: 48px;
+  padding: 32px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-value {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #8891a0;
+  font-weight: 600;
+}
+
+.footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 22px;
+  color: #8891a0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.footer-social {
+  display: flex;
+  gap: 18px;
+}
+.footer-social a {
+  color: #8891a0;
+  transition: color 0.2s ease;
+}
+.footer-social a:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 760px) {
+  .footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .footer-brand {
+    grid-column: 1 / -1;
+  }
+  .footer-stats {
+    flex-wrap: wrap;
+    gap: 28px;
+  }
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .footer-watermark {
+    width: 260px;
+    height: 260px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-value {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 1020px) {
+  .nav-links {
+    display: none;
+  }
+  .hero {
+    padding-top: 62px;
+  }
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+  .mockup-stage {
+    min-height: auto;
+    padding: 30px 0 60px;
+  }
+  .browser {
+    transform: none;
+  }
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .shell {
+    width: min(100% - 28px, var(--max));
+  }
+  .nav-actions .btn-plain {
+    display: none;
+  }
+  .btn {
+    min-height: 42px;
+    padding: 0 14px;
+  }
+  .hero {
+    padding: 44px 0 54px;
+  }
+  h1 {
+    font-size: clamp(43px, 14vw, 58px);
+  }
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dash {
+    grid-template-columns: 1fr;
+  }
+  .side {
+    display: none;
+  }
+  .dash-grid,
+  .readiness {
+    grid-template-columns: 1fr;
+  }
+  .dash-main {
+    padding: 16px;
+  }
+  .dash-head {
+    flex-direction: column;
+  }
+  section {
+    padding: 64px 0;
+  }
+  .section-head {
+    display: block;
+  }
+}
+
+/* Final landing polish layer: keeps the existing visual language intact. */
+.hero h1,
+section h2,
+section h3 {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.hero h1 {
+  margin: 20px 0 0;
+  max-width: 760px;
+  font-size: clamp(50px, 5.7vw, 74px);
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+section h2 {
+  margin-top: 10px;
+  font-size: clamp(34px, 4.2vw, 54px);
+  line-height: 1.03;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+section h3 {
+  font-size: 23px;
+  line-height: 1.16;
+  font-weight: 700;
+}
+
+.hero-copy,
+.section-copy,
+.feature-card p,
+.summary-text {
+  text-wrap: pretty;
+}
+
+.hero {
+  position: relative;
+  padding: 68px 0 56px;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  width: min(940px, 92vw);
+  height: 500px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(36, 87, 255, 0.075),
+    rgba(255, 255, 255, 0) 68%
+  );
+  pointer-events: none;
+}
+
+.hero-grid {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.9fr);
+  gap: 60px;
+}
+
+.eyebrow,
+.hero-proof-strip div,
+.metric-card,
+.summary-card,
+.feature-card,
+.product-panel {
+  background-color: #fff;
+}
+
+.btn {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.btn-primary {
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
+}
+
+.btn-primary:active,
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
+.hero-proof-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 520px;
+  margin-top: 24px;
+}
+
+.hero-proof-strip div {
+  border: 1px solid #e4e9f2;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 26px rgba(20, 28, 46, 0.045);
+  transition:
+    transform 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.hero-proof-strip div:hover {
+  transform: translateY(-2px);
+  border-color: #d3dbea;
+}
+
+.hero-proof-strip strong {
+  display: block;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+.hero-proof-strip span {
+  display: block;
+  margin-top: 3px;
+  color: #737c8d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.browser {
+  width: min(460px, 100%);
+}
+
+.feature-card {
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+  border-color: #000000;
+  box-shadow: 0 24px 58px rgba(20, 28, 46, 0.1);
+}
+
+.site-footer {
+  background: #fbfcff;
+  border-top: 1px solid #e6eaf2;
+  color: var(--ink);
+}
+
+.site-footer .brand,
+.site-footer .footer-heading,
+.site-footer .stat-value {
+  color: var(--ink);
+}
+
+.footer-tagline,
+.footer-col a,
+.footer-bottom,
+.stat-label {
+  color: black;
+}
+
+.footer-grid,
+.footer-stats {
+  border-color: #000000;
+}
+
+.footer-col a:hover,
+.footer-social a:hover {
+  color: var(--blue);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fade {
+    animation: refaiFade 0.7s ease both;
+  }
+
+  .delay-1 {
+    animation-delay: 0.08s;
+  }
+  .delay-2 {
+    animation-delay: 0.16s;
+  }
+  .delay-3 {
+    animation-delay: 0.24s;
+  }
+}
+
+@keyframes refaiFade {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1020px) {
+  .hero {
+    padding-bottom: 42px;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .mockup-stage {
+    padding-bottom: 18px;
+  }
+
+  .browser {
+    width: min(560px, 100%);
+  }
+}
+
+@media (max-width: 760px) {
+  .nav {
+    min-height: 54px;
+  }
+
+  .brand {
+    font-size: 20px;
+  }
+
+  .mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .hero {
+    padding: 46px 0 34px;
+  }
+
+  .hero h1 {
+    max-width: 100%;
+    font-size: clamp(37px, 10.6vw, 45px);
+    line-height: 1;
+  }
+
+  .hero-copy {
+    max-width: 100%;
+    font-size: 16px;
+    line-height: 1.62;
+  }
+
+  .hero-actions .btn {
+    width: 100%;
+  }
+
+  .hero-proof-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .mockup-stage {
+    padding-top: 22px;
+  }
+
+  .score {
+    font-size: 34px;
+  }
+}
+
+/* ============================================================
+   ADDITIONS ONLY — append the block below to the END of your
+   existing CSS file. Nothing above this needs to change.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap");
+
+/* Elegant editorial italic serif for the single highlighted word in the hero heading */
+.hero-serif-italic {
+  font-family: "Cormorant Garamond", "Playfair Display", Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Trust strip: avatar stack + copy, sits directly below the hero CTA buttons */
+.trust-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.avatar-stack {
+  display: flex;
+  align-items: center;
+}
+
+.mini-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #dde3ee, #cbd3e2);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(20, 28, 46, 0.1);
+  margin-left: -9px;
+}
+
+.mini-avatar:first-child {
+  margin-left: 0;
+}
+
+.mini-avatar.count-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111827;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.trust-strip-text {
+  color: black;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.trust-divider {
+  width: 1px;
+  height: 16px;
+  background: #d7dce6;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #35c26b;
+  box-shadow: 0 0 0 4px rgba(53, 194, 107, 0.14);
+}
+
+@media (max-width: 760px) {
+  .trust-strip {
+    gap: 10px;
+  }
+  .trust-strip-text {
+    font-size: 13px;
+  }
+}
+
+/* ============================================================
+   ROUND 3 ADDITIONS — Trust Card content now matches the
+   reference exactly (minus the floating overlay boxes).
+   Append to the END of your stylesheet.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&display=swap");
+
+/* Monospace, letter-spaced section labels (REFERRAL RISK / TOP SKILLS / MISSING SKILLS) */
+.card-label-mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 700;
+  color: #8891a0;
+}
+
+/* Real breadcrumb + status inside the browser chrome bar */
+.address-text {
+  flex: 1;
+  margin-left: 8px;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #8891a0;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.analyzing-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b6478;
+  white-space: nowrap;
+}
+
+.analyzing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #35c26b;
+  box-shadow: 0 0 0 3px rgba(53, 194, 107, 0.16);
+}
+
+/* Dark chip variant for matched skills */
+.skill.skill-dark {
+  background: #111827;
+  color: #fff;
+}
+
+/* Referral Risk: stat trio + single low/medium/high bar */
+.risk-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.risk-stat-label {
+  display: block;
+  color: #8891a0;
+  font-size: 9.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.risk-stat-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.risk-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #edf1f7;
+  overflow: hidden;
+  margin-top: 14px;
+}
+
+.risk-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #0e9368;
+}
+
+.risk-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #8891a0;
+}
+
+/* Missing Skills: label/value row + short accent bar (no track) */
+.missing-skill-row + .missing-skill-row {
+  margin-top: 14px;
+}
+
+.missing-skill-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.missing-skill-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.mini-bar {
+  height: 4px;
+  border-radius: 999px;
+  margin-top: 6px;
+}
+
+.mini-bar.amber {
+  background: var(--amber);
+}
+
+/* Candidate Trust Card footer: icon + title + plain verification line */
+.trust-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.trust-footer-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #eef4ff;
+  color: #2457ff;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.trust-card-title {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+/* ============================================================
+   ROUND 4 ADDITIONS — infinite auto-scrolling logo marquee,
+   replacing the static "Built for referrals..." row.
+   Append to the END of your stylesheet.
+   ============================================================ */
+
+.logo-marquee-wrap {
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.logo-marquee-label {
+  display: block;
+  text-align: center;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 11px;
+  font-weight: 700;
+  color: #a3abba;
+  margin-bottom: 16px;
+}
+
+.logo-marquee {
+  position: relative;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+}
+
+.logo-marquee-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  animation: logoMarqueeScroll 22s linear infinite;
+}
+
+.logo-marquee-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(18px, 3vw, 38px);
+  padding-right: clamp(18px, 3vw, 38px);
+}
+
+.logo-marquee-item {
+  color: #4f5868;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.logo-marquee-dot {
+  color: #c7cee0;
+  font-size: 9px;
+}
+
+@keyframes logoMarqueeScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.logo-marquee:hover .logo-marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-marquee-track {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .logo-marquee-item {
+    font-size: 14px;
+  }
+}
+
+/* ============================================================
+   ROUND 5 ADDITIONS — new About section content (Platform
+   Features / AI Resume Analyzer / Candidate Trust Card).
+   Append this block to the very END of your existing
+   stylesheet — nothing above it needs to change.
+   ============================================================ */
+
+/* Two-column variant of the existing 3-column card grid */
+.card-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Small spinning glyph inside the "Platform Features" eyebrow pill */
+.eyebrow-spinner {
+  display: inline-flex;
+  color: #8891a0;
+  font-size: 13px;
+  animation: aboutSpin 3s linear infinite;
+}
+
+@keyframes aboutSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Outlined icon square used by the two feature cards (replaces the dark numbered .icon for this section only) */
+.feature-icon-outline {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #e5e9f1;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  margin-bottom: 20px;
+}
+
+/* Small file icon inside the resume panel row */
+.panel-file-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid #e5e9f1;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  color: #566071;
+  flex: none;
+}
+
+/* Match / Skills / Risk mini metric row inside the resume preview panel */
+.mini-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mini-metric-grid .score {
+  font-size: 24px;
+  margin: 6px 0 10px;
+}
+
+/* Dashed segment bar for the Skills mini-card (e.g. 6/8 filled) */
+.segment-bar {
+  display: flex;
+  gap: 3px;
+}
+
+.segment-bar i {
+  display: block;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #edf1f7;
+}
+
+.segment-bar i.filled {
+  background: #111827;
+}
+
+/* Small green caption under the Risk mini-card ("Safe to refer") */
+.mini-caption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0e9368;
+}
+
+/* Person row inside the Candidate Trust Card preview panel */
+.trust-person-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.trust-person-row .avatar {
+  font-weight: 800;
+}
+
+.trust-person-row > div:nth-child(2) {
+  flex: 1;
+}
+
+/* Circular score ring ("87") next to the person row */
+.score-ring {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  display: grid;
+  place-items: center;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  flex: none;
+}
+
+/* Confidence / Tenure / Culture boxed stats inside the Trust Card panel */
+.stat-box-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.stat-box {
+  border: 1px solid #e8edf5;
+  border-radius: 11px;
+  background: #fff;
+  padding: 10px;
+  text-align: center;
+}
+
+/* "Verifiable · Signed by RefAI" footnote under the Trust Card panel */
+.panel-footnote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0e9368;
+}
+
+@media (max-width: 1020px) {
+  .card-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+/* ============================================================
+   COMPACT FONT SIZING — #about section only
+   ============================================================ */
+
+#about h3 {
+  font-size: 18px;
+}
+
+#about .feature-card > p {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+#about .card-label-mono {
+  font-size: 9px;
+}
+
+#about .panel-row b {
+  font-size: 11px;
+}
+
+#about .score-pill {
+  font-size: 9px;
+  padding: 4px 8px;
+}
+
+#about .mini-metric-grid .score {
+  font-size: 18px;
+}
+
+#about .mini-caption {
+  font-size: 10px;
+}
+
+#about .trust-person-row b {
+  font-size: 12px;
+}
+
+#about .metric-label,
+#about .risk-stat-label {
+  font-size: 9px;
+}
+
+#about .risk-stat-value {
+  font-size: 11px;
+}
+
+#about .score-ring {
+  width: 42px;
+  height: 42px;
+  font-size: 12px;
+}
+
+#about .panel-footnote {
+  font-size: 11px;
+}
+/* ============================================================
+   ROUND 6 ADDITIONS — Product Showcase section (Referral
+   Readiness Gate / AI Referral Message Generator / Employee
+   Dashboard). Append to the very END of your existing
+   stylesheet — nothing above it needs to change.
+   ============================================================ */
+
+/* ---- Card 1: Referral Readiness Gate ---- */
+
+.gate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gate-status {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.gate-meter {
+  height: 10px;
+  border-radius: 999px;
+  background: #edf1f7;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.gate-meter > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #111827;
+}
+
+.gate-checklist {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.check-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+
+/* ---- Card 2: AI Referral Message Generator ---- */
+
+.msg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.msg-ai-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.msg-box {
+  border: 1px solid #e7ecf4;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #3f4756;
+}
+
+.msg-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.msg-btn {
+  border: 1px solid #e5e9f1;
+  background: #fff;
+  color: #3f4756;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.msg-btn:hover {
+  transform: translateY(-1px);
+  border-color: #d7dfec;
+}
+
+.msg-btn-primary {
+  background: #111827;
+  color: #fff;
+  border-color: #111827;
+}
+
+.msg-btn-primary:hover {
+  background: #1f2937;
+}
+
+/* ---- Card 3: Employee Dashboard ---- */
+
+.queue-label {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.queue-list {
+  display: grid;
+  gap: 12px;
+}
+
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.queue-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #eef2f7;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.queue-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.queue-score {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.queue-score-high {
+  color: var(--green);
+}
+
+#product-showcase {
+  padding-top: 10px;
+  margin-top: -70px;
+}
+
+/* ============================================================
+   ROUND 7 ADDITIONS — 2-Week Learning Plan card + dark CTA box
+   row, sitting below the Product Showcase's three cards.
+   Append to the very END of your existing stylesheet — nothing
+   above it needs to change.
+   ============================================================ */
+
+.showcase-grid {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 22px;
+  margin-top: 18px;
+  align-items: stretch;
+}
+
+/* ---- Learning Plan roadmap panel ---- */
+
+.roadmap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.roadmap-progress-text {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8891a0;
+}
+
+.roadmap-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.roadmap-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.roadmap-check {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #111827;
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+
+.roadmap-radio {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #111827;
+  background: transparent;
+}
+
+.roadmap-radio.disabled {
+  border-color: #d7dce6;
+}
+
+.roadmap-task {
+  flex: 1;
+  color: var(--ink);
+}
+
+.roadmap-item.completed .roadmap-task {
+  color: #9aa4b8;
+  text-decoration: line-through;
+}
+
+.roadmap-item.disabled .roadmap-task {
+  color: #b7bfcd;
+}
+
+.roadmap-hours {
+  font-size: 12px;
+  font-weight: 700;
+  color: #9aa4b8;
+  flex: none;
+}
+
+.roadmap-next-tag {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--amber);
+  flex: none;
+}
+
+.roadmap-progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #edf1f7;
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.roadmap-progress-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #111827;
+}
+
+/* ---- Dark CTA box ---- */
+
+.showcase-cta-box {
+  position: relative;
+  border-radius: var(--radius);
+  background: #0b0f1a;
+  color: #fff;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 264px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.showcase-cta-heading {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.12;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+  max-width: 480px;
+}
+
+.showcase-cta-heading .hero-serif-italic {
+  color: #dfe3ec;
+}
+
+.showcase-cta-copy {
+  margin: 16px 0 0;
+  max-width: 460px;
+  color: #a7b0c2;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.showcase-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.showcase-btn-primary {
+  background: #fff;
+  color: #0b0f1a;
+}
+
+.showcase-btn-primary:hover {
+  background: #eef1f6;
+  transform: translateY(-2px);
+}
+
+.showcase-btn-secondary {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.showcase-btn-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 1020px) {
+  .showcase-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .showcase-cta-box {
+    padding: 28px 24px;
+  }
+  .showcase-cta-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ============================================================
+   COMPACT SIZING — smaller cards/fonts for the Round 6 (Referral
+   Readiness Gate / AI Referral Message Generator / Employee
+   Dashboard) and Round 7 (2-Week Learning Plan + dark CTA) cards.
+   Scoped to #product-showcase only — nothing else on the page
+   is affected. Insert this block right after the existing
+   Round 7 rules (before Round 8) in your stylesheet.
+   ============================================================ */
+
+#product-showcase .feature-card {
+  padding: 18px;
+  min-height: auto;
+}
+
+#product-showcase h3 {
+  font-size: 16px;
+}
+
+#product-showcase .feature-card > p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+#product-showcase .feature-icon-outline {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  margin-bottom: 14px;
+}
+
+#product-showcase .product-panel {
+  padding: 14px;
+}
+
+/* Card 1: Referral Readiness Gate */
+
+#product-showcase .gate-status {
+  font-size: 10.5px;
+}
+
+#product-showcase .gate-meter {
+  height: 7px;
+  margin-top: 8px;
+}
+
+#product-showcase .gate-checklist {
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#product-showcase .check-item {
+  font-size: 11px;
+  gap: 7px;
+}
+
+#product-showcase .check-icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* Card 2: AI Referral Message Generator */
+
+#product-showcase .msg-header {
+  margin-bottom: 8px;
+}
+
+#product-showcase .msg-ai-badge {
+  font-size: 9px;
+  padding: 3px 8px;
+}
+
+#product-showcase .msg-box {
+  padding: 10px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+#product-showcase .msg-actions {
+  gap: 6px;
+  margin-top: 10px;
+}
+
+#product-showcase .msg-btn {
+  padding: 6px 11px;
+  font-size: 10.5px;
+}
+
+/* Card 3: Employee Dashboard */
+
+#product-showcase .queue-label {
+  margin-bottom: 10px;
+}
+
+#product-showcase .queue-list {
+  gap: 9px;
+}
+
+#product-showcase .queue-row {
+  gap: 9px;
+}
+
+#product-showcase .queue-avatar {
+  width: 26px;
+  height: 26px;
+  font-size: 9.5px;
+}
+
+#product-showcase .queue-name,
+#product-showcase .queue-score {
+  font-size: 11.5px;
+}
+
+/* Card 4: 2-Week Learning Plan */
+
+#product-showcase .roadmap-progress-text {
+  font-size: 9.5px;
+}
+
+#product-showcase .roadmap-list {
+  gap: 11px;
+  margin-top: 12px;
+}
+
+#product-showcase .roadmap-item {
+  font-size: 11.5px;
+  gap: 9px;
+}
+
+#product-showcase .roadmap-check,
+#product-showcase .roadmap-radio {
+  width: 15px;
+  height: 15px;
+}
+
+#product-showcase .roadmap-hours,
+#product-showcase .roadmap-next-tag {
+  font-size: 10.5px;
+}
+
+#product-showcase .roadmap-progress-bar {
+  height: 5px;
+  margin-top: 14px;
+}
+
+/* Dark CTA box */
+
+#product-showcase .showcase-cta-box {
+  padding: 26px;
+  min-height: auto;
+}
+
+#product-showcase .showcase-cta-heading {
+  font-size: clamp(19px, 2.2vw, 24px);
+  max-width: 380px;
+}
+
+#product-showcase .showcase-cta-copy {
+  margin-top: 10px;
+  font-size: 12.5px;
+  max-width: 380px;
+}
+
+#product-showcase .showcase-cta-actions {
+  gap: 8px;
+  margin-top: 18px;
+}
+
+#product-showcase .showcase-cta-actions .btn {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 12.5px;
+}
+
+/* ============================================================
+   ROUND 8 ADDITIONS — "See RefAI in Action" section (AI Resume
+   Analyzer detailed preview + Candidate Trust Card detailed
+   preview). Most classes needed already exist from earlier
+   rounds (card-label-mono, skill, skill-dark, metric-card,
+   gate-row, gate-status, gate-meter, risk-bar, mini-bar,
+   missing-skill-line, missing-skill-tag, score-ring,
+   trust-person-row, stat-box-row, panel-file-icon,
+   feature-icon-outline, score-pill, segment-bar, mini-caption,
+   live-dot). This block only adds what's new.
+   Append to the very END of your existing stylesheet.
+   ============================================================ */
+
+.action-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.action-card-head .feature-icon-outline {
+  margin-bottom: 0;
+}
+
+.action-panel {
+  padding: 18px;
+}
+
+.action-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin: -18px -18px 16px -18px;
+  padding: 0 14px;
+  border-bottom: 1px solid #edf1f6;
+  border-radius: 18px 18px 0 0;
+  background: #fbfcff;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.action-span-2 {
+  grid-column: 1 / -1;
+}
+
+.action-muted-tag {
+  display: inline-block;
+  margin-top: 2px;
+  color: #8891a0;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.action-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.action-check {
+  margin-left: auto;
+  flex: none;
+  color: var(--green);
+  display: grid;
+  place-items: center;
+}
+
+.action-score-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.action-small-copy {
+  margin: 8px 0 0;
+  color: #5e6675;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.action-gap-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(168, 104, 5, 0.1);
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.action-footnote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  color: #5e6675;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.action-signed-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.action-signed-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.action-timestamp {
+  color: #b7bfcd;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   ROUND 9 ADDITIONS — compact/smaller sizing for the
+   "See RefAI in Action" section only. Scoped to #see-in-action
+   so nothing elsewhere on the page is affected.
+   Append to the very END of your existing stylesheet.
+   ============================================================ */
+
+#see-in-action .card-grid-2 {
+  gap: 14px;
+}
+
+#see-in-action .feature-card {
+  padding: 18px;
+  min-height: auto;
+}
+
+#see-in-action h3 {
+  font-size: 16px;
+}
+
+#see-in-action .feature-card > p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+#see-in-action .action-card-head {
+  margin-bottom: 14px;
+}
+
+#see-in-action .feature-icon-outline {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+#see-in-action .score-pill {
+  font-size: 9px;
+  padding: 4px 8px;
+  gap: 4px;
+}
+
+#see-in-action .action-panel {
+  padding: 14px;
+}
+
+#see-in-action .action-toolbar {
+  height: 30px;
+  margin: -14px -14px 12px -14px;
+  padding: 0 10px;
+  border-radius: 14px 14px 0 0;
+}
+
+#see-in-action .address-text {
+  font-size: 10px;
+}
+
+#see-in-action .analyzing-status {
+  font-size: 10px;
+}
+
+#see-in-action .traffic {
+  width: 7px;
+  height: 7px;
+}
+
+#see-in-action .action-grid {
+  gap: 8px;
+}
+
+#see-in-action .metric-card {
+  padding: 9px;
+  border-radius: 10px;
+}
+
+#see-in-action .card-label-mono {
+  font-size: 8.5px;
+}
+
+#see-in-action .action-muted-tag {
+  font-size: 9.5px;
+}
+
+#see-in-action .action-small-copy {
+  margin-top: 6px;
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+#see-in-action .action-file-row {
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#see-in-action .panel-file-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+#see-in-action .action-score-row {
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#see-in-action .skills {
+  gap: 4px;
+}
+
+#see-in-action .skill {
+  font-size: 8px;
+  padding: 4px 7px;
+}
+
+#see-in-action .segment-bar i {
+  height: 4px;
+}
+
+#see-in-action .action-gap-pill {
+  font-size: 9.5px;
+  padding: 3px 8px;
+}
+
+#see-in-action .missing-skill-line {
+  font-size: 11px;
+}
+
+#see-in-action .missing-skill-tag {
+  font-size: 9.5px;
+}
+
+#see-in-action .mini-bar {
+  height: 3px;
+  margin-top: 5px;
+}
+
+#see-in-action .missing-skill-row + .missing-skill-row {
+  margin-top: 10px;
+}
+
+#see-in-action .action-footnote {
+  margin-top: 12px;
+  gap: 6px;
+  font-size: 10.5px;
+}
+
+#see-in-action .action-footnote svg {
+  width: 11px;
+  height: 11px;
+}
+
+#see-in-action .gate-meter,
+#see-in-action .risk-bar {
+  height: 5px;
+}
+
+#see-in-action .trust-person-row {
+  gap: 8px;
+}
+
+#see-in-action .avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+#see-in-action .score-ring {
+  width: 38px;
+  height: 38px;
+  border-width: 1.5px;
+  font-size: 11px;
+}
+
+#see-in-action .stat-box-row {
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#see-in-action .stat-box {
+  padding: 8px;
+  border-radius: 9px;
+}
+
+#see-in-action .risk-stat-label {
+  font-size: 8.5px;
+}
+
+#see-in-action .risk-stat-value {
+  font-size: 11px;
+}
+
+#see-in-action .mini-caption {
+  font-size: 9.5px;
+}
+
+#see-in-action .gate-status {
+  font-size: 10.5px;
+}
+
+#see-in-action .action-signed-footer {
+  margin-top: 12px;
+}
+
+#see-in-action .action-signed-left,
+#see-in-action .action-timestamp {
+  font-size: 10px;
+}
+
+/* ============================================================
+   ROUND 10 ADDITIONS — Employee Dashboard queue card in
+   #see-in-action. Small font sizing throughout.
+   ============================================================ */
+
+.queue-card-span {
+  grid-column: 1 / -1;
+  margin-top: 24px;
+}
+
+.queue-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.queue-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-new-badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+.queue-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.queue-toggle-btn {
+  border: none;
+  background: transparent;
+  color: #8891a0;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.queue-toggle-btn.active {
+  background: #111827;
+  color: #fff;
+}
+
+.queue-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px solid #e5e9f1;
+  border-radius: 10px;
+  background: #fff;
+  color: #a3abba;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.queue-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.candidate-row {
+  border: 1px solid #e8edf5;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.candidate-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.queue-avatar {
+  flex: none;
+}
+
+.candidate-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.candidate-info b {
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.candidate-info .action-muted-tag {
+  font-size: 9.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-score {
+  font-size: 12px;
+  font-weight: 800;
+  flex: none;
+}
+
+.candidate-tags {
+  display: flex;
+  gap: 5px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.tag-risk,
+.tag-skill {
+  font-size: 9px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
+.candidate-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.cand-btn {
+  font-size: 9.5px;
+  padding: 7px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.cand-btn-accept {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.cand-btn-accept.disabled {
+  background: #f0f1f5;
+  border-color: #e5e9f1;
+  color: #b7bfcd;
+  cursor: not-allowed;
+}
+
+.cand-btn-view {
+  background: #fff;
+}
+
+@media (max-width: 640px) {
+  .queue-panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* ============================================================
+   ROUND 11 ADDITIONS — "How RefAI Works" 6-step timeline with
+   scroll-triggered reveal (Journey.tsx). Namespaced with hiw-
+   prefix so it never collides with existing .journey classes.
+   Append to the very END of your existing stylesheet.
+   ============================================================ */
+
+#how-it-works {
+  padding-top: 40px;
+}
+
+.hiw-track {
+  position: relative;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.hiw-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #dfe6f2;
+  transform: translateX(-50%);
+}
+
+.hiw-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+  padding: 46px 0;
+}
+
+.hiw-row--reverse .hiw-text {
+  order: 2;
+}
+.hiw-row--reverse .hiw-visual {
+  order: 1;
+}
+
+.hiw-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: #fff;
+  z-index: 2;
+}
+
+.hiw-dot::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.hiw-step-num {
+  display: block;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 700;
+  color: #8891a0;
+}
+
+.hiw-step-title {
+  margin-top: 6px;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.hiw-step-desc {
+  margin-top: 8px;
+  color: #5e6675;
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 320px;
+}
+
+.hiw-row--reverse .hiw-text {
+  text-align: left;
+}
+
+.hiw-panel {
+  border: 1px solid #e7ecf4;
+  border-radius: 16px;
+  background: #fbfcff;
+  padding: 16px;
+}
+
+.hiw-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.hiw-muted {
+  color: #8891a0;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.hiw-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hiw-file-row b {
+  display: block;
+  font-size: 12px;
+}
+
+.hiw-file-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid #e5e9f1;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  color: #566071;
+  flex: none;
+}
+
+.hiw-file-row > div {
+  flex: 1;
+}
+
+.hiw-uploaded-pill {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #effaf5;
+  color: #08714f;
+  font-size: 9.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hiw-dropzone {
+  margin-top: 14px;
+  border: 1px dashed #d7dfec;
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #a3abba;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hiw-role-box {
+  border: 1px solid #e7ecf4;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hiw-role-box b {
+  font-size: 12.5px;
+}
+
+.hiw-jd-box {
+  border: 1px solid #e7ecf4;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+
+.hiw-jd-box p {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #5e6675;
+}
+
+.hiw-jd-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hiw-btn {
+  border: 1px solid #e5e9f1;
+  border-radius: 999px;
+  background: #fff;
+  color: #3f4756;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.hiw-btn-dark {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.hiw-btn-accept {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.hiw-analyzing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--green);
+}
+
+.hiw-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #35c26b;
+  box-shadow: 0 0 0 3px rgba(53, 194, 107, 0.16);
+  flex: none;
+}
+
+.hiw-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+}
+
+.hiw-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #8891a0;
+}
+
+.hiw-checklist li.done {
+  color: #5e6675;
+}
+
+.hiw-checklist li.active {
+  color: var(--ink);
+}
+
+.hiw-check {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #111827;
+  color: #fff;
+  font-size: 9px;
+  display: grid;
+  place-items: center;
+}
+
+.hiw-radio {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid #111827;
+}
+
+.hiw-progress {
+  margin-top: 12px;
+  height: 5px;
+  border-radius: 999px;
+  background: #edf1f7;
+  overflow: hidden;
+}
+
+.hiw-progress > i {
+  display: block;
+  height: 100%;
+  background: #111827;
+}
+
+.hiw-trust-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hiw-trust-row > div:nth-child(2) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.hiw-trust-row b {
+  font-size: 12px;
+}
+
+.hiw-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #eef2f7;
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 10px;
+  flex: none;
+}
+
+.hiw-ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 11px;
+  flex: none;
+}
+
+.hiw-score-num {
+  font-size: 13px;
+  flex: none;
+}
+
+.hiw-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hiw-stat {
+  border: 1px solid #e8edf5;
+  border-radius: 9px;
+  background: #fff;
+  padding: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hiw-stat b {
+  font-size: 11.5px;
+}
+
+.hiw-stat b.green {
+  color: var(--green);
+}
+
+.hiw-footnote {
+  margin-top: 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.hiw-msg-box {
+  border: 1px solid #e7ecf4;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #3f4756;
+}
+
+.hiw-inline-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #5e6675;
+}
+
+/* NOTE: Journey.tsx uses `.hiw-btn-light` on several buttons (Import URL,
+   Edit, Copy, Decline) but no such class is defined — leaving this note
+   instead of guessing a style, since fixing it wasn't part of the cleanup. */
+
+/* ---- Scroll reveal effect ---- */
+
+.hiw-reveal {
+  opacity: 0;
+  transform: translateY(48px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+.hiw-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hiw-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .hiw-row,
+  .hiw-row--reverse {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 28px 0;
+  }
+  .hiw-row--reverse .hiw-text,
+  .hiw-row--reverse .hiw-visual {
+    order: initial;
+  }
+  .hiw-line {
+    left: 18px;
+  }
+  .hiw-dot {
+    left: 18px;
+  }
+  .hiw-step-desc {
+    max-width: 100%;
+  }
+  .hiw-row--reverse .hiw-text {
+    text-align: left;
+  }
+  .hiw-track {
+    padding-left: 34px;
+  }
+}
+
+/* ============================================================
+   ROUND 12 ADDITIONS — Site-wide scroll reveal utility.
+   Same visual language as the existing .hiw-reveal effect used
+   in "How RefAI Works", but generalized so it can be dropped on
+   ANY element site-wide: hero proof stats, feature cards in
+   #about / #product-showcase / #see-in-action, product panels,
+   footer stats, showcase CTA box, queue rows, etc.
+
+   HOW TO USE (HTML side):
+   1. Add class="reveal" to any card/element you want to animate.
+   2. For a grid/row of cards, add class="reveal" to each card AND
+      stagger them with reveal-delay-1, reveal-delay-2, etc. so
+      they don't all pop up at the exact same instant, e.g.:
+        <div class="feature-card reveal reveal-delay-1">...</div>
+        <div class="feature-card reveal reveal-delay-2">...</div>
+        <div class="feature-card reveal reveal-delay-3">...</div>
+   3. This CSS only defines the hidden/visible states — you still
+      need a few lines of JS (IntersectionObserver) to toggle the
+      "is-visible" class when an element scrolls into view. See
+      the reveal.js snippet provided alongside this file.
+
+   Append to the very END of your existing stylesheet.
+   ============================================================ */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(48px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Optional subtler variant for large panels/CTA boxes where a big
+   translateY feels heavy — fades + rises less */
+.reveal-soft {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+.reveal-soft.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger helpers — combine with .reveal on siblings inside the
+   same grid/row so cards animate in one after another */
+.reveal-delay-1 {
+  transition-delay: 0.08s;
+}
+.reveal-delay-2 {
+  transition-delay: 0.16s;
+}
+.reveal-delay-3 {
+  transition-delay: 0.24s;
+}
+.reveal-delay-4 {
+  transition-delay: 0.32s;
+}
+.reveal-delay-5 {
+  transition-delay: 0.4s;
+}
+.reveal-delay-6 {
+  transition-delay: 0.48s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-soft {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ============================================================
+   ROUND 13 ADDITIONS — label + rule row for the logo marquee,
+   matching reference (left-aligned label, line fills rest of
+   row, logos row sits below). Overrides earlier centered
+   .logo-marquee-label rule via cascade order.
+   ============================================================ */
+
+.logo-marquee-label-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.logo-marquee-label {
+  display: block;
+  text-align: left;
+  margin-bottom: 0;
+  flex: none;
+  white-space: nowrap;
+}
+
+.logo-marquee-line {
+  flex: 1;
+  height: 1px;
+  background: #e2e6ee;
+}
+
+.logo-marquee-item {
+  color: #2a2f3a;
+}
+
+@media (max-width: 760px) {
+  .logo-marquee-label-row {
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+}
+
+/* ============================================================
+   FAQ SECTION — accordion list + contact CTA row.
+   New selectors only. Append to the END of your stylesheet.
+   ============================================================ */
+
+#faq {
+  padding-top: 30px;
+}
+
+.faq-list {
+  max-width: 820px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.faq-item {
+  border: 1px solid #e5e9f1;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(25, 31, 44, 0.03);
+  overflow: hidden;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.faq-item.is-open {
+  border-color: var(--blue);
+  box-shadow: 0 14px 34px rgba(36, 87, 255, 0.08);
+}
+
+.faq-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.faq-question:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+
+.faq-q-num {
+  flex: none;
+  width: 26px;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #b7bfcd;
+  transition: color 0.25s ease;
+}
+
+.faq-item.is-open .faq-q-num {
+  color: var(--blue);
+}
+
+.faq-q-text {
+  flex: 1;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.faq-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #e5e9f1;
+  background: #fbfcff;
+  color: #566071;
+  display: grid;
+  place-items: center;
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease;
+}
+
+.faq-item.is-open .faq-icon {
+  transform: rotate(45deg);
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.faq-answer-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.faq-item.is-open .faq-answer-wrap {
+  grid-template-rows: 1fr;
+}
+
+.faq-answer-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.faq-answer {
+  margin: 0;
+  padding: 0 22px 22px 64px;
+  color: #5e6675;
+  font-size: 14.5px;
+  line-height: 1.68;
+}
+
+.faq-cta {
+  max-width: 820px;
+  margin: 40px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px 30px;
+  border: 1px solid #e5e9f1;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #fcfdff, #f7faff);
+  box-shadow: 0 14px 34px rgba(30, 36, 52, 0.05);
+}
+
+.faq-cta-title {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.faq-cta-copy {
+  margin: 6px 0 0;
+  color: black;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .faq-question {
+    padding: 16px 16px;
+    gap: 12px;
+  }
+  .faq-q-num {
+    width: 20px;
+  }
+  .faq-q-text {
+    font-size: 14.5px;
+  }
+  .faq-answer {
+    padding: 0 16px 18px 48px;
+  }
+  .faq-cta {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 22px;
+  }
+  .faq-cta .btn {
+    width: 100%;
+  }
+}
