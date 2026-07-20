@@ -4,4 +4,4 @@ from app.core.config import settings
 
 # Server-side client using the service role key — bypasses RLS,
 # so only use this inside trusted backend logic.
-supabase: Client = create_client(settings.supabase_url, settings.supabase_service_key)
+supabase: Client = create_client(settings.supabase_url, settings.supabase_client_key)

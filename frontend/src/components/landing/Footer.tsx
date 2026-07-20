@@ -5,7 +5,7 @@ export default function Footer() {
   const maskId = useId()
 
   return (
-    <footer className="site-footer">
+    <footer id="contact" className="site-footer">
 
       <div className="shell footer-grid">
         <div className="footer-brand">
@@ -29,31 +29,31 @@ export default function Footer() {
 
         <div className="footer-col">
           <div className="footer-heading">Product</div>
-          <a href="#how">How It Works</a>
+          <a href="#how-it-works">How It Works</a>
           <a href="#demo">AI Preview</a>
         </div>
 
         <div className="footer-col">
           <div className="footer-heading">Audience</div>
-          <a href="#students">For Students</a>
-          <a href="#employees">For Employees</a>
+          <a href="/auth">For Students</a>
+          <a href="/auth">For Employees</a>
           <a href="#about">Why RefAI</a>
         </div>
 
         <div className="footer-col">
-          <div className="footer-heading">Get Started</div>
-          <a href="/dashboard">Create Trust Card</a>
-          <a id="login" href="/login">Login</a>
-          <a href="mailto:hello@refai.example">Contact Us</a>
+          <div className="footer-heading">Contact & Get Started</div>
+          <a href="/auth">Create Trust Card</a>
+          <a id="login" href="/auth">Login</a>
+          <a href="#contact" aria-current="location">Hackathon contact</a>
         </div>
       </div>
 
       <div className="shell footer-bottom">
         <span>(c) {new Date().getFullYear()} RefAI. All rights reserved.</span>
         <div className="footer-social">
-          <a href="#top" aria-label="RefAI on LinkedIn">LinkedIn</a>
-          <a href="#top" aria-label="RefAI on GitHub">GitHub</a>
-          <a href="#top" aria-label="RefAI on X">X</a>
+          <span aria-label="RefAI on LinkedIn">LinkedIn</span>
+          <span aria-label="RefAI on GitHub">GitHub</span>
+          <span aria-label="RefAI on X">X</span>
         </div>
       </div>
     </footer>

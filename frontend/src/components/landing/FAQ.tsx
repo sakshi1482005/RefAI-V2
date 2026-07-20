@@ -4,7 +4,7 @@ import { useState } from 'react'
 const FAQS = [
     {
         q: 'What is RefAI?',
-        a: 'RefAI is an AI-powered referral platform that connects students with professionals for trusted referrals. By analyzing your resume against job requirements, RefAI generates a Candidate Trust Card that helps employees make informed referral decisions quickly and confidently.',
+        a: 'RefAI is an AI-assisted referral workflow. It compares a resume with job requirements and generates a Candidate Trust Card that organizes role fit, supporting evidence, and gaps for employee review.',
     },
     {
         q: 'How does RefAI work?',
@@ -12,11 +12,11 @@ const FAQS = [
     },
     {
         q: 'What is the Candidate Trust Card?',
-        a: 'The Candidate Trust Card is an AI-generated summary of your professional readiness. It highlights your strengths, skill match, project experience, and overall fit, helping employees assess your profile in under a minute.',
+        a: 'The Candidate Trust Card is an AI-generated summary of role readiness. It highlights strengths, skill match, project evidence, and gaps so employees can begin with a structured overview and inspect the underlying resume claims.',
     },
     {
         q: 'Does RefAI guarantee a referral?',
-        a: 'No. RefAI does not guarantee referrals or job offers. It helps you present your profile more effectively and gives employees the information they need to make confident referral decisions.',
+        a: 'No. RefAI does not guarantee referrals or job offers. It helps candidates present relevant evidence and leaves every referral decision to the employee.',
     },
     {
         q: 'How does AI evaluate my resume?',
@@ -24,15 +24,15 @@ const FAQS = [
     },
     {
         q: 'Is my resume and personal data secure?',
-        a: 'Yes. Your data is securely stored and processed using industry-standard security practices. Your information is only shared with people you choose to connect with.',
+        a: 'The public demo uses fictional candidate data. For authenticated use, resume handling depends on the configured application services and privacy controls; avoid uploading sensitive information until you have reviewed the product’s data policy.',
     },
     {
         q: 'Can employees trust the AI analysis?',
-        a: 'The Trust Card is designed to assist, not replace, human judgment. It provides a concise, data-driven overview to help employees evaluate candidates faster while leaving the final referral decision entirely to them.',
+        a: 'The Trust Card is designed to assist, not replace, human judgment. Its scores summarize the available inputs, while employees should inspect the cited resume evidence and make the final referral decision themselves.',
     },
     {
         q: 'Who can use RefAI?',
-        a: 'RefAI is designed for students, recent graduates, job seekers, and professionals who want to connect through trusted referrals while reducing uncertainty in the referral process.',
+        a: 'RefAI is designed for students, recent graduates, job seekers, and employees who want a more structured, evidence-led referral conversation.',
     },
     {
         q: 'What makes RefAI different from LinkedIn?',
@@ -56,7 +56,7 @@ export default function FAQ() {
                     <div className="eyebrow"><i></i> Got questions?</div>
                     <h2>Frequently asked questions</h2>
                     <p className="section-copy" style={{ margin: '14px auto 0' }}>
-                        Everything students and employees want to know before trusting RefAI with a referral.
+                        Practical details students and employees should understand before using RefAI for a referral review.
                     </p>
                 </div>
 
@@ -66,6 +66,8 @@ export default function FAQ() {
                         return (
                             <div className={`faq-item fade ${isOpen ? 'is-open' : ''}`} key={item.q}>
                                 <button
+                                    type="button"
+                                    id={`faq-question-${i}`}
                                     className="faq-question"
                                     onClick={() => toggle(i)}
                                     aria-expanded={isOpen}
@@ -79,7 +81,7 @@ export default function FAQ() {
                                         </svg>
                                     </span>
                                 </button>
-                                <div className="faq-answer-wrap" id={`faq-answer-${i}`}>
+                                <div className="faq-answer-wrap" id={`faq-answer-${i}`} role="region" aria-labelledby={`faq-question-${i}`} aria-hidden={!isOpen}>
                                     <div className="faq-answer-inner">
                                         <p className="faq-answer">{item.a}</p>
                                     </div>
@@ -94,7 +96,8 @@ export default function FAQ() {
                         <div className="faq-cta-title">Still have questions?</div>
                         <p className="faq-cta-copy">Reach out and our team will get back to you within a day.</p>
                     </div>
-                    <a className="btn btn-primary" href="mailto:hello@refai.example">Contact us</a>
+                    {/* TODO: Replace with a real support channel when one is configured. */}
+                    <span className="btn btn-primary" aria-disabled="true" title="Contact support is not configured yet">Contact us</span>
                 </div>
             </div>
         </section>

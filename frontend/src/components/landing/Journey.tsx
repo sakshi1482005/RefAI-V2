@@ -50,7 +50,7 @@ export default function Journey() {
             How RefAI <em className="hero-serif-italic">Works</em>
           </h2>
           <p className="section-copy" style={{ margin: '14px auto 0' }}>
-            From resume upload to referral approval in six simple steps.
+            Start with a resume, verify the analysis, generate a Trust Card, request a referral, and record the employee decision.
           </p>
         </div>
 
@@ -75,7 +75,7 @@ export default function Journey() {
                     </svg>
                   </span>
                   <div>
-                    <b>resume_alex_morgan.pdf</b>
+                    <b>Ananya_Rao_Atlassian_Resume.pdf</b>
                     <span className="hiw-muted">248 KB · PDF</span>
                   </div>
                   <span className="hiw-uploaded-pill">✓ Uploaded</span>
@@ -106,8 +106,8 @@ export default function Journey() {
                   <span className="hiw-muted">JD #4821</span>
                 </div>
                 <div className="hiw-role-box">
-                  <b>Senior Frontend Engineer</b>
-                  <span className="hiw-muted">Helix Labs · Remote · Full-time</span>
+                  <b>Associate Software Engineer</b>
+                  <span className="hiw-muted">Atlassian · Product Platform</span>
                 </div>
                 <div className="hiw-jd-box">
                   <span className="hiw-step-num">JOB DESCRIPTION</span>
@@ -118,8 +118,8 @@ export default function Journey() {
                   </p>
                 </div>
                 <div className="hiw-jd-actions">
-                  <button className="hiw-btn hiw-btn-dark">Paste JD</button>
-                  <button className="hiw-btn hiw-btn-light">Import URL</button>
+                  <span className="hiw-btn hiw-btn-dark">Paste JD</span>
+                  <span className="hiw-btn hiw-btn-light">Import URL</span>
                 </div>
               </div>
             </Reveal>
@@ -142,7 +142,7 @@ export default function Journey() {
                   <span className="hiw-analyzing">
                     <span className="hiw-live-dot"></span>Analyzing
                   </span>
-                  <span className="hiw-muted">AI Engine v2.4</span>
+                  <span className="hiw-muted">AI Engine · Demo</span>
                 </div>
                 <ul className="hiw-checklist">
                   <li className="done"><span className="hiw-check">✓</span>Parsing resume structure</li>
@@ -150,7 +150,7 @@ export default function Journey() {
                   <li className="done"><span className="hiw-check">✓</span>Comparing against JD</li>
                   <li className="active"><span className="hiw-radio"></span>Calculating match score...</li>
                 </ul>
-                <div className="hiw-progress"><i style={{ width: '78%' }}></i></div>
+                <div className="hiw-progress"><i style={{ width: '88%' }}></i></div>
               </div>
             </Reveal>
           </div>
@@ -161,40 +161,41 @@ export default function Journey() {
               <span className="hiw-step-num">STEP 04</span>
               <h3 className="hiw-step-title">Generate Candidate Trust Card</h3>
               <p className="hiw-step-desc">
-                AI creates a concise Candidate Trust Card with Match Score, Top Skills, Referral
-                Risk, and Readiness Summary.
+                AI creates a concise Candidate Trust Card with a Match Score, skills found,
+                supporting evidence, and a readiness summary for human review.
               </p>
             </Reveal>
             <span className="hiw-dot"></span>
             <Reveal className="hiw-visual" delay={100}>
               <div className="hiw-panel">
                 <div className="hiw-panel-head">
-                  <span className="hiw-step-num">TRUST CARD</span>
+                  <span className="hiw-step-num">TRUST CARD · DEMO</span>
                   <span className="hiw-uploaded-pill">Generated</span>
                 </div>
                 <div className="hiw-trust-row">
-                  <div className="hiw-avatar">AM</div>
+                  <div className="hiw-avatar">AR</div>
                   <div>
-                    <b>Alex Morgan</b>
-                    <span className="hiw-muted">Stanford · Computer Eng.</span>
+                    <b>Ananya Rao</b>
+                    <span className="hiw-muted">Associate Software Engineer · Atlassian</span>
                   </div>
-                  <div className="hiw-ring">87</div>
+                  <div className="hiw-ring">91</div>
                 </div>
                 <div className="hiw-stat-row">
                   <div className="hiw-stat">
                     <span className="hiw-muted">MATCH</span>
-                    <b>87%</b>
+                    <b>88%</b>
                   </div>
                   <div className="hiw-stat">
-                    <span className="hiw-muted">RISK</span>
-                    <b className="green">Low</b>
+                    <span className="hiw-muted">EVIDENCE</span>
+                    <b className="green">Strong</b>
                   </div>
                   <div className="hiw-stat">
                     <span className="hiw-muted">SKILLS</span>
-                    <b>6/8</b>
+                    <b>8 found</b>
                   </div>
                 </div>
-                <div className="hiw-footnote">✓ Verifiable · Signed by RefAI</div>
+                <p className="demo-score-why"><strong>Why 91?</strong> The sample has strong React, FastAPI, SQL, leadership, and project evidence, with a smaller cloud-certification gap.</p>
+                <div className="hiw-footnote">✓ AI-generated demo · Source evidence shown</div>
               </div>
             </Reveal>
           </div>
@@ -213,22 +214,21 @@ export default function Journey() {
             <Reveal className="hiw-visual" delay={100}>
               <div className="hiw-panel">
                 <div className="hiw-panel-head">
-                  <span className="hiw-step-num">REFERRAL MESSAGE</span>
+                  <span className="hiw-step-num">REFERRAL MESSAGE · DEMO</span>
                   <span className="hiw-muted">AI-generated</span>
                 </div>
                 <div className="hiw-msg-box">
-                  &quot;Hi Sarah, I&apos;d like to refer <b>Alex Morgan</b> for the Senior Frontend
-                  Engineer role at Helix Labs. Their trust score is <b>87%</b> with strong React &amp;
-                  TypeScript skills and low referral risk...&quot;
+                  Hi Meera, I’m applying for the Associate Software Engineer role at Atlassian. My demo profile shows an 88% Resume Match, 93 ATS Score, and 91 Trust Score, supported by React, FastAPI, SQL, and collaboration examples. Would you be open to reviewing my Trust Card?
                 </div>
                 <div className="hiw-jd-actions">
-                  <button className="hiw-btn hiw-btn-dark">➤ Send Request</button>
-                  <button className="hiw-btn hiw-btn-light">Edit</button>
-                  <button className="hiw-btn hiw-btn-light">Copy</button>
+                  <span className="hiw-btn hiw-btn-dark">➤ Send Request</span>
+                  <span className="hiw-btn hiw-btn-light">Edit</span>
+                  <span className="hiw-btn hiw-btn-light">Copy</span>
                 </div>
                 <div className="hiw-inline-note">
-                  <span className="hiw-live-dot"></span>Score 87% ≥ 70% threshold — referral unlocked
+                  <span className="hiw-live-dot"></span>Referral gate unlocked · Trust score 91
                 </div>
+                <p className="demo-score-why"><strong>Why unlocked?</strong> The 88% role match and repeated evidence exceed the sample referral-readiness threshold.</p>
               </div>
             </Reveal>
           </div>
@@ -239,42 +239,43 @@ export default function Journey() {
               <span className="hiw-step-num">STEP 06</span>
               <h3 className="hiw-step-title">Employee Reviews</h3>
               <p className="hiw-step-desc">
-                Employees review the Candidate Trust Card and confidently accept or decline the
-                referral request.
+                Employees review the Candidate Trust Card, inspect its supporting resume evidence,
+                and then accept or decline the referral request.
               </p>
             </Reveal>
             <span className="hiw-dot"></span>
             <Reveal className="hiw-visual" delay={100}>
               <div className="hiw-panel">
                 <div className="hiw-panel-head">
-                  <span className="hiw-step-num">EMPLOYEE VIEW</span>
+                  <span className="hiw-step-num">EMPLOYEE VIEW · DEMO</span>
                   <span className="hiw-muted">Dashboard</span>
                 </div>
                 <div className="hiw-trust-row">
-                  <div className="hiw-avatar">AM</div>
+                  <div className="hiw-avatar">AR</div>
                   <div>
-                    <b>Alex Morgan</b>
-                    <span className="hiw-muted">Sr. Frontend Engineer · Referral</span>
+                    <b>Ananya Rao</b>
+                    <span className="hiw-muted">Associate Software Engineer · Atlassian</span>
                   </div>
-                  <b className="hiw-score-num">87%</b>
+                  <b className="hiw-score-num">91</b>
                 </div>
                 <div className="hiw-stat-row">
                   <div className="hiw-stat">
-                    <span className="hiw-muted">RISK</span>
-                    <b className="green">Low</b>
+                    <span className="hiw-muted">EVIDENCE</span>
+                    <b className="green">Strong</b>
                   </div>
                   <div className="hiw-stat">
                     <span className="hiw-muted">SKILLS</span>
-                    <b>6/8</b>
+                    <b>8 found</b>
                   </div>
                   <div className="hiw-stat">
                     <span className="hiw-muted">FIT</span>
-                    <b>High</b>
+                    <b>88%</b>
                   </div>
                 </div>
+                <p className="demo-score-why"><strong>Why 91?</strong> Role-aligned skills and measurable delivery evidence are strong; the remaining gaps are non-blocking for this sample role.</p>
                 <div className="hiw-jd-actions">
-                  <button className="hiw-btn hiw-btn-accept">Accept Referral</button>
-                  <button className="hiw-btn hiw-btn-light">Decline</button>
+                  <span className="hiw-btn hiw-btn-accept">Accept Referral</span>
+                  <span className="hiw-btn hiw-btn-light">Decline</span>
                 </div>
               </div>
             </Reveal>

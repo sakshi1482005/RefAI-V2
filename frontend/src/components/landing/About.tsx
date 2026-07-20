@@ -9,10 +9,10 @@ export default function About() {
             <span className="eyebrow-spinner">&#10042;</span> Platform Features
           </div>
           <h2>
-            Everything You Need to Earn Referrals With <em className="hero-serif-italic">Confidence</em>
+            From resume evidence to a clear <em className="hero-serif-italic">referral decision</em>
           </h2>
           <p className="section-copy" style={{ margin: '14px auto 0' }}>
-            RefAI combines AI-powered resume analysis, trust scoring, and referral workflows into one seamless platform.
+            This demo shows where each score comes from and how students and employees use the same evidence at different steps.
           </p>
         </Reveal>
 
@@ -25,7 +25,7 @@ export default function About() {
               </svg>
             </div>
             <h3>AI Resume Analyzer</h3>
-            <p>Upload your resume and a job description to instantly receive a match score, skill analysis, and personalized feedback.</p>
+            <p>Upload a resume and job description to generate a match score, skill analysis, and role-specific feedback.</p>
 
             <div className="product-panel" style={{ marginTop: '20px' }}>
               <div className="panel-row">
@@ -37,8 +37,8 @@ export default function About() {
                     </svg>
                   </span>
                   <div>
-                    <b style={{ fontSize: '13px' }}>resume_alex_morgan.pdf</b>
-                    <div className="card-label-mono" style={{ marginTop: '3px' }}>Analyzed 3s ago</div>
+                    <b style={{ fontSize: '13px' }}>Ananya_Rao_Atlassian_Resume.pdf</b>
+                    <div className="card-label-mono" style={{ marginTop: '3px' }}>Sample resume · Demo</div>
                   </div>
                 </div>
                 <span className="score-pill">Complete</span>
@@ -46,8 +46,8 @@ export default function About() {
               <div className="mini-metric-grid">
                 <div className="metric-card">
                   <div className="card-label-mono">Match</div>
-                  <div className="score" style={{ color: '#0e9368' }}>87<span>%</span></div>
-                  <div className="meter"><i style={{ width: '87%', background: '#111827' }}></i></div>
+                  <div className="score" style={{ color: '#0e9368' }}>88<span>%</span></div>
+                  <div className="meter"><i style={{ width: '88%', background: '#111827' }}></i></div>
                 </div>
                 <div className="metric-card">
                   <div className="card-label-mono">Skills</div>
@@ -61,9 +61,10 @@ export default function About() {
                 <div className="metric-card">
                   <div className="card-label-mono">Risk</div>
                   <div className="score" style={{ color: '#0e9368' }}>Low</div>
-                  <div className="mini-caption"><span className="live-dot" style={{ width: '6px', height: '6px' }}></span>Safe to refer</div>
+                  <div className="mini-caption"><span className="live-dot" style={{ width: '6px', height: '6px' }}></span>Review suggested</div>
                 </div>
               </div>
+              <p className="demo-score-why"><strong>Why 88%?</strong> Six of eight target skills are supported by role-aligned project and experience evidence; system design and cloud depth remain weaker.</p>
             </div>
           </Reveal>
 
@@ -75,32 +76,33 @@ export default function About() {
               </svg>
             </div>
             <h3>Candidate Trust Card</h3>
-            <p>Generate an AI-powered trust summary that helps employees evaluate candidates in under 30 seconds.</p>
+            <p>Generate an AI-powered summary that organizes role fit, resume evidence, and open questions for employee review.</p>
 
             <div className="product-panel" style={{ marginTop: '20px' }}>
               <div className="trust-person-row">
-                <div className="avatar" style={{ background: '#eef2f7', color: 'var(--ink)' }}>AM</div>
+                <div className="avatar" style={{ background: '#eef2f7', color: 'var(--ink)' }}>AR</div>
                 <div>
-                  <b style={{ fontSize: '14px' }}>Alex Morgan</b>
-                  <div className="metric-label" style={{ marginTop: '2px' }}>Trust Score: 87%</div>
+                  <b style={{ fontSize: '14px' }}>Ananya Rao · Atlassian Demo</b>
+                  <div className="metric-label" style={{ marginTop: '2px' }}>Trust Score: 91</div>
                 </div>
-                <div className="score-ring">87</div>
+                <div className="score-ring">91</div>
               </div>
               <div className="stat-box-row">
                 <div className="stat-box">
-                  <span className="risk-stat-label">Confidence</span>
-                  <span className="risk-stat-value">94%</span>
+                  <span className="risk-stat-label">Resume Match</span>
+                  <span className="risk-stat-value">88%</span>
                 </div>
                 <div className="stat-box">
-                  <span className="risk-stat-label">Tenure</span>
-                  <span className="risk-stat-value">High</span>
+                  <span className="risk-stat-label">ATS Score</span>
+                  <span className="risk-stat-value">93</span>
                 </div>
                 <div className="stat-box">
-                  <span className="risk-stat-label">Culture</span>
-                  <span className="risk-stat-value">Strong</span>
+                  <span className="risk-stat-label">Reviewer</span>
+                  <span className="risk-stat-value">Meera</span>
                 </div>
               </div>
-              <div className="panel-footnote">&#10003; Verifiable · Signed by RefAI</div>
+              <p className="demo-score-why"><strong>Why 91?</strong> Strong project evidence, ATS-friendly formatting, leadership, and team collaboration outweigh the missing cloud certification.</p>
+              <div className="panel-footnote">&#10003; AI-generated demo · Review the source evidence</div>
             </div>
           </Reveal>
         </div>

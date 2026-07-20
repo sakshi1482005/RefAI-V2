@@ -18,11 +18,11 @@ export default function ProductShowcase() {
 
                         <div className="product-panel gate-panel" style={{ marginTop: '16px' }}>
                             <div className="gate-row">
-                                <span className="card-label-mono">Readiness</span>
+                                <span className="card-label-mono">Readiness · Demo</span>
                                 <span className="gate-status">Unlocked</span>
                             </div>
                             <div className="gate-meter">
-                                <i style={{ width: '92%' }}></i>
+                                <i style={{ width: '91%' }}></i>
                             </div>
                             <div className="gate-checklist">
                                 <div className="check-item">
@@ -31,7 +31,7 @@ export default function ProductShowcase() {
                                             <path d="M20 6 9 17l-5-5"></path>
                                         </svg>
                                     </span>
-                                    Skills verified
+                                    Skills found
                                 </div>
                                 <div className="check-item">
                                     <span className="check-icon">
@@ -39,9 +39,10 @@ export default function ProductShowcase() {
                                             <path d="M20 6 9 17l-5-5"></path>
                                         </svg>
                                     </span>
-                                    Score &ge; 80%
+                                    Trust score 91
                                 </div>
                             </div>
+                            <p className="demo-score-why"><strong>Why 91?</strong> Target skills appear in project examples, leadership evidence is present, and cloud depth remains the main sample gap.</p>
                         </div>
                     </Reveal>
 
@@ -57,16 +58,16 @@ export default function ProductShowcase() {
 
                         <div className="product-panel msg-panel" style={{ marginTop: '16px' }}>
                             <div className="msg-header">
-                                <span className="card-label-mono">Generated Message</span>
+                                <span className="card-label-mono">Generated Message · Demo</span>
                                 <span className="msg-ai-badge">AI</span>
                             </div>
                             <div className="msg-box">
-                                &ldquo;Hi Sarah, I&rsquo;d like to refer <b>Alex Morgan</b> for the Senior Frontend role. Their trust score is <b>87%</b> with strong React &amp; TypeScript skills&hellip;&rdquo;
+                                Hi Meera, I’m applying for the Associate Software Engineer role at Atlassian. RefAI shows an 88% Resume Match, 93 ATS Score, and 91 Trust Score with React, FastAPI, and SQL evidence. Would you review my Trust Card for a referral?
                             </div>
                             <div className="msg-actions">
-                                <button type="button" className="msg-btn msg-btn-primary">Copy</button>
-                                <button type="button" className="msg-btn">Edit</button>
-                                <button type="button" className="msg-btn">Regenerate</button>
+                                <span className="msg-btn msg-btn-primary">Copy</span>
+                                <span className="msg-btn">Edit</span>
+                                <span className="msg-btn">Regenerate</span>
                             </div>
                         </div>
                     </Reveal>
@@ -82,27 +83,18 @@ export default function ProductShowcase() {
                             </svg>
                         </div>
                         <h3>Employee Dashboard</h3>
-                        <p>Employees review Candidate Trust Cards instead of manually reading resumes, making referral decisions faster.</p>
+                        <p>Employees use Candidate Trust Cards to focus their resume review on role fit, supporting evidence, and open questions.</p>
 
                         <div className="product-panel queue-panel" style={{ marginTop: '16px' }}>
-                            <span className="card-label-mono queue-label">Referral Queue</span>
+                            <span className="card-label-mono queue-label">Referral Queue · Demo</span>
                             <div className="queue-list">
                                 <div className="queue-row">
-                                    <div className="avatar queue-avatar">AM</div>
-                                    <span className="queue-name">Alex Morgan</span>
-                                    <span className="queue-score queue-score-high">87%</span>
-                                </div>
-                                <div className="queue-row">
-                                    <div className="avatar queue-avatar">JK</div>
-                                    <span className="queue-name">Jamie Kim</span>
-                                    <span className="queue-score">74%</span>
-                                </div>
-                                <div className="queue-row">
-                                    <div className="avatar queue-avatar">RP</div>
-                                    <span className="queue-name">Riya Patel</span>
-                                    <span className="queue-score queue-score-high">91%</span>
+                                    <div className="avatar queue-avatar">AR</div>
+                                    <span className="queue-name">Ananya Rao · Atlassian</span>
+                                    <span className="queue-score queue-score-high">91</span>
                                 </div>
                             </div>
+                            <p className="demo-score-why"><strong>Meera Shah’s review:</strong> Ananya’s 91 Trust Score is supported by an 88% Resume Match, 93 ATS Score, and measurable project evidence.</p>
                         </div>
                     </Reveal>
                 </div>
@@ -175,21 +167,21 @@ export default function ProductShowcase() {
                     <Reveal as="div" delay={3} soft className="showcase-cta-box">
                         <div className="showcase-cta-top">
                             <h2 className="showcase-cta-heading">
-                                Ready to turn your resume into a <em className="hero-serif-italic">trusted</em> referral?
+                                Ready to turn your resume into an <em className="hero-serif-italic">evidence-backed</em> referral request?
                             </h2>
                             <p className="showcase-cta-copy">
-                                Join 2,400+ candidates and employees already using RefAI to make smarter referral decisions.
+                                Explore a realistic sample workflow built with clearly labeled demo profiles and metrics.
                             </p>
                         </div>
                         <div className="showcase-cta-actions">
-                            <button type="button" className="btn showcase-btn-primary">
+                            <a href="/auth" className="btn showcase-btn-primary">
                                 Analyze My Resume
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M5 12h14"></path>
                                     <path d="m12 5 7 7-7 7"></path>
                                 </svg>
-                            </button>
-                            <button type="button" className="btn showcase-btn-secondary">See How It Works</button>
+                            </a>
+                            <a href="#how-it-works" className="btn showcase-btn-secondary">See How It Works</a>
                         </div>
                     </Reveal>
                 </div>

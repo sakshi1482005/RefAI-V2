@@ -9,7 +9,7 @@ export default function Action() {
             See RefAI in <em className="hero-serif-italic">Action</em>
           </h2>
           <p className="section-copy" style={{ margin: '14px auto 0' }}>
-            Explore how RefAI helps students prove their readiness and helps employees make confident referral decisions.
+            Follow the sample outputs a student reviews before outreach and the evidence an employee checks before deciding.
           </p>
         </Reveal>
 
@@ -23,7 +23,7 @@ export default function Action() {
                   <path d="M13 2v6h6"></path>
                 </svg>
               </div>
-              <span className="score-pill">Live Preview</span>
+              <span className="score-pill">Demo Preview</span>
             </div>
 
             <h3>AI Resume Analyzer</h3>
@@ -37,7 +37,7 @@ export default function Action() {
                 <span className="address-text">refai.app / analyze</span>
                 <span className="analyzing-status">
                   <span className="analyzing-dot"></span>
-                  Live
+                  Sample
                 </span>
               </div>
 
@@ -53,7 +53,7 @@ export default function Action() {
                       </svg>
                     </span>
                     <div>
-                      <b style={{ fontSize: '11px', display: 'block' }}>resume_alex.pdf</b>
+                      <b style={{ fontSize: '11px', display: 'block' }}>Ananya_Rao_Atlassian_Resume.pdf</b>
                       <span className="action-muted-tag">248 KB</span>
                     </div>
                     <span className="action-check">
@@ -80,8 +80,8 @@ export default function Action() {
                       ></circle>
                     </svg>
                     <div>
-                      <b style={{ display: 'block', fontSize: '11px' }}>Strong alignment</b>
-                      <span className="action-muted-tag">Top 8% of applicants</span>
+                      <b style={{ display: 'block', fontSize: '11px' }}>88% · Strong alignment</b>
+                      <span className="action-muted-tag">6 of 8 sample requirements covered</span>
                     </div>
                   </div>
                   <div className="segment-bar" style={{ marginTop: '12px' }}>
@@ -90,14 +90,15 @@ export default function Action() {
                     <i className="filled"></i>
                     <i></i>
                   </div>
+                  <p className="demo-score-why"><strong>Why 88%?</strong> React, FastAPI, SQL, and collaboration terms match the job description and appear in project evidence.</p>
                 </div>
 
                 {/* Job description */}
                 <div className="metric-card">
                   <div className="card-label-mono">Job Description</div>
-                  <b style={{ display: 'block', marginTop: '8px', fontSize: '12px' }}>Sr. Frontend Engineer</b>
-                  <span className="action-muted-tag">Helix Labs · Remote</span>
-                  <p className="action-small-copy">5+ years React, TypeScript, system design experience...</p>
+                  <b style={{ display: 'block', marginTop: '8px', fontSize: '12px' }}>Associate Software Engineer</b>
+                  <span className="action-muted-tag">Atlassian · Product Platform</span>
+                  <p className="action-small-copy">React, FastAPI, SQL, system design, and cross-functional ownership...</p>
                 </div>
 
                 {/* Matching skills */}
@@ -119,7 +120,7 @@ export default function Action() {
                 {/* AI summary */}
                 <div className="metric-card action-span-2">
                   <div className="card-label-mono">AI Summary</div>
-                  <p className="action-small-copy">Strong technical alignment. Missing Kubernetes &amp; AWS. Recommend learning plan before referral.</p>
+                  <p className="action-small-copy">Ananya shows strong product-engineering alignment through React delivery, a FastAPI service used by 240 students, and SQL analytics work.</p>
                 </div>
 
                 {/* Missing skills */}
@@ -132,9 +133,9 @@ export default function Action() {
                   <div className="missing-skill-row" style={{ marginTop: '14px' }}>
                     <div className="missing-skill-line">
                       <span>Kubernetes</span>
-                      <span className="missing-skill-tag">Critical</span>
+                      <span className="missing-skill-tag">Not evidenced</span>
                     </div>
-                    <div className="mini-bar amber" style={{ width: '32%' }}></div>
+                    <div className="mini-bar amber" style={{ width: '72%' }}></div>
                   </div>
 
                   <div className="missing-skill-row">
@@ -142,7 +143,7 @@ export default function Action() {
                       <span>AWS</span>
                       <span className="missing-skill-tag">Moderate</span>
                     </div>
-                    <div className="mini-bar amber" style={{ width: '55%' }}></div>
+                    <div className="mini-bar amber" style={{ width: '46%' }}></div>
                   </div>
 
                   <div className="action-footnote">
@@ -166,39 +167,39 @@ export default function Action() {
                   <path d="m9 12 2 2 4-4"></path>
                 </svg>
               </div>
-              <span className="score-pill">Verified</span>
+              <span className="score-pill">Demo analysis</span>
             </div>
 
             <h3>Candidate Trust Card</h3>
-            <p>A concise AI-generated summary that helps employees evaluate candidates in under 30 seconds.</p>
+            <p>A concise AI-generated summary that organizes candidate evidence and gaps for an employee’s review.</p>
 
             <div className="product-panel action-panel" style={{ marginTop: '20px' }}>
               <div className="gate-row">
                 <span className="card-label-mono">Trust Card</span>
-                <span className="score-pill">Verified</span>
+                <span className="score-pill">Sample output</span>
               </div>
 
               <div className="trust-person-row" style={{ marginTop: '18px' }}>
-                <div className="avatar" style={{ background: '#eef2f7', color: 'var(--ink)' }}>AM</div>
+                <div className="avatar" style={{ background: '#eef2f7', color: 'var(--ink)' }}>AR</div>
                 <div>
-                  <b style={{ fontSize: '13px' }}>Alex Morgan</b>
-                  <div className="action-muted-tag" style={{ marginTop: '2px' }}>Computer Engineering · Stanford</div>
+                  <b style={{ fontSize: '13px' }}>Ananya Rao · Demo</b>
+                  <div className="action-muted-tag" style={{ marginTop: '2px' }}>Associate Software Engineer · Atlassian</div>
                 </div>
-                <div className="score-ring">87</div>
+                <div className="score-ring">91</div>
               </div>
 
               <div className="stat-box-row">
                 <div className="stat-box">
-                  <span className="risk-stat-label">Confidence</span>
-                  <span className="risk-stat-value">94%</span>
+                  <span className="risk-stat-label">Resume Match</span>
+                  <span className="risk-stat-value">88%</span>
                 </div>
                 <div className="stat-box">
-                  <span className="risk-stat-label">Tenure Fit</span>
-                  <span className="risk-stat-value">High</span>
+                  <span className="risk-stat-label">ATS Score</span>
+                  <span className="risk-stat-value">93</span>
                 </div>
                 <div className="stat-box">
-                  <span className="risk-stat-label">Culture</span>
-                  <span className="risk-stat-value">Strong</span>
+                  <span className="risk-stat-label">Reviewer</span>
+                  <span className="risk-stat-value">Meera</span>
                 </div>
               </div>
 
@@ -206,33 +207,35 @@ export default function Action() {
                 <div className="card-label-mono">Top Skills</div>
                 <div className="skills" style={{ marginTop: '10px' }}>
                   <span className="skill skill-dark">React</span>
-                  <span className="skill skill-dark">TypeScript</span>
-                  <span className="skill skill-dark">System Design</span>
-                  <span className="skill">GraphQL</span>
+                  <span className="skill skill-dark">FastAPI</span>
+                  <span className="skill skill-dark">SQL</span>
+                  <span className="skill">Leadership</span>
+                  <span className="skill">Problem Solving</span>
                 </div>
               </div>
 
               <div className="metric-card" style={{ marginTop: '14px' }}>
                 <div className="gate-row">
-                  <span className="card-label-mono">Referral Risk</span>
+                  <span className="card-label-mono">Evidence Coverage</span>
                   <span className="mini-caption" style={{ marginTop: 0 }}>
                     <span className="live-dot" style={{ width: '6px', height: '6px' }}></span>
-                    Low
+                    Strong sample
                   </span>
                 </div>
                 <div className="risk-bar" style={{ marginTop: '12px' }}>
-                  <i style={{ width: '92%', background: '#111827' }}></i>
+                  <i style={{ width: '18%', background: '#111827' }}></i>
                 </div>
               </div>
 
               <div className="metric-card" style={{ marginTop: '14px' }}>
                 <div className="gate-row">
                   <span className="card-label-mono">Referral Readiness</span>
-                  <span className="gate-status" style={{ color: 'var(--ink)' }}>Ready</span>
+                  <span className="gate-status" style={{ color: 'var(--ink)' }}>91 · Demo</span>
                 </div>
                 <div className="gate-meter" style={{ marginTop: '12px' }}>
-                  <i style={{ width: '96%' }}></i>
+                  <i style={{ width: '91%' }}></i>
                 </div>
+                <p className="demo-score-why"><strong>Why 91?</strong> The sample has strong role alignment and repeated project evidence, while cloud and system-design depth remain open questions.</p>
               </div>
 
               <div className="action-signed-footer">
@@ -241,7 +244,7 @@ export default function Action() {
                     <path d="M12 2 4 5.5v6c0 5 3.4 8.4 8 10.5 4.6-2.1 8-5.5 8-10.5v-6Z"></path>
                     <path d="m9 12 2 2 4-4"></path>
                   </svg>
-                  Signed by RefAI · Verifiable
+                  AI-generated demo · Evidence shown above
                 </span>
                 <span className="action-timestamp">2m ago</span>
               </div>
@@ -269,11 +272,11 @@ export default function Action() {
             <div className="queue-panel-head">
               <div className="queue-panel-title">
                 <span className="card-label-mono">Referral Queue</span>
-                <span className="queue-new-badge">3 new</span>
+                <span className="queue-new-badge">1 new</span>
               </div>
               <div className="queue-toggle">
-                <button className="queue-toggle-btn">All</button>
-                <button className="queue-toggle-btn active">Pending</button>
+                <span className="queue-toggle-btn">All</span>
+                <span className="queue-toggle-btn active">Pending</span>
               </div>
             </div>
 
@@ -286,69 +289,28 @@ export default function Action() {
             </div>
 
             <div className="queue-list">
-              {/* Alex Morgan */}
               <div className="candidate-row">
                 <div className="candidate-head">
-                  <div className="queue-avatar">AM</div>
+                  <div className="queue-avatar">AR</div>
                   <div className="candidate-info">
-                    <b>Alex Morgan</b>
-                    <span className="action-muted-tag">Sr. Frontend · Helix Labs</span>
+                    <b>Ananya Rao</b>
+                    <span className="action-muted-tag">Associate Software Engineer · Atlassian</span>
                   </div>
-                  <span className="queue-score queue-score-high">87%</span>
+                  <span className="queue-score queue-score-high">91</span>
                 </div>
                 <div className="candidate-tags">
-                  <span className="tag-risk tag-risk-low">Low Risk</span>
-                  <span className="tag-skill">6/8 Skills</span>
+                  <span className="tag-risk tag-risk-low">Evidence review</span>
+                  <span className="tag-skill">React · FastAPI · SQL</span>
                 </div>
                 <div className="candidate-actions">
-                  <button className="cand-btn cand-btn-accept">Accept</button>
-                  <button className="cand-btn cand-btn-decline">Decline</button>
-                  <button className="cand-btn cand-btn-view">View</button>
+                  <span className="cand-btn cand-btn-accept">Accept</span>
+                  <span className="cand-btn cand-btn-decline">Decline</span>
+                  <span className="cand-btn cand-btn-view">View</span>
                 </div>
               </div>
 
-              {/* Riya Patel */}
-              <div className="candidate-row">
-                <div className="candidate-head">
-                  <div className="queue-avatar">RP</div>
-                  <div className="candidate-info">
-                    <b>Riya Patel</b>
-                    <span className="action-muted-tag">Backend Eng · Meridian</span>
-                  </div>
-                  <span className="queue-score queue-score-high">91%</span>
-                </div>
-                <div className="candidate-tags">
-                  <span className="tag-risk tag-risk-low">Low Risk</span>
-                  <span className="tag-skill">8/8 Skills</span>
-                </div>
-                <div className="candidate-actions">
-                  <button className="cand-btn cand-btn-accept">Accept</button>
-                  <button className="cand-btn cand-btn-decline">Decline</button>
-                  <button className="cand-btn cand-btn-view">View</button>
-                </div>
-              </div>
-
-              {/* Jamie Kim */}
-              <div className="candidate-row">
-                <div className="candidate-head">
-                  <div className="queue-avatar">JK</div>
-                  <div className="candidate-info">
-                    <b>Jamie Kim</b>
-                    <span className="action-muted-tag">Full Stack · Atlas &amp; Co.</span>
-                  </div>
-                  <span className="queue-score queue-score-mid">74%</span>
-                </div>
-                <div className="candidate-tags">
-                  <span className="tag-risk tag-risk-medium">Medium Risk</span>
-                  <span className="tag-skill">5/8 Skills</span>
-                </div>
-                <div className="candidate-actions">
-                  <button className="cand-btn cand-btn-accept disabled">Accept</button>
-                  <button className="cand-btn cand-btn-decline">Decline</button>
-                  <button className="cand-btn cand-btn-view">View</button>
-                </div>
-              </div>
             </div>
+            <p className="demo-score-why"><strong>Meera Shah’s review:</strong> Ananya’s 91 Trust Score combines an 88% Resume Match, 93 ATS Score, and consistent React, FastAPI, SQL, and collaboration evidence.</p>
           </div>
         </Reveal>
       </div>

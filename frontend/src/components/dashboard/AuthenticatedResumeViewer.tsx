@@ -1,0 +1,26 @@
+import { ArrowRight, FileText, RefreshCw, ShieldCheck } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import PageShell from './PageShell'
+import { Badge, Card, EmptyState, InlineFeedback, PrimaryButton, SecondaryButton, Skeleton } from './primitives'
+import { useEmployeeRequestResource } from '../../hooks/useEmployeeRequestResource'
+import { parseEmployeeRequestDetail, parseEmployeeResume } from '../../lib/employeeDetailContract'
+import { getEmployeeWorkflowState } from '../../lib/employeeWorkflow'
+import { friendlyErrorMessage } from '../../lib/requestSafety'
+
+export default function AuthenticatedResumeViewer({ requestId }: { requestId: string }) {
+  const navigate = useNavigate()
+  const detailResource = useEmployeeRequestResource(`/referral/employee/requests/${requestId}`, parseEmployeeRequestDetail)
+  const resumeResource = useEmployeeRequestResource(detailResource.data?.resumeExists ? `/referral/employee/requests/${requestId}/resume` : null, parseEmployeeResume)
+  const detail = detailResource.data
+  const resume = resumeResource.data
+  const workflow = getEmployeeWorkflowState({ hasAssignedRequest: Boolean(detail), resumeExists: Boolean(resume), trustCardExists: detail?.trustCardExists })
+  const openResume = () => { if (resume) window.open(resume.signedUrl, '_blank', 'noopener,noreferrer') }
+
+  if (detailResource.loading) return <PageShell eyebrow="Resume viewer" title="Loading authorized resume" description="Verifying request access and preparing the private document."><Skeleton className="h-[36rem] rounded-2xl" /></PageShell>
+  if (detailResource.error || !detail) return <PageShell eyebrow="Resume viewer" title="Resume access unavailable" description="RefAI could not verify access to this request."><InlineFeedback tone="error">{friendlyErrorMessage(detailResource.error, 'This request was not found or is not assigned to your Employee account.')}</InlineFeedback><EmptyState className="mt-6" icon={ShieldCheck} title="Unable to verify resume access" description="Retry authorization or return to your assigned queue." action={<div className="flex gap-2"><PrimaryButton onClick={detailResource.retry}>Retry</PrimaryButton><SecondaryButton onClick={() => navigate('/employee/dashboard')}>Back to Queue</SecondaryButton></div>} /></PageShell>
+
+  const name = detail.candidate.studentName || 'Student applicant'
+  return <PageShell eyebrow="Resume viewer" title={`Verify ${name}'s resume`} description={`Private resume access for the ${detail.targetRole} request at ${detail.targetCompany}. Signed links expire automatically.`} action={<div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => navigate(`/employee/review/${requestId}`)}>Back to Candidate</SecondaryButton><SecondaryButton onClick={openResume} disabled={!resume} disabledReason="No real resume is available">Open / Save PDF</SecondaryButton><PrimaryButton onClick={() => navigate(`/employee/trust-card/${requestId}`)} disabled={!workflow.canOpenTrustCard} disabledReason="No persisted Trust Card is available">Next: Review Trust Card<ArrowRight className="ml-2 size-4" /></PrimaryButton></div>}>
+    {resumeResource.loading ? <Skeleton className="h-[36rem] rounded-2xl" /> : resumeResource.error ? <><InlineFeedback tone="error">{friendlyErrorMessage(resumeResource.error, 'The stored resume is unavailable or its signed link could not be created.')}</InlineFeedback><EmptyState className="mt-6" icon={FileText} title="Resume could not be opened" description="Refresh the short-lived signed link or return to candidate review." action={<PrimaryButton onClick={resumeResource.retry}><RefreshCw className="mr-2 size-4" />Refresh Resume Link</PrimaryButton>} /></> : resume ? <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><Card className="overflow-hidden p-0"><div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 p-5"><div><p className="font-semibold">{resume.fileName}</p><p className="mt-1 text-xs text-slate-500">Private link expires in {Math.round(resume.expiresIn / 60)} minutes</p></div><Badge tone="success"><ShieldCheck className="mr-1 size-3" />Authorized</Badge></div><iframe src={resume.signedUrl} title={`${name} resume PDF`} className="h-[70vh] w-full bg-slate-100" /></Card><Card className="p-6 sm:p-8"><h3 className="text-lg font-semibold">Role evidence</h3><div className="mt-5 space-y-3">{detail.analysis?.evidence?.map((item) => <div key={item} className="rounded-xl border border-slate-200 p-4 text-sm leading-6">{item}</div>) || <p className="text-sm text-slate-500">No structured evidence summary is available.</p>}</div><div className="mt-6 flex flex-wrap gap-2">{detail.analysis?.matchedSkills?.map((skill) => <Badge key={skill} tone="success">{skill}</Badge>)}</div></Card></div> : <EmptyState icon={FileText} title="No stored resume is available" description="This referral request is authorized, but RefAI could not find a private PDF in the student’s resume folder." action={<div className="flex gap-2"><PrimaryButton onClick={() => navigate(`/employee/review/${requestId}`)}>Return to Candidate</PrimaryButton><SecondaryButton onClick={() => navigate(`/employee/trust-card/${requestId}`)} disabled={!workflow.canOpenTrustCard} disabledReason="No persisted Trust Card is available">Open Trust Card</SecondaryButton></div>} />}
+  </PageShell>
+}

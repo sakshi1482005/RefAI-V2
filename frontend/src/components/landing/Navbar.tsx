@@ -1,4 +1,8 @@
+import { Link } from 'react-router-dom'
+import { useDemoMode } from '../../context/DemoModeContext'
+
 export default function Navbar() {
+  const { enterDemoMode } = useDemoMode()
   return (
     <header className="nav-wrap">
       <nav className="nav shell" aria-label="Primary navigation">
@@ -23,7 +27,7 @@ export default function Navbar() {
         </div>
         <div className="nav-actions">
           <a className="btn btn-plain" href="/login">Login</a>
-          <a className="btn btn-primary" href="/">Get Started</a>
+          <Link className="btn btn-primary" to="/dashboard" onClick={enterDemoMode}>Get Started</Link>
         </div>
       </nav>
     </header>

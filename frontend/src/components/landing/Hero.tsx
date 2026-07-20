@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
+import { useDemoMode } from '../../context/DemoModeContext'
 
 const MAX_TILT = 14 // degrees
 const MAX_LIFT = 10 // px
 const RESET_TRANSFORM = 'perspective(1200px) rotateY(-6deg) rotateX(4deg) translate3d(0,0,0)'
 
-const MARQUEE_COMPANIES = ['Northwind', 'Linearly', 'Atlas & Co.', 'Helix Labs', 'Meridian', 'Quillmark']
+const DEMO_JOURNEY_CONTEXT = ['Target · Atlassian', 'Candidate · Ananya Rao', 'Reviewer · Meera Shah', 'Demo scores · 88 / 91 / 93']
 
 export default function Hero() {
+  const { enterDemoMode } = useDemoMode()
   const stageRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const floaterRef = useRef<HTMLDivElement>(null)
@@ -73,7 +76,7 @@ export default function Hero() {
 
   const renderMarqueeSet = (keyPrefix: string) => (
     <>
-      {MARQUEE_COMPANIES.map((name, i) => (
+      {DEMO_JOURNEY_CONTEXT.map((name, i) => (
         <span key={`${keyPrefix}-${i}`} className="logo-marquee-pair">
           <span className="logo-marquee-item">{name}</span>
           <span className="logo-marquee-dot">&#9670;</span>
@@ -88,11 +91,11 @@ export default function Hero() {
         <div>
           <div className="eyebrow fade"><i></i> AI referral intelligence for student talent</div>
           <h1 className="fade delay-1">
-            Turn your resume into a <em className="hero-serif-italic">trusted</em> referral.
+            Turn your resume into an <em className="hero-serif-italic">evidence-backed</em> referral request.
           </h1>
-          <p className="hero-copy fade delay-2">RefAI reads resumes and job descriptions, explains the fit, and creates an AI Trust Card so students ask with proof and employees review with confidence.</p>
+          <p className="hero-copy fade delay-2">RefAI compares resumes with job descriptions, explains the resulting fit, and creates an AI Trust Card for a more structured referral review.</p>
           <div className="hero-actions fade delay-3">
-            <a className="btn btn-primary" href="/dashboard">Analyze my Resume</a>
+            <Link className="btn btn-primary" to="/dashboard" onClick={enterDemoMode}>Explore Live Demo</Link>
             <a className="btn btn-secondary" href="#demo">See how it Works!</a>
           </div>
           <div className="trust-strip fade delay-3" aria-label="Trust indicators">
@@ -100,18 +103,19 @@ export default function Hero() {
               <span className="mini-avatar"></span>
               <span className="mini-avatar"></span>
               <span className="mini-avatar"></span>
-              <span className="mini-avatar count-badge">+2k</span>
+              <span className="mini-avatar count-badge">Demo</span>
             </div>
-            <span className="trust-strip-text">Trusted by 2,400+ candidates &amp; referrers</span>
+            <span className="trust-strip-text">One fictional candidate journey</span>
             <span className="trust-divider"></span>
             <span className="live-dot"></span>
-            <span className="trust-strip-text">Live analysis</span>
+            <span className="trust-strip-text">Demo analysis</span>
           </div>
           <div className="hero-proof-strip fade delay-3" aria-label="RefAI proof metrics">
-            <div><strong>91%</strong><span>role-fit signal</span></div>
-            <div><strong>2 min</strong><span>employee review</span></div>
-            <div><strong>5</strong><span>proof points</span></div>
+            <div><strong>88%</strong><span>resume match</span></div>
+            <div><strong>91</strong><span>trust score</span></div>
+            <div><strong>12</strong><span>sample evidence points</span></div>
           </div>
+          <p className="demo-score-why fade delay-3"><strong>Why?</strong> The sample resume matches React, FastAPI, and SQL requirements, supports them with measurable project evidence, and leaves one cloud-certification gap.</p>
         </div>
 
         <div className="mockup-stage fade delay-2" id="demo" ref={stageRef}>
@@ -135,66 +139,65 @@ export default function Hero() {
               <div className="dash-main">
                 <div className="dash-head">
                   <div>
-                    <div className="dash-kicker">AI Trust Card</div>
-                    <div className="dash-title">Backend Engineer Intern</div>
-                    <div className="metric-label" style={{ marginTop: '6px', color: '#8891a0' }}>Stanford University</div>
+                    <div className="dash-kicker">AI Trust Card · Demo</div>
+                    <div className="dash-title">Associate Software Engineer · Atlassian</div>
+                    <div className="metric-label" style={{ marginTop: '6px', color: '#8891a0' }}>Ananya Rao · Demo candidate</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="score-pill">Referral ready</div>
-                    <div className="metric-label" style={{ marginTop: '8px', color: '#0e9368' }}>&#10003; Resume Uploaded</div>
+                    <div className="score-pill">Demo readiness · 91</div>
+                    <div className="metric-label" style={{ marginTop: '8px', color: '#0e9368' }}>Resume analyzed · ATS 93</div>
+                    <div className="demo-score-why" style={{ maxWidth: '230px', textAlign: 'right' }}><strong>Why?</strong> Clear headings, readable text, and role-specific keywords.</div>
                   </div>
                 </div>
                 <div className="dash-grid">
                   <div className="metric-card">
-                    <div className="card-label-mono">Referral Risk</div>
-                    <div className="score-pill" style={{ marginTop: '9px', display: 'inline-flex' }}>Low</div>
+                    <div className="card-label-mono">Evidence Coverage</div>
+                    <div className="score-pill" style={{ marginTop: '9px', display: 'inline-flex' }}>Strong sample</div>
                     <div className="risk-stats">
                       <div>
-                        <span className="risk-stat-label">Confidence</span>
-                        <span className="risk-stat-value">94%</span>
+                        <span className="risk-stat-label">Resume Match</span>
+                        <span className="risk-stat-value">88%</span>
                       </div>
                       <div>
-                        <span className="risk-stat-label">Tenure fit</span>
-                        <span className="risk-stat-value">High</span>
+                        <span className="risk-stat-label">ATS Score</span>
+                        <span className="risk-stat-value">93</span>
                       </div>
                       <div>
-                        <span className="risk-stat-label">Culture</span>
-                        <span className="risk-stat-value">Strong</span>
+                        <span className="risk-stat-label">Reviewer</span>
+                        <span className="risk-stat-value">Meera</span>
                       </div>
                     </div>
-                    <div className="risk-bar"><i style={{ width: '30%' }}></i></div>
-                    <div className="risk-bar-labels"><span>Low</span><span>Medium</span><span>High</span></div>
+                    <div className="risk-bar"><i style={{ width: '18%' }}></i></div>
+                    <div className="risk-bar-labels"><span>Strong</span><span>Mixed</span><span>Limited</span></div>
                   </div>
                   <div className="metric-card">
-                    <div className="card-label-mono">Top Skills · 6 matched</div>
+                    <div className="card-label-mono">Skills Found</div>
                     <div className="skills">
-                      <span className="skill skill-dark">React</span>
-                      <span className="skill skill-dark">TypeScript</span>
-                      <span className="skill skill-dark">System Design</span>
-                      <span className="skill">GraphQL</span>
-                      <span className="skill">Node.js</span>
-                      <span className="skill">Testing</span>
+                      <span className="skill">React</span>
+                      <span className="skill">FastAPI</span>
+                      <span className="skill">SQL</span>
+                      <span className="skill">Leadership</span>
                     </div>
-                    <div className="metric-label" style={{ marginTop: '13px' }}>Skill coverage &nbsp;87/100</div>
-                    <div className="meter" style={{ marginTop: '7px' }}><i style={{ width: '87%', background: '#111827' }}></i></div>
+                    <div className="metric-label" style={{ marginTop: '13px' }}>Resume Match &nbsp;88%</div>
+                    <div className="meter" style={{ marginTop: '7px' }}><i style={{ width: '88%', background: '#111827' }}></i></div>
                   </div>
                   <div className="readiness">
                     <div className="metric-card">
-                      <div className="card-label-mono">Missing Skills · 2 gaps</div>
+                      <div className="card-label-mono">Growth Opportunities</div>
                       <div className="missing-skill-row" style={{ marginTop: '13px' }}>
-                        <div className="missing-skill-line"><span>Kubernetes</span><span className="missing-skill-tag">Critical</span></div>
-                        <div className="mini-bar amber" style={{ width: '70px' }}></div>
+                        <div className="missing-skill-line"><span>System Design</span><span className="missing-skill-tag">Medium</span></div>
+                        <div className="mini-bar amber" style={{ width: '64%' }}></div>
                       </div>
                       <div className="missing-skill-row" style={{ marginTop: '14px' }}>
-                        <div className="missing-skill-line"><span>AWS</span><span className="missing-skill-tag">Moderate</span></div>
-                        <div className="mini-bar amber" style={{ width: '40px' }}></div>
+                        <div className="missing-skill-line"><span>AWS Architecture</span><span className="missing-skill-tag">Low</span></div>
+                        <div className="mini-bar amber" style={{ width: '38%' }}></div>
                       </div>
                     </div>
                     <div className="summary-card trust-footer">
                       <div className="trust-footer-icon">&#10003;</div>
                       <div>
                         <div className="trust-card-title">Candidate Trust Card</div>
-                        <p className="summary-text" style={{ margin: '4px 0 0' }}>Verifiable · Signed by RefAI · Updated 2m ago</p>
+                        <p className="summary-text" style={{ margin: '4px 0 0' }}>Strong full-stack evidence, measurable project ownership, and clear team leadership.</p>
                       </div>
                     </div>
                   </div>
@@ -206,9 +209,9 @@ export default function Hero() {
 
         </div>
       </div>
-      <div className="shell logo-marquee-wrap fade delay-3" aria-label="Companies using RefAI">
+      <div className="shell logo-marquee-wrap fade delay-3" aria-label="Fictional demo journey context">
         <div className="logo-marquee-label-row">
-          <span className="logo-marquee-label">Powering referrals at</span>
+          <span className="logo-marquee-label">Fictional demo context · No company affiliation implied</span>
           <span className="logo-marquee-line"></span>
         </div>
         <div className="logo-marquee">

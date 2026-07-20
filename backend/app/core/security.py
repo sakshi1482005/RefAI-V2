@@ -1,25 +1,26 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
 
-from app.core.config import settings
+from app.db.supabase_client import supabase
 
 bearer_scheme = HTTPBearer()
 
 
 def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> dict:
-    """Verify the Supabase-issued JWT sent from the frontend."""
+    """Validate the current token with Supabase and return the authenticated identity."""
     token = creds.credentials
     try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-    except jwt.PyJWTError:
+        response = supabase.auth.get_user(token)
+        user = response.user
+        if not user:
+            raise ValueError("Supabase did not return a user")
+        return {
+            "sub": str(user.id),
+            "email": user.email,
+            "user_metadata": user.user_metadata or {},
+        }
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-        )
-    return payload
+        ) from exc

@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=JetBrains+Mono:wght@600;700&display=swap");
+
 :root {
   color-scheme: light;
   --ink: #12131a;
@@ -1135,8 +1137,6 @@ section h3 {
    existing CSS file. Nothing above this needs to change.
    ============================================================ */
 
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap");
-
 /* Elegant editorial italic serif for the single highlighted word in the hero heading */
 .hero-serif-italic {
   font-family: "Cormorant Garamond", "Playfair Display", Georgia, serif;
@@ -1218,8 +1218,6 @@ section h3 {
    reference exactly (minus the floating overlay boxes).
    Append to the END of your stylesheet.
    ============================================================ */
-
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&display=swap");
 
 /* Monospace, letter-spaced section labels (REFERRAL RISK / TOP SKILLS / MISSING SKILLS) */
 .card-label-mono {
@@ -1778,6 +1776,9 @@ section h3 {
 }
 
 .msg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #e5e9f1;
   background: #fff;
   color: #3f4756;
@@ -1785,7 +1786,7 @@ section h3 {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 800;
-  cursor: pointer;
+  cursor: default;
   transition:
     transform 0.2s ease,
     border-color 0.2s ease,
@@ -2608,6 +2609,8 @@ section h3 {
 }
 
 .queue-toggle-btn {
+  display: inline-flex;
+  align-items: center;
   border: none;
   background: transparent;
   color: #8891a0;
@@ -2615,7 +2618,7 @@ section h3 {
   font-weight: 800;
   padding: 5px 10px;
   border-radius: 999px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .queue-toggle-btn.active {
@@ -2714,6 +2717,9 @@ section h3 {
 }
 
 .cand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 9.5px;
   padding: 7px 6px;
   white-space: nowrap;
@@ -2947,6 +2953,9 @@ section h3 {
 }
 
 .hiw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #e5e9f1;
   border-radius: 999px;
   background: #fff;
@@ -2954,7 +2963,7 @@ section h3 {
   font-size: 10.5px;
   font-weight: 800;
   padding: 7px 12px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .hiw-btn-dark {
@@ -3472,6 +3481,18 @@ section h3 {
   color: black;
   font-size: 14px;
   line-height: 1.55;
+}
+
+.demo-score-why {
+  margin: 10px 0 0;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.demo-score-why strong {
+  color: #161a2e;
+  font-weight: 700;
 }
 
 @media (max-width: 640px) {

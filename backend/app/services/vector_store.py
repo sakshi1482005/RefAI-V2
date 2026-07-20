@@ -1,12 +1,20 @@
 import chromadb
+from chromadb.config import Settings as ChromaSettings
+from functools import lru_cache
 
 from app.core.config import settings
 
-_client = chromadb.PersistentClient(path=settings.chroma_persist_dir)
+
+@lru_cache(maxsize=1)
+def _client():
+    return chromadb.PersistentClient(
+        path=settings.chroma_persist_dir,
+        settings=ChromaSettings(anonymized_telemetry=False),
+    )
 
 
 def get_collection(name: str = "resume_signals"):
-    return _client.get_or_create_collection(name=name)
+    return _client().get_or_create_collection(name=name)
 
 
 def upsert_resume_chunks(resume_id: str, chunks: list[str]) -> None:

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { friendlyErrorMessage, requireOnline, withRequestTimeout } from "../lib/requestSafety";
 /**
  * RefAI — Auth (Sign in / Create account)
  *
@@ -23,7 +24,7 @@ const ROLE_KEY = "refai_role";
 /** Swap this for your router's navigate() — kept framework-agnostic here. */
 function redirectToDashboard(role: Role) {
   window.location.href =
-    role === "student" ? "/dashboard" : "/dashboard/employee";
+    role === "student" ? "/dashboard" : "/employee/dashboard";
 }
 
 export default function AuthPage(): JSX.Element {
@@ -97,63 +98,32 @@ export default function AuthPage(): JSX.Element {
   }
 
   function authMessage(error: unknown, fallback: string) {
-    const message = error instanceof Error ? error.message : "";
-    const lower = message.toLowerCase();
-    if (lower.includes("invalid login credentials")) {
-      return "Email or password is incorrect. If you recently signed up, confirm your email first or reset your password.";
-    }
-    if (lower.includes("email not confirmed")) {
-      return "Please confirm your email using the link we sent before logging in.";
-    }
-    if (
-      lower.includes("already registered") ||
-      lower.includes("already exists")
-    ) {
-      return "An account with this email already exists. Log in or use Forgot password.";
-    }
-    if (lower.includes("rate limit"))
-      return "Too many attempts. Please wait a moment and try again.";
-    return message || fallback;
+    return friendlyErrorMessage(error, fallback);
   }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const oauthDescription =
-      params.get("error_description") || hash.get("error_description");
-
-    if (oauthDescription) {
-      setOauthError(decodeURIComponent(oauthDescription.replace(/\+/g, " ")));
+    if (params.get("verified") === "1") {
+      setNotice("Email confirmed. Log in to continue to your RefAI dashboard.");
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
+    const isRecoveryReturn = params.get('flow') === 'recovery' || window.location.hash.includes('type=recovery');
+    void supabase.auth.getSession().then(({ data }) => {
+      const user = data.session?.user;
+      if (!user || isRecoveryReturn) return;
+      const metadataRole = user.user_metadata?.role;
+      redirectToDashboard(metadataRole === "employee" ? "employee" : "student");
+    });
+
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (event) => {
         if (event === "PASSWORD_RECOVERY") {
           setMode("reset");
           setNotice("Choose a new password for your account.");
         }
 
-        const isOAuthReturn =
-          Boolean(window.location.hash) ||
-          new URLSearchParams(window.location.search).has("code");
-
-        if (event === "SIGNED_IN" && session?.user && isOAuthReturn) {
-          const savedRole = localStorage.getItem(ROLE_KEY);
-          const metadataRole = session.user.user_metadata?.role;
-          const destinationRole: Role =
-            metadataRole === "employee" || metadataRole === "student"
-              ? metadataRole
-              : savedRole === "employee"
-                ? "employee"
-                : "student";
-          window.history.replaceState(
-            {},
-            document.title,
-            window.location.pathname,
-          );
-          redirectToDashboard(destinationRole);
-        }
+        if (event === "SIGNED_OUT") setOauthLoading(false);
       },
     );
 
@@ -162,6 +132,7 @@ export default function AuthPage(): JSX.Element {
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
+    if (formLoading) return;
     setSiError(null);
     setNotice(null);
 
@@ -183,10 +154,11 @@ export default function AuthPage(): JSX.Element {
     setFormLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      requireOnline();
+      const { data, error } = await withRequestTimeout(supabase.auth.signInWithPassword({
         email: normaliseEmail(email.value),
         password: pw.value,
-      });
+      }));
 
       if (error) {
         closeModalWithError();
@@ -210,8 +182,17 @@ export default function AuthPage(): JSX.Element {
         accountRole === "employee" || accountRole === "student"
           ? accountRole
           : role;
+      if (accountRole !== "employee" && accountRole !== "student") {
+        const { error: roleError } = await withRequestTimeout(supabase.auth.updateUser({ data: { role: destinationRole } }));
+        if (roleError) {
+          closeModalWithError();
+          setSiError(authMessage(roleError, "Your account role could not be saved. Please try again."));
+          return;
+        }
+      }
       runAuthSuccess("Welcome back!", destinationRole);
     } catch (err) {
+      console.error('[RefAI email sign-in failed]', err);
       closeModalWithError();
       setSiError(authMessage(err, "Something went wrong. Please try again."));
     } finally {
@@ -221,6 +202,7 @@ export default function AuthPage(): JSX.Element {
 
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
+    if (formLoading) return;
     setSuError(null);
     setNotice(null);
 
@@ -255,17 +237,18 @@ export default function AuthPage(): JSX.Element {
     setFormLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      requireOnline();
+      const { data, error } = await withRequestTimeout(supabase.auth.signUp({
         email: normaliseEmail(email.value),
         password: pw.value,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?flow=signup`,
           data: {
             full_name: name.value.trim(),
             role: role,
           },
         },
-      });
+      }));
 
       if (error) {
         closeModalWithError();
@@ -303,6 +286,7 @@ export default function AuthPage(): JSX.Element {
         setMode("signin");
       }
     } catch (err) {
+      console.error('[RefAI email signup failed]', err);
       closeModalWithError();
       setSuError(authMessage(err, "Something went wrong. Please try again."));
     } finally {
@@ -312,6 +296,7 @@ export default function AuthPage(): JSX.Element {
 
   async function handleForgotPassword(e: React.FormEvent) {
     e.preventDefault();
+    if (formLoading) return;
     setRecoveryError(null);
     setNotice(null);
     const email = recoveryEmailRef.current;
@@ -322,28 +307,22 @@ export default function AuthPage(): JSX.Element {
     }
 
     setFormLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(
-      normaliseEmail(email.value),
-      {
-        redirectTo: `${window.location.origin}/auth`,
-      },
-    );
-    setFormLoading(false);
-
-    if (error) {
-      setRecoveryError(
-        authMessage(error, "Unable to send the reset email. Please try again."),
-      );
-      return;
+    try {
+      requireOnline();
+      const { error } = await withRequestTimeout(supabase.auth.resetPasswordForEmail(normaliseEmail(email.value), { redirectTo: `${window.location.origin}/auth?flow=recovery` }));
+      if (error) { setRecoveryError(authMessage(error, "Unable to send the reset email. Please try again.")); return; }
+      setNotice("If an account exists for that email, a password-reset link has been sent.");
+    } catch (error) {
+      console.error('[RefAI password recovery request failed]', error);
+      setRecoveryError(authMessage(error, "Unable to send the reset email. Please try again."));
+    } finally {
+      setFormLoading(false);
     }
-
-    setNotice(
-      "If an account exists for that email, a password-reset link has been sent.",
-    );
   }
 
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
+    if (formLoading) return;
     setRecoveryError(null);
     const password = resetPasswordRef.current?.value || "";
     const confirm = resetConfirmRef.current?.value || "";
@@ -360,16 +339,19 @@ export default function AuthPage(): JSX.Element {
     }
 
     setFormLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setFormLoading(false);
-    if (error) {
+    try {
+      requireOnline();
+      const { error } = await withRequestTimeout(supabase.auth.updateUser({ password }));
+      if (error) { setRecoveryError(authMessage(error, "Unable to update your password.")); return; }
+      await withRequestTimeout(supabase.auth.signOut());
+      setNotice("Password updated. You can now log in with your new password.");
+      setMode("signin");
+    } catch (error) {
+      console.error('[RefAI password update failed]', error);
       setRecoveryError(authMessage(error, "Unable to update your password."));
-      return;
+    } finally {
+      setFormLoading(false);
     }
-
-    await supabase.auth.signOut();
-    setNotice("Password updated. You can now log in with your new password.");
-    setMode("signin");
   }
 
   function switchMode(next: Mode) {
@@ -381,6 +363,7 @@ export default function AuthPage(): JSX.Element {
   }
 
   async function handleGoogleSignIn() {
+    if (oauthLoading || formLoading) return;
     setOauthError(null);
     setOauthLoading(true);
 
@@ -390,28 +373,29 @@ export default function AuthPage(): JSX.Element {
     localStorage.setItem(ROLE_KEY, role);
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      requireOnline();
+      const { error } = await withRequestTimeout(supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth`,
+          redirectTo: `${window.location.origin}/auth/callback?flow=oauth`,
           scopes:
             "openid email profile https://www.googleapis.com/auth/userinfo.email",
+          queryParams: { prompt: "select_account" },
         },
-      });
+      }));
 
       if (error) {
         setOauthError(
-          error.message || "Unable to continue with Google. Please try again.",
+          authMessage(error, "Unable to continue with Google. Please try again."),
         );
         setOauthLoading(false);
       }
       // On success, Supabase redirects the browser to Google immediately —
       // no further code here runs, so no need to reset oauthLoading.
     } catch (err) {
+      console.error('[RefAI Google OAuth request failed]', err);
       setOauthError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong. Please try again.",
+        authMessage(err, "Unable to continue with Google. Please try again."),
       );
       setOauthLoading(false);
     }
@@ -807,12 +791,12 @@ export default function AuthPage(): JSX.Element {
             <p>
               {mode === "signin"
                 ? role === "student"
-                  ? "Sign in to continue to your student dashboard."
-                  : "Sign in to review incoming referral requests."
+                  ? "Sign in to review your profile, resume evidence, Trust Card, and referral status."
+                  : "Sign in to open the candidate queue, verify evidence, and record referral decisions."
                 : mode === "signup"
                   ? role === "student"
-                    ? "Upload your resume, get a Trust Card, request referrals."
-                    : "Review Trust Cards instead of resumes — decide in seconds."
+                    ? "Create a student workspace, then complete your profile and upload a resume."
+                    : "Create an employee workspace for candidate reviews and referral decisions."
                   : mode === "forgot"
                     ? "Enter your account email and we’ll send you a secure reset link."
                     : "Use at least 8 characters with uppercase, lowercase, and a number."}
@@ -849,7 +833,7 @@ export default function AuthPage(): JSX.Element {
           )}
 
           {oauthError && (
-            <div className="ra-error" style={{ marginTop: 10 }}>
+            <div className="ra-error" style={{ marginTop: 10 }} role="alert">
               {oauthError}
             </div>
           )}
@@ -925,7 +909,7 @@ export default function AuthPage(): JSX.Element {
                 </button>
               </div>
 
-              {siError && <div className="ra-error">{siError}</div>}
+              {siError && <div className="ra-error" role="alert">{siError}</div>}
 
               <button
                 type="submit"
@@ -944,7 +928,7 @@ export default function AuthPage(): JSX.Element {
                     ref={suNameRef}
                     type="text"
                     id="su-name"
-                    placeholder="Ananya Rao"
+                    placeholder="Full name"
                     autoComplete="name"
                     required
                   />
@@ -1027,7 +1011,7 @@ export default function AuthPage(): JSX.Element {
                 </div>
               </div>
 
-              {suError && <div className="ra-error">{suError}</div>}
+              {suError && <div className="ra-error" role="alert">{suError}</div>}
               {!suError && (
                 <div className="ra-hint">
                   8+ characters with uppercase, lowercase, and a number.
@@ -1131,7 +1115,7 @@ export default function AuthPage(): JSX.Element {
         </div>
       </div>
 
-      <div className={`ra-modal-overlay ${modalOpen ? "show" : ""}`}>
+      <div className={`ra-modal-overlay ${modalOpen ? "show" : ""}`} role="status" aria-live="polite" aria-hidden={!modalOpen}>
         <div className="ra-modal-box">
           {modalPhase === "loading" ? (
             <>
