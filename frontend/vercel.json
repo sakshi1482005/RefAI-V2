@@ -1,0 +1,10 @@
+@'
+{
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+'@ | Set-Content frontend\vercel.json
