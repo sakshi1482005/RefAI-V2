@@ -1,10 +1,1 @@
-@'
-{
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
-}
-'@ | Set-Content frontend\vercel.json
+{"rewrites":[{"source":"/(.*)","destination":"/index.html"}]}
