@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, type ReactNode } from 'react'
-import { AlertCircle, CheckCircle2, HelpCircle, Inbox, Info, LoaderCircle, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { AlertCircle, CheckCircle2, HelpCircle, Inbox, Info, LoaderCircle, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+export { default as Logo } from '../branding/RefAILogo'
 
 type BadgeTone = 'neutral' | 'dark' | 'success' | 'warning' | 'danger' | 'info'
 
@@ -142,17 +143,6 @@ export function SectionHeading({ eyebrow, title, description, action }: { eyebro
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">{description}</p>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
-    </div>
-  )
-}
-
-export function Logo({ inverse = false }: { inverse?: boolean }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className={cn('flex size-9 items-center justify-center rounded-xl', inverse ? 'bg-white text-black' : 'bg-black text-white')}>
-        <ShieldCheck className="size-5" />
-      </div>
-      <span className={cn('text-xl font-bold tracking-tight', inverse ? 'text-white' : 'text-slate-950')}>RefAI</span>
     </div>
   )
 }

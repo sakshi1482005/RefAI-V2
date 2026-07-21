@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { friendlyErrorMessage, withRequestTimeout } from '../lib/requestSafety'
+import RefAILogo from '../components/branding/RefAILogo'
 
 type Role = 'student' | 'employee'
 const ROLE_KEY = 'refai_role'
@@ -15,6 +16,7 @@ export default function AuthCallback() {
     let active = true
     const params = new URLSearchParams(window.location.search)
     const flow = params.get('flow')
+    const requestedRole = params.get('role')
     const providerError = params.get('error_description')
 
     const complete = async () => {
@@ -35,7 +37,9 @@ export default function AuthCallback() {
       const metadataRole = user.user_metadata?.role
       const role: Role = metadataRole === 'employee' || metadataRole === 'student'
         ? metadataRole
-        : storedRole === 'employee' ? 'employee' : 'student'
+        : requestedRole === 'employee' || requestedRole === 'student'
+          ? requestedRole
+          : storedRole === 'employee' ? 'employee' : 'student'
 
       if (metadataRole !== 'employee' && metadataRole !== 'student') {
         const { error: roleError } = await withRequestTimeout(supabase.auth.updateUser({ data: { role } }))
@@ -73,6 +77,7 @@ export default function AuthCallback() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f7f7f8] px-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm" role="status">
+        <RefAILogo className="mb-5 justify-center" />
         <div className={`mx-auto size-10 rounded-full border-4 border-slate-200 ${error ? 'border-rose-300' : 'animate-spin border-t-slate-900'}`} />
         <h1 className="mt-5 text-xl font-semibold">{error ? 'Authentication could not be completed' : 'Finishing authentication'}</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">{error || 'RefAI is confirming your session and account role.'}</p>

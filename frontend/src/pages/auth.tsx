@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { friendlyErrorMessage, requireOnline, withRequestTimeout } from "../lib/requestSafety";
+import RefAILogo from "../components/branding/RefAILogo";
 /**
  * RefAI — Auth (Sign in / Create account)
  *
@@ -377,7 +378,7 @@ export default function AuthPage(): JSX.Element {
       const { error } = await withRequestTimeout(supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?flow=oauth`,
+          redirectTo: `${window.location.origin}/auth/callback?flow=oauth&role=${role}`,
           scopes:
             "openid email profile https://www.googleapis.com/auth/userinfo.email",
           queryParams: { prompt: "select_account" },
@@ -739,8 +740,7 @@ export default function AuthPage(): JSX.Element {
       `}</style>
 
       <a href="/" className="ra-brand">
-        <span className="dot"></span>
-        <span>RefAI</span>
+        <RefAILogo className="contents" />
       </a>
 
       <div className="ra-wrap">

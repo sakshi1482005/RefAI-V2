@@ -8,22 +8,30 @@ SIGNED_RESUME_TTL_SECONDS = 600
 
 
 def store_resume(user_id: str, resume_id: str, file_bytes: bytes) -> tuple[str | None, str]:
-    """Store a resume when a bucket is configured without blocking text analysis."""
     bucket = settings.resume_storage_bucket.strip()
-    if not bucket or not settings.supabase_service_key.strip():
-        return None, "not_configured"
+
+    logger.info(f"Bucket = {bucket}")
+    logger.info(f"Using service key = {bool(settings.supabase_service_key)}")
 
     storage_path = f"{user_id}/{resume_id}.pdf"
+
     try:
-        supabase.storage.from_(bucket).upload(
+        result = supabase.storage.from_(bucket).upload(
             path=storage_path,
             file=file_bytes,
-            file_options={"content-type": "application/pdf", "upsert": "true"},
+            file_options={
+                "content-type": "application/pdf",
+                "upsert": True,
+            },
         )
+
+        logger.info("Upload Result: %s", result)
+
         return storage_path, "stored"
-    except Exception:
-        logger.exception("Resume storage failed for user=%s resume=%s", user_id, resume_id)
-        return None, "unavailable"
+
+    except Exception as e:
+        logger.exception("FULL STORAGE ERROR")
+        raise
 
 
 def find_latest_student_resume(user_id: str) -> dict | None:

@@ -14,6 +14,7 @@ import { DEMO_ATS_SCORE } from '../lib/demoData'
 import TrustScoreExplanation from '../components/dashboard/TrustScoreExplanation'
 import { getStudentWorkflowState } from '../lib/studentWorkflow'
 import ActionPlanPanel from '../components/dashboard/ActionPlanPanel'
+import RefAILogo from '../components/branding/RefAILogo'
 
 export default function TrustCard() {
   const { profile } = useCurrentUser()
@@ -104,15 +105,7 @@ export default function TrustCard() {
         <Card className="overflow-hidden bg-slate-950 text-white">
           <div className="border-b border-white/10 p-6 sm:p-8">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-white text-black">
-                  <ShieldCheck className="size-5" />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold">RefAI</p>
-                  <p className="text-sm text-slate-400">Candidate Trust Card</p>
-                </div>
-              </div>
+              <RefAILogo inverse markClassName="size-10" wordmarkClassName="text-lg font-semibold" subtitle="Candidate Trust Card" subtitleClassName="text-sm text-slate-400" />
               <Badge className="border-white/10 bg-white/10 text-white">{isDemoMode ? 'Demo · Employee view' : 'Employee view'}</Badge>
             </div>
 
