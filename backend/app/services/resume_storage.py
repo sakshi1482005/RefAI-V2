@@ -21,7 +21,7 @@ def store_resume(user_id: str, resume_id: str, file_bytes: bytes) -> tuple[str |
             file=file_bytes,
             file_options={
                 "content-type": "application/pdf",
-                "upsert": True,
+                "upsert": "true",
             },
         )
 

@@ -49,7 +49,7 @@ class FakeRepository:
         self.cards[card_id] = row
         return row
     def list_employees(self):
-        return [{"id": self.employee, "full_name": "Employee One"}]
+        return [{"id": self.employee, "full_name": "Employee One", "company": "Acme", "designation": "Engineer"}]
 
 
 class ReferralRequestTests(unittest.TestCase):
@@ -103,6 +103,16 @@ class ReferralRequestTests(unittest.TestCase):
     def test_student_cannot_access_employee_queue(self):
         self.create()
         with self.assertRaises(ReferralForbidden): self.service.employee_queue(self.repository.student)
+    def test_employee_directory_returns_persisted_company(self):
+        directory = self.service.employee_directory(self.repository.student)
+        self.assertEqual(directory[0]["company"], "Acme")
+        self.assertEqual(directory[0]["designation"], "Engineer")
+    def test_employee_directory_supports_legacy_company_metadata(self):
+        self.repository.list_employees = lambda: [{"id": self.repository.employee, "full_name": "Employee One"}]
+        self.repository.auth_metadata[self.repository.employee] = {"company_name": "Legacy Co", "headline": "Senior Engineer"}
+        directory = self.service.employee_directory(self.repository.student)
+        self.assertEqual(directory[0]["company"], "Legacy Co")
+        self.assertEqual(directory[0]["designation"], "Senior Engineer")
     def test_employee_queue_excludes_detail_payloads(self):
         self.create()
         item = self.service.employee_queue(self.repository.employee)[0]

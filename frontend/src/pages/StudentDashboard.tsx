@@ -30,6 +30,7 @@ import {
   WandSparkles,
   X,
   Zap,
+  Upload,
   type LucideIcon,
 } from "lucide-react";
 import { AnimatedNumber, Avatar, Badge, Card, EmptyState, IconButton, Logo, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton, SectionHeading, Skeleton } from "../components/dashboard/primitives";
@@ -280,16 +281,15 @@ export default function StudentDashboard() {
   const analysisInsights = useMemo(() => analysisSession.matchScore ? buildResumeInsights(analysisSession.matchScore, analysisSession.role) : null, [analysisSession.matchScore, analysisSession.role]);
   const scoreReasons = useMemo(() => analysisSession.matchScore ? buildScoreReasons(analysisSession.matchScore, isDemoMode) : [], [analysisSession.matchScore, isDemoMode]);
   const suggestedImprovements = analysisInsights?.improvements ?? [];
+  const primaryNextAction = workflow.primaryAction;
+  const isPrimaryWorkflowAction = (href: string) => href === primaryNextAction.href;
   const upcomingActions = useMemo(() => {
     const actions: Array<{ title: string; description: string; href: string }> = [];
     if (!profileDetailsComplete) actions.push({ title: "Complete your profile", description: `${100 - profileDetailsCompletion}% remains before your personal and professional details are complete.`, href: "/settings#profile" });
-    if (!workflow.hasResume) actions.push({ title: workflow.uploadAction.label, description: "A resume is required before RefAI can calculate role fit.", href: workflow.uploadAction.href });
-    if (workflow.hasResume && !workflow.hasAnalysis) actions.push({ title: workflow.analysisAction.label, description: "Compare the uploaded resume with a target job description.", href: workflow.analysisAction.href });
     if (workflow.hasAnalysis && !workflow.hasTrustCard) actions.push({ title: workflow.trustCardAction.label, description: "Turn the completed match analysis into referral evidence.", href: workflow.trustCardAction.href });
     if (workflow.hasTrustCard) actions.push({ title: workflow.actionPlanAction.label, description: "Review improvements before continuing to employee matching.", href: workflow.actionPlanAction.href });
     return actions.slice(0, 3);
   }, [profileDetailsComplete, profileDetailsCompletion, workflow]);
-  const primaryNextAction = workflow.primaryAction;
 
   const filteredEmployees = useMemo(() => employees.filter((employee) =>
     `${employee.name} ${employee.company} ${employee.designation}`
@@ -512,7 +512,7 @@ export default function StudentDashboard() {
               {analysisSession.upload && analysisSession.matchScore ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{analysisSession.upload.fileName}</p><p className="mt-1 text-xs text-slate-500">{analysisSession.role || "Target role not saved"}</p></div><Badge tone="success">{analysisSession.matchScore.overall}% match</Badge></div>
                 <div className="mt-4 flex items-center justify-between text-xs text-slate-500"><span>{analysisSession.analyzedAt ? new Date(analysisSession.analyzedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Current session"}</span><button type="button" onClick={() => navigate("/dashboard/resume-analysis")} className="cursor-pointer font-semibold text-slate-900 hover:underline">View analysis</button></div>
-              </div> : <EmptyState className="mt-6" icon={FileSearch} title="No analyzed resumes yet" description="Upload a PDF resume, add a target job description, and RefAI will calculate role fit, proof strength, and skill gaps." action={<PrimaryButton onClick={() => navigate("/dashboard/resume")}>Open Resume Workspace</PrimaryButton>} />}
+              </div> : <EmptyState className="mt-6" icon={FileSearch} title="No analyzed resumes yet" description="Upload a PDF resume, add a target job description, and RefAI will calculate role fit, proof strength, and skill gaps." />}
             </Card>
 
             <Card className="p-6 sm:p-7">
@@ -521,12 +521,12 @@ export default function StudentDashboard() {
                 <div className="flex items-center justify-between rounded-xl bg-slate-950 p-4 text-white"><div><p className="text-xs text-slate-300">{analysisSession.trustCard.role}</p><p className="mt-1 text-sm font-semibold">{analysisSession.trustCard.candidateName}</p></div><div className="text-right"><span className="text-3xl font-semibold">{analysisSession.trustCard.trustScore}</span><p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Trust Score</p></div></div>
                 <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-600">{analysisSession.trustCard.aiSummary}</p>
                 <SecondaryButton className="mt-5 w-full" onClick={() => navigate("/dashboard/trust-card")}>Open Trust Card<ArrowRight className="ml-2 size-4" /></SecondaryButton>
-              </div> : <EmptyState className="mt-6" icon={ShieldCheck} title="Build your first Trust Card" description="A Trust Card turns resume evidence and job-match scores into a concise summary employees can review before referring you." action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</PrimaryButton><SecondaryButton onClick={() => navigate("/dashboard/trust-card")}>Learn about Trust Cards</SecondaryButton></div>} />}
+              </div> : <EmptyState className="mt-6" icon={ShieldCheck} title="Build your first Trust Card" description="A Trust Card turns resume evidence and job-match scores into a concise summary employees can review before referring you." action={<div className="flex flex-wrap justify-center gap-2">{!isPrimaryWorkflowAction(workflow.trustCardAction.href) ? <PrimaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</PrimaryButton> : null}<SecondaryButton onClick={() => navigate("/dashboard/trust-card")}>Learn about Trust Cards</SecondaryButton></div>} />}
             </Card>
 
             <Card className="p-6 sm:p-7 xl:col-span-2">
               <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">AI recommendations</p><h3 className="mt-2 text-xl font-semibold">Suggested improvements</h3></div><Sparkles className="size-5 text-slate-400" /></div>
-              {suggestedImprovements.length > 0 ? <div className="mt-6 grid gap-3 sm:grid-cols-2">{suggestedImprovements.map((suggestion, index) => <div key={suggestion.title} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold">{index + 1}</div><div><p className="text-sm font-semibold">{suggestion.title}</p><p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Why this recommendation?</p><p className="mt-1 text-sm leading-6 text-slate-500">{suggestion.description}</p></div></div></div>)}</div> : <EmptyState className="mt-6" icon={Sparkles} title="Unlock AI recommendations" description="Analyze a resume against a target role to receive evidence-based suggestions for role fit, proof, and skill gaps." action={<PrimaryButton onClick={() => navigate(workflow.analysisAction.href)}>{workflow.analysisAction.label}</PrimaryButton>} />}
+              {suggestedImprovements.length > 0 ? <div className="mt-6 grid gap-3 sm:grid-cols-2">{suggestedImprovements.map((suggestion, index) => <div key={suggestion.title} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold">{index + 1}</div><div><p className="text-sm font-semibold">{suggestion.title}</p><p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Why this recommendation?</p><p className="mt-1 text-sm leading-6 text-slate-500">{suggestion.description}</p></div></div></div>)}</div> : <EmptyState className="mt-6" icon={Sparkles} title="Unlock AI recommendations" description="Analyze a resume against a target role to receive evidence-based suggestions for role fit, proof, and skill gaps." action={!isPrimaryWorkflowAction(workflow.analysisAction.href) ? <PrimaryButton onClick={() => navigate(workflow.analysisAction.href)}>{workflow.analysisAction.label}</PrimaryButton> : undefined} />}
             </Card>
 
             <Card className="p-6 sm:p-7">
@@ -536,7 +536,9 @@ export default function StudentDashboard() {
 
             <Card className="p-6 sm:p-7 xl:col-span-3">
               <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Recent referral activity</p><h3 className="mt-2 text-xl font-semibold">Requests and decisions</h3></div><Activity className="size-5 text-slate-400" /></div>
-              {referralRequests.length > 0 ? <div className="mt-6 grid gap-3 md:grid-cols-3">{referralRequests.slice(0, 3).map((request) => <div key={`${request.employee}-${request.date}`} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">{request.employee}</p><Badge tone={statusTones[request.status]}>{request.status}</Badge></div><p className="mt-2 text-sm text-slate-500">{request.company} · {request.role}</p><p className="mt-3 text-xs text-slate-400">{request.date}</p></div>)}</div> : <EmptyState className="mt-6" icon={Activity} title="Start your referral workflow" description="Create a Trust Card, find a relevant employee, send a personalized request, and track the employee’s decision here." action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton><SecondaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</SecondaryButton></div>} />}
+              {referralRequests.length > 0 ? <div className="mt-6 grid gap-3 md:grid-cols-3">{referralRequests.slice(0, 3).map((request) => <div key={`${request.employee}-${request.date}`} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">{request.employee}</p><Badge tone={statusTones[request.status]}>{request.status}</Badge></div><p className="mt-2 text-sm text-slate-500">{request.company} · {request.role}</p><p className="mt-3 text-xs text-slate-400">{request.date}</p></div>)}</div> : <EmptyState className="mt-6" icon={Activity} title="Start your referral workflow" description="Create a Trust Card, find a relevant employee, send a personalized request, and track the employee’s decision here." action={!workflow.hasResume
+                ? <PrimaryButton onClick={() => navigate(workflow.uploadAction.href)}><Upload className="mr-2 size-4" />Upload Resume</PrimaryButton>
+                : !isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : undefined} />}
             </Card>
           </div>
         </section>
@@ -619,7 +621,7 @@ export default function StudentDashboard() {
             {analysisMetrics.length > 0 ? <>
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h3 className="text-xl font-semibold">Latest analysis</h3><p className="mt-1.5 text-sm text-slate-500">{analysisSession.upload?.fileName} · {analysisSession.role}</p></div><PrimaryButton onClick={() => navigate('/dashboard/resume-analysis')}>Review Analysis<ArrowRight className="ml-2 size-4" /></PrimaryButton></div>
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{analysisMetrics.map((metric) => { const Icon = metric.icon; return <div key={metric.label} className="rounded-xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div className="flex size-9 items-center justify-center rounded-lg bg-slate-100"><Icon className="size-4" /></div><span className="text-2xl font-semibold">{metric.value}</span></div><p className="mt-5 text-sm font-semibold">{metric.label}</p><p className="mt-1 text-xs text-slate-500">{metric.description}</p><div className="mt-4"><ProgressBar value={metric.score} /></div></div> })}</div>
-            </> : <EmptyState icon={FileText} title="No resume analysis yet" description="Open the Resume workspace to select one PDF, add the target role and job description, and run the complete analysis." action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Open Resume Workspace<ArrowRight className="ml-2 size-4" /></PrimaryButton>} />}
+            </> : <EmptyState icon={FileText} title="No resume analysis yet" description="Open the Resume workspace to select one PDF, add the target details, and run the analysis." />}
           </Card>
         </section>
 
@@ -672,7 +674,7 @@ export default function StudentDashboard() {
                   </div>
                 );
               })}
-              {gapGroups.length === 0 ? <EmptyState className="lg:col-span-3" icon={Target} title="Discover your highest-impact gaps" description="Run a role analysis to identify missing evidence. Structured gap recommendations will appear when the analysis API provides them." action={<PrimaryButton onClick={() => navigate(workflow.analysisAction.href)}>{workflow.analysisAction.label}</PrimaryButton>} /> : null}
+              {gapGroups.length === 0 ? <EmptyState className="lg:col-span-3" icon={Target} title="Discover your highest-impact gaps" description="Run a role analysis to identify missing evidence. Structured gap recommendations will appear when the analysis API provides them." action={!isPrimaryWorkflowAction(workflow.analysisAction.href) ? <PrimaryButton onClick={() => navigate(workflow.analysisAction.href)}>{workflow.analysisAction.label}</PrimaryButton> : undefined} /> : null}
             </div>
 
             <div className="mt-5 rounded-xl bg-slate-950 p-6 text-white">
@@ -693,7 +695,7 @@ export default function StudentDashboard() {
                   </div>
                 </div>
 
-                <div className="flex shrink-0 flex-wrap gap-2"><button type="button" onClick={() => navigate(workflow.actionPlanAction.href)} className="inline-flex h-11 items-center justify-center rounded-xl border border-white/20 px-5 text-sm font-semibold text-white transition hover:bg-white/10">{workflow.actionPlanAction.label}</button><button type="button" onClick={() => navigate(workflow.findEmployeesAction.href)} className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-slate-200">{workflow.findEmployeesAction.label}<ArrowRight className="ml-2 size-4" /></button></div>
+                {workflow.hasAnalysis ? <div className="flex shrink-0 flex-wrap gap-2"><button type="button" onClick={() => navigate(workflow.actionPlanAction.href)} className="inline-flex h-11 items-center justify-center rounded-xl border border-white/20 px-5 text-sm font-semibold text-white transition hover:bg-white/10">{workflow.actionPlanAction.label}</button><button type="button" onClick={() => navigate(workflow.findEmployeesAction.href)} className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-slate-200">{workflow.findEmployeesAction.label}<ArrowRight className="ml-2 size-4" /></button></div> : null}
               </div>
             </div>
           </Card>
@@ -768,7 +770,7 @@ export default function StudentDashboard() {
                 </div>
               </Card>
             ))}
-            {learningPlan.length === 0 ? <EmptyState className="lg:col-span-2" icon={GraduationCap} title="Create your AI learning plan" description="RefAI uses resume gaps and target-role evidence to prioritize skills, practical tasks, and a focused two-week improvement path." action={<PrimaryButton onClick={() => navigate(workflow.evidenceAction.href)}>{workflow.evidenceAction.label}</PrimaryButton>} /> : null}
+            {learningPlan.length === 0 ? <EmptyState className="lg:col-span-2" icon={GraduationCap} title="Create your AI learning plan" description="RefAI uses resume gaps and target-role evidence to prioritize skills, practical tasks, and a focused two-week improvement path." action={!isPrimaryWorkflowAction(workflow.evidenceAction.href) ? <PrimaryButton onClick={() => navigate(workflow.evidenceAction.href)}>{workflow.evidenceAction.label}</PrimaryButton> : undefined} /> : null}
           </div>
         </section>
 
@@ -881,7 +883,7 @@ export default function StudentDashboard() {
                 ))}
               </div>
               {scoreReasons.length > 0 ? <ScoreExplanation className="mt-7" title="Why these Trust Card signals?" points={scoreReasons} /> : null}
-              {!analysisSession.trustCard ? <EmptyState className="mt-7" icon={ShieldCheck} title="Generate your Trust Card" description="Complete a resume analysis to turn match scores and supporting evidence into an employee-ready referral summary." action={<PrimaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</PrimaryButton>} /> : null}
+              {!analysisSession.trustCard ? <EmptyState className="mt-7" icon={ShieldCheck} title="Generate your Trust Card" description="Complete a resume analysis to turn match scores and supporting evidence into an employee-ready referral summary." /> : null}
 
               <div className="mt-7">
                 <p className="text-sm font-semibold">Top Skills</p>
@@ -903,7 +905,7 @@ export default function StudentDashboard() {
                 </p>
               </div>
 
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              {!isPrimaryWorkflowAction(workflow.trustCardAction.href) ? <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <PrimaryButton onClick={() => navigate(workflow.trustCardAction.href)}>
                   {workflow.trustCardAction.label}
                   <ArrowRight className="ml-2 size-4" />
@@ -912,7 +914,7 @@ export default function StudentDashboard() {
                   <GitBranch className="mr-2 size-4" />
                   {workflow.evidenceAction.label}
                 </SecondaryButton>
-              </div>
+              </div> : null}
             </div>
           </div>
         </section>
@@ -977,7 +979,7 @@ export default function StudentDashboard() {
             ))}
           </div>
 
-          {filteredEmployees.length === 0 && <EmptyState className="mt-4" icon={Users} title={employees.length === 0 ? "Prepare for employee discovery" : "No employees match your search"} description={employees.length === 0 ? "Build a Trust Card while the employee-directory integration is being connected." : "Adjust the name, company, or role, or clear the current search."} action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton>{employeeQuery ? <SecondaryButton onClick={() => setEmployeeQuery("")}>Clear Search</SecondaryButton> : <SecondaryButton onClick={() => navigate('/dashboard#referral-requests')}>Referral Requests</SecondaryButton>}</div>} />}
+          {filteredEmployees.length === 0 && <EmptyState className="mt-4" icon={Users} title={employees.length === 0 ? "Prepare for employee discovery" : "No employees match your search"} description={employees.length === 0 ? "Build a Trust Card while the employee-directory integration is being connected." : "Adjust the name, company, or role, or clear the current search."} action={<div className="flex flex-wrap justify-center gap-2">{!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : null}{employeeQuery ? <SecondaryButton onClick={() => setEmployeeQuery("")}>Clear Search</SecondaryButton> : <SecondaryButton onClick={() => navigate('/dashboard#referral-requests')}>Referral Requests</SecondaryButton>}</div>} />}
         </section>
 
         {/* Referral gate and message generator */}
@@ -1133,7 +1135,7 @@ export default function StudentDashboard() {
                   </div>
                 </div>
               ))}
-              {referralRequests.length === 0 ? <EmptyState className="m-5 md:m-6" icon={Activity} title="Send your first referral request" description="The workflow starts with a Trust Card, continues with employee discovery, and tracks pending, accepted, or declined decisions here." action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton><SecondaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</SecondaryButton></div>} /> : null}
+              {referralRequests.length === 0 ? <EmptyState className="m-5 md:m-6" icon={Activity} title="Send your first referral request" description="The workflow starts with a Trust Card, continues with employee discovery, and tracks pending, accepted, or declined decisions here." action={!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : undefined} /> : null}
             </div>
           </Card>
         </section>
@@ -1144,12 +1146,12 @@ export default function StudentDashboard() {
             eyebrow="Resume Health"
             title="Check resume clarity and evidence quality"
             description="Use these checks to identify formatting or proof issues, then update the resume before your next analysis."
-            action={
+            action={!isPrimaryWorkflowAction(workflow.optimizeResumeAction.href) ?
               <PrimaryButton onClick={() => navigate(workflow.optimizeResumeAction.href)}>
                 <WandSparkles className="mr-2 size-4" />
                 {workflow.optimizeResumeAction.label}
               </PrimaryButton>
-            }
+            : undefined}
           />
 
           <Card className="p-6 sm:p-8">
@@ -1196,7 +1198,7 @@ export default function StudentDashboard() {
                     </div>
                   );
                 })}
-                {resumeHealth.length === 0 ? <EmptyState className="sm:col-span-2" icon={FileSearch} title="Check your resume health" description="Upload your latest PDF and run an analysis to prepare ATS, evidence, and role-alignment insights when resume-health metrics become available." action={<PrimaryButton onClick={() => navigate(workflow.optimizeResumeAction.href)}>{workflow.optimizeResumeAction.label}</PrimaryButton>} /> : null}
+                {resumeHealth.length === 0 ? <EmptyState className="sm:col-span-2" icon={FileSearch} title="Check your resume health" description="Upload your latest PDF and run an analysis to prepare ATS, evidence, and role-alignment insights when resume-health metrics become available." /> : null}
               </div>
             </div>
           </Card>

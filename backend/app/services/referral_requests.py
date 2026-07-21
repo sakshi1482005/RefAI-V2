@@ -109,7 +109,13 @@ class SupabaseReferralRepository:
         return rows[0]
 
     def list_employees(self) -> list[dict[str, Any]]:
-        return supabase.table("profiles").select("id,full_name").eq("role", "employee").order("full_name").execute().data or []
+        profiles = supabase.table("profiles").select("id,full_name").eq("role", "employee").order("full_name").execute().data or []
+        if not profiles:
+            return []
+        profile_ids = [str(profile["id"]) for profile in profiles]
+        employee_profiles = supabase.table("employee_profiles").select("profile_id,company,designation").in_("profile_id", profile_ids).execute().data or []
+        details_by_profile = {str(details["profile_id"]): details for details in employee_profiles}
+        return [{**profile, **details_by_profile.get(str(profile["id"]), {})} for profile in profiles]
 
 
 class ReferralRequestService:
@@ -261,7 +267,13 @@ class ReferralRequestService:
 
     def employee_directory(self, actor_id: str) -> list[dict[str, Any]]:
         if self._role(actor_id) != "student": raise ReferralForbidden("Student access is required")
-        return [
-            {"id": row["id"], "name": row.get("full_name") or "Employee", "company": None, "designation": None}
-            for row in self.repository.list_employees()
-        ]
+        employees = []
+        for row in self.repository.list_employees():
+            metadata = self.repository.get_auth_metadata(str(row["id"])) if not row.get("company") or not row.get("designation") else {}
+            employees.append({
+                "id": row["id"],
+                "name": row.get("full_name") or "Employee",
+                "company": row.get("company") or metadata.get("company") or metadata.get("company_name") or metadata.get("preferred_company"),
+                "designation": row.get("designation") or metadata.get("designation") or metadata.get("job_title") or metadata.get("headline"),
+            })
+        return employees
