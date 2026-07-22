@@ -1,16 +1,14 @@
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/feedback/ToastProvider";
 import {
   Activity,
   ArrowRight,
-  Bell,
   BriefcaseBusiness,
   Check,
   CheckCircle2,
   ChevronRight,
-  Clock3,
   Copy,
   FileSearch,
   FileText,
@@ -18,33 +16,24 @@ import {
   GraduationCap,
   LockKeyhole,
   Menu,
-  Rocket,
   Search,
   Send,
-  Settings,
   ShieldCheck,
   Sparkles,
-  Target,
   UserCheck,
   Users,
-  WandSparkles,
   X,
-  Zap,
-  Upload,
-  type LucideIcon,
 } from "lucide-react";
-import { AnimatedNumber, Avatar, Badge, Card, EmptyState, IconButton, Logo, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton, SectionHeading, Skeleton } from "../components/dashboard/primitives";
-import { cn as classNames } from "../lib/utils";
+import { Avatar, Badge, Card, EmptyState, IconButton, Logo, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton, SectionHeading, Skeleton } from "../components/dashboard/primitives";
 import { useAnalysisSession } from "../hooks/useAnalysisSession";
 import StudentNavigation from "../components/dashboard/StudentNavigation";
-import { buildResumeInsights, buildScoreReasons } from "../lib/aiInsights";
+import { buildScoreReasons } from "../lib/aiInsights";
 import { hasReachedDemoStage, useDemoMode } from "../context/DemoModeContext";
 import DemoModeBanner from "../components/dashboard/DemoModeBanner";
 import { DEMO_ATS_SCORE, demoEmployee, demoReferral, demoReferralRequestNote } from "../lib/demoData";
 import NetworkStatusBanner from "../components/feedback/NetworkStatusBanner";
 import { useSectionReveal } from "../hooks/useSectionReveal";
 import ProfileMenu from "../components/dashboard/ProfileMenu";
-import AITransparencyPanel from "../components/dashboard/AITransparencyPanel";
 import ConfettiBurst from "../components/feedback/ConfettiBurst";
 import { getStudentWorkflowState } from "../lib/studentWorkflow";
 import { api } from "../lib/apiClient";
@@ -72,15 +61,6 @@ type BadgeTone =
   | "info";
 
 type Status = "Pending" | "Under Review" | "Approved" | "Declined" | "More Info Requested" | "Referred";
-type Priority = "High" | "Medium" | "Low";
-
-interface Metric {
-  label: string;
-  value: string;
-  description: string;
-  score: number;
-  icon: LucideIcon;
-}
 
 interface Employee {
   id: string;
@@ -100,70 +80,6 @@ interface ReferralRequest {
   date: string;
   status: Status;
 }
-
-const ScoreRing = memo(function ScoreRing({
-  score,
-  size = 176,
-  strokeWidth = 12,
-}: {
-  score: number | null;
-  size?: number;
-  strokeWidth?: number;
-}) {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const normalizedScore = score ?? 0;
-  const offset = circumference - (normalizedScore / 100) * circumference;
-
-  return (
-    <div
-      className="relative shrink-0"
-      style={{ width: size, height: size }}
-      aria-label={score === null ? "Score not available" : `${score} out of 100`}
-    >
-      <svg
-        className="-rotate-90"
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        aria-hidden="true"
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          className="text-slate-100"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className="text-black"
-        />
-      </svg>
-
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-semibold tracking-tight">{score === null ? "—" : <AnimatedNumber value={score} />}</span>
-        <span className="mt-1 text-sm font-medium text-slate-500">out of 100</span>
-      </div>
-    </div>
-  );
-})
-
-const priorityTones: Record<Priority, BadgeTone> = {
-  High: "danger",
-  Medium: "warning",
-  Low: "neutral",
-};
 
 const statusTones: Record<Status, BadgeTone> = {
   Approved: "success",
@@ -192,14 +108,6 @@ export default function StudentDashboard() {
   const demoAnalysisReady = isDemoMode && hasReachedDemoStage(demoJourneyStage, 'analyzed');
   const matchingSkills = demoAnalysisReady ? ["React", "TypeScript", "FastAPI", "SQL", "Problem Solving", "Team Collaboration"] : analysisSession.analysis?.matchedSkills ?? [];
   const priorityActionPlan = analysisSession.trustCard?.actionPlan ?? analysisSession.analysis?.actionPlan ?? [];
-  const gapGroups = demoAnalysisReady ? [
-    { title: "System design", subtitle: "Explain scale and trade-offs", icon: GitBranch, iconClass: "bg-amber-50 text-amber-700", items: ["Document API scaling choices", "Add caching and reliability decisions"] },
-    { title: "Cloud delivery", subtitle: "Show production ownership", icon: Rocket, iconClass: "bg-blue-50 text-blue-700", items: ["Deploy one FastAPI service", "Add monitoring evidence"] },
-  ] : [];
-  const learningPlan = demoAnalysisReady ? [
-    { week: "Week 1", focus: "System design evidence", duration: "4 hours", tasks: [{ title: "Write a design brief for the FastAPI project", hours: "2h", priority: "High" as Priority }, { title: "Add scale and reliability trade-offs", hours: "2h", priority: "Medium" as Priority }] },
-    { week: "Week 2", focus: "Cloud delivery proof", duration: "3 hours", tasks: [{ title: "Deploy and monitor one API", hours: "3h", priority: "High" as Priority }] },
-  ] : [];
   const employeeDiscoveryReady = isDemoMode && hasReachedDemoStage(demoJourneyStage, 'trust-card-generated');
   const demoReferralSent = isDemoMode && hasReachedDemoStage(demoJourneyStage, 'referral-sent');
   const referralSent = isDemoMode ? demoReferralSent : persistedRequests.length > 0;
@@ -211,23 +119,13 @@ export default function StudentDashboard() {
   const referralRequests: ReferralRequest[] = isDemoMode
     ? (demoReferralSent ? [{ id: 'demo-referral', employee: demoReferral.employee, initials: demoReferral.employeeInitials, company: demoReferral.company, role: demoReferral.role, date: demoReferral.requestedAt, status: demoDecision === 'pending' ? 'Pending' : demoDecision === 'approved' ? 'Approved' : demoDecision === 'more_info_requested' ? 'More Info Requested' : 'Declined' }] : [])
     : persistedRequests.map((request) => { const employee = employees.find((item) => item.id === request.employeeId); return { id: request.id, employee: employee?.name || 'Assigned employee', initials: employee?.initials || 'AE', company: request.targetCompany, role: request.targetRole, date: new Date(request.createdAt).toLocaleDateString(), status: statusLabel(request.status) }; });
-  const resumeHealth = demoAnalysisReady ? [{ label: "ATS Score", score: DEMO_ATS_SCORE, icon: FileSearch }, { label: "Evidence strength", score: 82, icon: ShieldCheck }] : [];
   const readinessScore = analysisSession.trustCard?.trustScore ?? null;
-  const analysisMetrics: Metric[] = useMemo(() => analysisSession.matchScore
-    ? [
-        { label: "Resume Match", value: `${analysisSession.matchScore.overall}%`, description: "Average of role fit and proof", score: analysisSession.matchScore.overall, icon: Target },
-        { label: "Role Fit", value: `${analysisSession.matchScore.roleFit}%`, description: "Job terms found in the resume", score: analysisSession.matchScore.roleFit, icon: CheckCircle2 },
-        { label: "Proof", value: `${analysisSession.matchScore.proof}%`, description: "Matched requirements supported repeatedly", score: analysisSession.matchScore.proof, icon: FileSearch },
-        { label: "Gaps", value: `${analysisSession.matchScore.gaps}%`, description: "Job terms not covered by the resume", score: analysisSession.matchScore.gaps, icon: Zap },
-      ]
-    : [], [analysisSession.matchScore]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [copied, setCopied] = useState(false);
   const [referralRequestNote, setReferralRequestNote] = useState(() => isDemoMode ? demoReferralRequestNote : "");
   const [referralCelebration, setReferralCelebration] = useState(false);
   const [showReferralSuccess, setShowReferralSuccess] = useState(false);
-  const [completedTasks, setCompletedTasks] = useState<string[]>([]);
   const employeeSearchRef = useRef<HTMLInputElement>(null);
   useSectionReveal();
   useEffect(() => {
@@ -263,47 +161,15 @@ export default function StudentDashboard() {
     return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   }, []);
   const firstName = profile?.fullName?.split(/\s+/)[0] || "there";
-  const profileCompletionItems = useMemo(() => [
-    Boolean(profile?.fullName),
-    Boolean(profile?.headline),
-    Boolean(profile?.college && profile?.degree),
-    Boolean(profile?.branch && profile?.graduationYear),
-    Boolean(profile?.skills.length),
-    Boolean(profile?.bio),
-    Boolean(profile?.preferredRole),
-    Boolean(profile?.linkedinUrl || profile?.githubUrl || profile?.portfolioUrl),
-    Boolean(analysisSession.upload),
-    Boolean(analysisSession.matchScore),
-  ], [analysisSession.matchScore, analysisSession.upload, profile]);
-  const profileCompletion = Math.round((profileCompletionItems.filter(Boolean).length / profileCompletionItems.length) * 100);
-  const profileDetailsCompletion = Math.round((profileCompletionItems.slice(0, 8).filter(Boolean).length / 8) * 100);
-  const profileDetailsComplete = profileDetailsCompletion === 100;
-  const analysisInsights = useMemo(() => analysisSession.matchScore ? buildResumeInsights(analysisSession.matchScore, analysisSession.role) : null, [analysisSession.matchScore, analysisSession.role]);
   const scoreReasons = useMemo(() => analysisSession.matchScore ? buildScoreReasons(analysisSession.matchScore, isDemoMode) : [], [analysisSession.matchScore, isDemoMode]);
-  const suggestedImprovements = analysisInsights?.improvements ?? [];
   const primaryNextAction = workflow.primaryAction;
   const isPrimaryWorkflowAction = (href: string) => href === primaryNextAction.href;
-  const upcomingActions = useMemo(() => {
-    const actions: Array<{ title: string; description: string; href: string }> = [];
-    if (!profileDetailsComplete) actions.push({ title: "Complete your profile", description: `${100 - profileDetailsCompletion}% remains before your personal and professional details are complete.`, href: "/settings#profile" });
-    if (workflow.hasAnalysis && !workflow.hasTrustCard) actions.push({ title: workflow.trustCardAction.label, description: "Turn the completed match analysis into referral evidence.", href: workflow.trustCardAction.href });
-    if (workflow.hasTrustCard) actions.push({ title: workflow.actionPlanAction.label, description: "Review improvements before continuing to employee matching.", href: workflow.actionPlanAction.href });
-    return actions.slice(0, 3);
-  }, [profileDetailsComplete, profileDetailsCompletion, workflow]);
 
   const filteredEmployees = useMemo(() => employees.filter((employee) =>
     `${employee.name} ${employee.company} ${employee.designation}`
       .toLowerCase()
       .includes(employeeQuery.toLowerCase()),
   ), [employeeQuery, employees]);
-
-  const toggleTask = (task: string) => {
-    setCompletedTasks((current) =>
-      current.includes(task)
-        ? current.filter((item) => item !== task)
-        : [...current, task],
-    );
-  };
 
   const copyMessage = async () => {
     try {
@@ -389,16 +255,6 @@ export default function StudentDashboard() {
           </div>
 
           <div className="hidden items-center gap-1 sm:flex">
-            <IconButton label="Notifications" onClick={() => scrollToSection("referral-requests")}>
-              <Bell className="size-[18px]" />
-              <span className="absolute right-2 top-2 size-1.5 rounded-full bg-rose-500 ring-2 ring-white" />
-            </IconButton>
-            <IconButton label="Settings" onClick={() => navigate("/settings")}>
-              <Settings className="size-[18px]" />
-            </IconButton>
-
-            <div className="mx-3 h-7 w-px bg-slate-200" />
-
             <ProfileMenu portal="student" />
           </div>
 
@@ -421,14 +277,6 @@ export default function StudentDashboard() {
             </div>
             <div className="mx-auto mt-3 flex max-w-[1440px] items-center justify-between rounded-xl bg-slate-50 p-3 sm:hidden">
               <ProfileMenu portal="student" showDetails onNavigate={() => setMobileMenuOpen(false)} />
-              <div className="flex">
-                <IconButton label="Notifications" onClick={() => { setMobileMenuOpen(false); scrollToSection("referral-requests"); }}>
-                  <Bell className="size-4" />
-                </IconButton>
-                <IconButton label="Settings" onClick={() => navigate("/settings")}>
-                  <Settings className="size-4" />
-                </IconButton>
-              </div>
             </div>
           </div>
         )}
@@ -496,286 +344,20 @@ export default function StudentDashboard() {
             description="See what is complete, what RefAI has analyzed, and which action will move your referral forward."
           />
 
-          <div className="grid gap-6 xl:grid-cols-3">
-            <Card className="p-6 sm:p-7">
-              <div className="flex items-start justify-between gap-4">
-                <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Resume completion</p><h3 id="dashboard-overview-title" className="mt-2 text-xl font-semibold">Profile readiness</h3></div>
-                <span className="text-2xl font-semibold tracking-tight">{profileLoading ? "—" : `${profileCompletion}%`}</span>
-              </div>
-              {profileLoading ? <Skeleton className="mt-6 h-2.5 w-full" /> : <div className="mt-6"><ProgressBar value={profileCompletion} /></div>}
-              <p className="mt-4 text-sm leading-6 text-slate-600">Completion reflects your Supabase profile, resume upload, and latest match analysis.</p>
-              <SecondaryButton className="mt-5 w-full" onClick={() => navigate("/settings#profile")}>Review profile<ArrowRight className="ml-2 size-4" /></SecondaryButton>
-            </Card>
-
+          <div>
             <Card className="p-6 sm:p-7">
               <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Recently analyzed resumes</p><h3 className="mt-2 text-xl font-semibold">Latest analysis</h3></div><FileText className="size-5 text-slate-400" /></div>
               {analysisSession.upload && analysisSession.matchScore ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{analysisSession.upload.fileName}</p><p className="mt-1 text-xs text-slate-500">{analysisSession.role || "Target role not saved"}</p></div><Badge tone="success">{analysisSession.matchScore.overall}% match</Badge></div>
                 <div className="mt-4 flex items-center justify-between text-xs text-slate-500"><span>{analysisSession.analyzedAt ? new Date(analysisSession.analyzedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Current session"}</span><button type="button" onClick={() => navigate("/dashboard/resume-analysis")} className="cursor-pointer font-semibold text-slate-900 hover:underline">View analysis</button></div>
-              </div> : <EmptyState className="mt-6" icon={FileSearch} title="No analyzed resumes yet" description="Upload a PDF resume, add a target job description, and RefAI will calculate role fit, proof strength, and skill gaps." />}
+              </div> : <EmptyState className="mt-6" icon={FileSearch} title="No analyzed resumes yet" description="Upload a PDF resume, choose a target role and company, and RefAI will calculate role fit, proof strength, and skill gaps." />}
             </Card>
 
-            <Card className="p-6 sm:p-7">
-              <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Latest Trust Card</p><h3 className="mt-2 text-xl font-semibold">Referral evidence</h3></div><ShieldCheck className="size-5 text-slate-400" /></div>
-              {analysisSession.trustCard ? <div className="mt-6">
-                <div className="flex items-center justify-between rounded-xl bg-slate-950 p-4 text-white"><div><p className="text-xs text-slate-300">{analysisSession.trustCard.role}</p><p className="mt-1 text-sm font-semibold">{analysisSession.trustCard.candidateName}</p></div><div className="text-right"><span className="text-3xl font-semibold">{analysisSession.trustCard.trustScore}</span><p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">Trust Score</p></div></div>
-                <p className="mt-4 line-clamp-3 text-sm leading-6 text-slate-600">{analysisSession.trustCard.aiSummary}</p>
-                <SecondaryButton className="mt-5 w-full" onClick={() => navigate("/dashboard/trust-card")}>Open Trust Card<ArrowRight className="ml-2 size-4" /></SecondaryButton>
-              </div> : <EmptyState className="mt-6" icon={ShieldCheck} title="Build your first Trust Card" description="A Trust Card turns resume evidence and job-match scores into a concise summary employees can review before referring you." action={<div className="flex flex-wrap justify-center gap-2">{!isPrimaryWorkflowAction(workflow.trustCardAction.href) ? <PrimaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</PrimaryButton> : null}<SecondaryButton onClick={() => navigate("/dashboard/trust-card")}>Learn about Trust Cards</SecondaryButton></div>} />}
-            </Card>
-
-            <Card className="p-6 sm:p-7 xl:col-span-2">
-              <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">AI recommendations</p><h3 className="mt-2 text-xl font-semibold">Suggested improvements</h3></div><Sparkles className="size-5 text-slate-400" /></div>
-              {suggestedImprovements.length > 0 ? <div className="mt-6 grid gap-3 sm:grid-cols-2">{suggestedImprovements.map((suggestion, index) => <div key={suggestion.title} className="rounded-xl border border-slate-200 p-4"><div className="flex items-start gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold">{index + 1}</div><div><p className="text-sm font-semibold">{suggestion.title}</p><p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Why this recommendation?</p><p className="mt-1 text-sm leading-6 text-slate-500">{suggestion.description}</p></div></div></div>)}</div> : <EmptyState className="mt-6" icon={Sparkles} title="Unlock AI recommendations" description="Analyze a resume against a target role to receive evidence-based suggestions for role fit, proof, and skill gaps." action={!isPrimaryWorkflowAction(workflow.analysisAction.href) ? <PrimaryButton onClick={() => navigate(workflow.analysisAction.href)}>{workflow.analysisAction.label}</PrimaryButton> : undefined} />}
-            </Card>
-
-            <Card className="p-6 sm:p-7">
-              <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Upcoming actions</p><h3 className="mt-2 text-xl font-semibold">Next best steps</h3></div><Clock3 className="size-5 text-slate-400" /></div>
-              <div className="mt-5 space-y-3">{upcomingActions.map((action) => <button key={action.title} type="button" onClick={() => navigate(action.href)} className="group flex w-full cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-black"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-slate-400" /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{action.title}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{action.description}</span></span><ChevronRight className="mt-0.5 size-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5" /></button>)}</div>
-            </Card>
-
-            <Card className="p-6 sm:p-7 xl:col-span-3">
-              <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Recent referral activity</p><h3 className="mt-2 text-xl font-semibold">Requests and decisions</h3></div><Activity className="size-5 text-slate-400" /></div>
-              {referralRequests.length > 0 ? <div className="mt-6 grid gap-3 md:grid-cols-3">{referralRequests.slice(0, 3).map((request) => <div key={`${request.employee}-${request.date}`} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold">{request.employee}</p><Badge tone={statusTones[request.status]}>{request.status}</Badge></div><p className="mt-2 text-sm text-slate-500">{request.company} · {request.role}</p><p className="mt-3 text-xs text-slate-400">{request.date}</p></div>)}</div> : <EmptyState className="mt-6" icon={Activity} title="Start your referral workflow" description="Create a Trust Card, find a relevant employee, send a personalized request, and track the employee’s decision here." action={!workflow.hasResume
-                ? <PrimaryButton onClick={() => navigate(workflow.uploadAction.href)}><Upload className="mr-2 size-4" />Upload Resume</PrimaryButton>
-                : !isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : undefined} />}
-            </Card>
-          </div>
-        </section>
-
-        {/* Referral readiness */}
-        <section>
-          <Card className="overflow-hidden">
-            <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
-              <div className="flex items-center justify-center border-b border-slate-200 bg-slate-50/70 p-8 sm:p-12 lg:border-b-0 lg:border-r">
-                <div className="text-center">
-                  <p className="mb-6 text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    Overall Match Score
-                  </p>
-                  <ScoreRing score={readinessScore} />
-                  <Badge tone={readinessScore === null ? "neutral" : "success"} className="mt-6 px-3">
-                    <CheckCircle2 className="mr-1.5 size-3.5" />
-                    {readinessScore === null ? "Score unavailable" : "Analysis available"}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="flex flex-col justify-center p-7 sm:p-10 lg:p-12">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-black text-white">
-                  <Sparkles className="size-5" />
-                </div>
-
-                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  AI Readiness Summary
-                </p>
-
-                <h2 className="mt-3 max-w-2xl text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
-                  {analysisSession.trustCard?.referralReadiness || "Generate a Trust Card to calculate readiness"}
-                </h2>
-
-                <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-                  {analysisSession.trustCard ? `Your backend-calculated Trust Score is ${analysisSession.trustCard.trustScore}. This readiness result is separate from the ${analysisSession.trustCard.overallMatch}% Overall Match and ${analysisSession.trustCard.confidence}% analysis confidence.` : "Complete resume analysis, then generate a Trust Card to receive a backend-calculated Trust Score and readiness result."}
-                </p>
-
-                {scoreReasons.length > 0 ? <ScoreExplanation className="mt-7" title="Why this match score?" points={scoreReasons} /> : null}
-
-                <div className="mt-7 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-                    <Check className="size-4" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-emerald-950">
-                      {analysisSession.trustCard?.referralReadiness || 'Readiness calculation pending'}
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-emerald-800">
-                      {analysisSession.trustCard ? 'Thresholds: Ready at 75+, Improve before requesting at 55–74, and Not ready yet below 55.' : 'Generate the Trust Card after analysis to calculate readiness.'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-7 flex flex-wrap gap-2">
-                  {[
-                    { label: "Resume processed", available: Boolean(analysisSession.upload) },
-                    { label: "Job description provided", available: Boolean(analysisSession.jobDescription) },
-                    { label: "Match analyzed", available: Boolean(analysisSession.matchScore) },
-                  ].map((item) => (
-                    <Badge key={item.label} tone={item.available ? "success" : "neutral"}>
-                      {item.available ? <Check className="mr-1.5 size-3" /> : null}
-                      {item.label}: {item.available ? "Yes" : "No"}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </section>
-
-        {/* Resume status — upload and analysis live in the single Resume workspace. */}
-        <section id="resume-analyzer" className="scroll-mt-24">
-          <SectionHeading
-            eyebrow="Resume Status"
-            title="One resume workflow, one clear next step"
-            description="Upload the PDF, add the target role, and run analysis in the Resume workspace. This dashboard only summarizes the latest result."
-          />
-          <Card className="p-6 sm:p-8">
-            {analysisMetrics.length > 0 ? <>
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><h3 className="text-xl font-semibold">Latest analysis</h3><p className="mt-1.5 text-sm text-slate-500">{analysisSession.upload?.fileName} · {analysisSession.role}</p></div><PrimaryButton onClick={() => navigate('/dashboard/resume-analysis')}>Review Analysis<ArrowRight className="ml-2 size-4" /></PrimaryButton></div>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{analysisMetrics.map((metric) => { const Icon = metric.icon; return <div key={metric.label} className="rounded-xl border border-slate-200 p-5"><div className="flex items-start justify-between"><div className="flex size-9 items-center justify-center rounded-lg bg-slate-100"><Icon className="size-4" /></div><span className="text-2xl font-semibold">{metric.value}</span></div><p className="mt-5 text-sm font-semibold">{metric.label}</p><p className="mt-1 text-xs text-slate-500">{metric.description}</p><div className="mt-4"><ProgressBar value={metric.score} /></div></div> })}</div>
-            </> : <EmptyState icon={FileText} title="No resume analysis yet" description="Open the Resume workspace to select one PDF, add the target details, and run the analysis." />}
-          </Card>
-        </section>
-
-        {/* AI gap analysis */}
-        <section id="ai-recommendations" className="scroll-mt-24">
-          <SectionHeading
-            eyebrow="AI Gap Analysis"
-            title="See what is limiting your match"
-            description="Review the missing skills or proof behind the score, then move the highest-impact gaps into your learning plan."
-          />
-
-          <AITransparencyPanel session={analysisSession} isDemoMode={isDemoMode} className="mb-6" />
-
-          <Card className="p-6 sm:p-8">
-            <div className="grid gap-5 lg:grid-cols-3">
-              {gapGroups.map((group) => {
-                const Icon = group.icon;
-
-                return (
-                  <div
-                    key={group.title}
-                    className="rounded-xl border border-slate-200 p-5 sm:p-6"
-                  >
-                    <div
-                      className={classNames(
-                        "flex size-10 items-center justify-center rounded-xl",
-                        group.iconClass,
-                      )}
-                    >
-                      <Icon className="size-5" />
-                    </div>
-
-                    <h3 className="mt-5 text-lg font-semibold">{group.title}</h3>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {group.subtitle}
-                    </p>
-
-                    <ul className="mt-6 space-y-4">
-                      {group.items.map((item) => (
-                        <li key={item} className="flex items-start gap-3">
-                          <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-100">
-                            <Check className="size-3" />
-                          </div>
-                          <span className="text-sm leading-5 text-slate-700">
-                            {item}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
-              {gapGroups.length === 0 ? <EmptyState className="lg:col-span-3" icon={Target} title="Discover your highest-impact gaps" description="Run a role analysis to identify missing evidence. Structured gap recommendations will appear when the analysis API provides them." action={!isPrimaryWorkflowAction(workflow.analysisAction.href) ? <PrimaryButton onClick={() => navigate(workflow.analysisAction.href)}>{workflow.analysisAction.label}</PrimaryButton> : undefined} /> : null}
-            </div>
-
-            <div className="mt-5 rounded-xl bg-slate-950 p-6 text-white">
-              <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
-                <div className="flex items-start gap-4">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                    <Sparkles className="size-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-300">
-                      Recommendation
-                    </p>
-                    <div className="mt-3 max-w-3xl space-y-3 text-sm leading-6 text-slate-300">
-                      <p><span className="font-semibold text-white">Why?</span> {analysisInsights?.weakness.description || "Run a resume analysis to identify which score is limiting readiness and why."}</p>
-                      <p><span className="font-semibold text-white">What evidence?</span> {analysisSession.matchScore ? `The match API returned ${analysisSession.matchScore.roleFit}% Role Fit, ${analysisSession.matchScore.proof}% repeated Proof, and ${analysisSession.matchScore.gaps}% unmatched terminology.` : "No match evidence has been returned."}</p>
-                      <p><span className="font-semibold text-white">What can improve?</span> {suggestedImprovements[0]?.title || "Complete an analysis to receive an evidence-based improvement."}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {workflow.hasAnalysis ? <div className="flex shrink-0 flex-wrap gap-2"><button type="button" onClick={() => navigate(workflow.actionPlanAction.href)} className="inline-flex h-11 items-center justify-center rounded-xl border border-white/20 px-5 text-sm font-semibold text-white transition hover:bg-white/10">{workflow.actionPlanAction.label}</button><button type="button" onClick={() => navigate(workflow.findEmployeesAction.href)} className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-slate-200">{workflow.findEmployeesAction.label}<ArrowRight className="ml-2 size-4" /></button></div> : null}
-              </div>
-            </div>
-          </Card>
-        </section>
-
-        {/* Learning plan */}
-        <section id="learning-plan" className="scroll-mt-24">
-          <SectionHeading
-            eyebrow="2-Week Learning Plan"
-            title="Turn resume gaps into a two-week plan"
-            description="Complete the highest-impact tasks first, then update your resume evidence and regenerate the analysis."
-            action={
-              <Badge>
-                <Clock3 className="mr-1.5 size-3.5" />
-                Plan unavailable
-              </Badge>
-            }
-          />
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            {learningPlan.map((week) => (
-              <Card key={week.week} className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <Badge tone="dark">{week.week}</Badge>
-                    <h3 className="mt-3 text-xl font-semibold">{week.focus}</h3>
-                  </div>
-                  <span className="text-sm font-medium text-slate-500">
-                    {week.duration}
-                  </span>
-                </div>
-
-                <div className="mt-5 space-y-3">
-                  {week.tasks.map((task) => {
-                    const completed = completedTasks.includes(task.title);
-
-                    return (
-                      <label
-                        key={task.title}
-                        className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-4"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={completed}
-                          onChange={() => toggleTask(task.title)}
-                          className="size-4 rounded border-slate-400 accent-black"
-                        />
-
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={classNames(
-                              "text-sm font-semibold",
-                              completed
-                                ? "text-slate-400 line-through"
-                                : "text-slate-900",
-                            )}
-                          >
-                            {task.title}
-                          </p>
-                          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                            <Clock3 className="size-3" />
-                            {task.hours}
-                          </p>
-                        </div>
-
-                        <Badge tone={priorityTones[task.priority]}>
-                          {task.priority}
-                        </Badge>
-                      </label>
-                    );
-                  })}
-                </div>
-              </Card>
-            ))}
-            {learningPlan.length === 0 ? <EmptyState className="lg:col-span-2" icon={GraduationCap} title="Create your AI learning plan" description="RefAI uses resume gaps and target-role evidence to prioritize skills, practical tasks, and a focused two-week improvement path." action={!isPrimaryWorkflowAction(workflow.evidenceAction.href) ? <PrimaryButton onClick={() => navigate(workflow.evidenceAction.href)}>{workflow.evidenceAction.label}</PrimaryButton> : undefined} /> : null}
           </div>
         </section>
 
         {/* Candidate Trust Card */}
-        <section>
+        {workflow.hasTrustCard ? <section>
           <SectionHeading
             eyebrow="Candidate Trust Card"
             title="Preview what an employee will review"
@@ -917,10 +499,10 @@ export default function StudentDashboard() {
               </div> : null}
             </div>
           </div>
-        </section>
+        </section> : null}
 
         {/* Employee discovery */}
-        <section id="find-referrers" className="scroll-mt-24">
+        {workflow.hasTrustCard ? <section id="find-referrers" className="scroll-mt-24">
           <SectionHeading
             eyebrow="Find Referrers"
             title="Choose an employee for your target company"
@@ -980,10 +562,10 @@ export default function StudentDashboard() {
           </div>
 
           {filteredEmployees.length === 0 && <EmptyState className="mt-4" icon={Users} title={employees.length === 0 ? "Prepare for employee discovery" : "No employees match your search"} description={employees.length === 0 ? "Build a Trust Card while the employee-directory integration is being connected." : "Adjust the name, company, or role, or clear the current search."} action={<div className="flex flex-wrap justify-center gap-2">{!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : null}{employeeQuery ? <SecondaryButton onClick={() => setEmployeeQuery("")}>Clear Search</SecondaryButton> : <SecondaryButton onClick={() => navigate('/dashboard#referral-requests')}>Referral Requests</SecondaryButton>}</div>} />}
-        </section>
+        </section> : null}
 
         {/* Referral gate and message generator */}
-        <section id="referral-message" className="grid scroll-mt-24 gap-6 xl:grid-cols-[0.75fr_1.25fr]">
+        {workflow.hasTrustCard && selectedEmployeeId ? <section id="referral-message" className="grid scroll-mt-24 gap-6 xl:grid-cols-[0.75fr_1.25fr]">
           <Card className="border-emerald-200 bg-emerald-50 p-6 sm:p-8">
             <div className="flex size-12 items-center justify-center rounded-xl bg-emerald-600 text-white">
               <LockKeyhole className="size-5" />
@@ -1073,7 +655,7 @@ export default function StudentDashboard() {
             </div>
             {showReferralSuccess ? <div role="status" className="toast-enter mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" /><div><p className="font-semibold text-emerald-950">Referral request sent</p><p className="mt-1 text-sm leading-6 text-emerald-800">The request is saved as Pending and is available in the assigned employee’s review queue.</p></div></div></div> : null}
           </Card>
-        </section>
+        </section> : null}
 
         {/* Referral requests */}
         <section id="referral-requests" className="scroll-mt-24">
@@ -1136,70 +718,6 @@ export default function StudentDashboard() {
                 </div>
               ))}
               {referralRequests.length === 0 ? <EmptyState className="m-5 md:m-6" icon={Activity} title="Send your first referral request" description="The workflow starts with a Trust Card, continues with employee discovery, and tracks pending, accepted, or declined decisions here." action={!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : undefined} /> : null}
-            </div>
-          </Card>
-        </section>
-
-        {/* Resume health */}
-        <section>
-          <SectionHeading
-            eyebrow="Resume Health"
-            title="Check resume clarity and evidence quality"
-            description="Use these checks to identify formatting or proof issues, then update the resume before your next analysis."
-            action={!isPrimaryWorkflowAction(workflow.optimizeResumeAction.href) ?
-              <PrimaryButton onClick={() => navigate(workflow.optimizeResumeAction.href)}>
-                <WandSparkles className="mr-2 size-4" />
-                {workflow.optimizeResumeAction.label}
-              </PrimaryButton>
-            : undefined}
-          />
-
-          <Card className="p-6 sm:p-8">
-            <div className="grid gap-8 lg:grid-cols-[0.55fr_1.45fr]">
-              <div className="flex flex-col items-center justify-center rounded-xl bg-slate-50 p-7 text-center">
-                <ScoreRing score={null} size={148} strokeWidth={10} />
-                <h3 className="mt-5 text-lg font-semibold">
-                  Overall Resume Health
-                </h3>
-                <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500">
-                  No resume-health API is currently available.
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {resumeHealth.map((item) => {
-                  const Icon = item.icon;
-
-                  return (
-                    <div
-                      key={item.label}
-                      className="rounded-xl border border-slate-200 p-4"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex size-9 items-center justify-center rounded-lg bg-slate-100">
-                            <Icon className="size-4" />
-                          </div>
-                          <span className="text-sm font-semibold">
-                            {item.label}
-                          </span>
-                        </div>
-                        <span className="text-sm font-semibold">
-                          {item.score}%
-                        </span>
-                      </div>
-                      <div className="mt-4">
-                        <ProgressBar value={item.score} />
-                      </div>
-                      <p className="mt-3 text-xs leading-5 text-slate-500">
-                        <span className="font-semibold text-slate-700">Why?</span>{" "}
-                        {item.label === "ATS Score" ? "Ananya’s demo resume uses clear headings, readable text, and Atlassian role terminology without graphics-heavy formatting." : "Ananya’s demo includes quantified React delivery, FastAPI ownership, SQL outcomes, and collaboration evidence."}
-                      </p>
-                    </div>
-                  );
-                })}
-                {resumeHealth.length === 0 ? <EmptyState className="sm:col-span-2" icon={FileSearch} title="Check your resume health" description="Upload your latest PDF and run an analysis to prepare ATS, evidence, and role-alignment insights when resume-health metrics become available." /> : null}
-              </div>
             </div>
           </Card>
         </section>

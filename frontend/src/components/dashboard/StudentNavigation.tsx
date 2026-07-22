@@ -2,7 +2,6 @@ import {
   Building2,
   FileText,
   LayoutDashboard,
-  Settings,
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
@@ -20,7 +19,6 @@ export const studentNavItems: StudentNavItem[] = [
   { label: 'Trust Card', href: '/dashboard/trust-card', icon: ShieldCheck },
   { label: 'Employees', href: '/dashboard#find-referrers', icon: Building2 },
   { label: 'Referral Requests', href: '/dashboard#referral-requests', icon: ShieldCheck },
-  { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
 const destination = (href: string) => {

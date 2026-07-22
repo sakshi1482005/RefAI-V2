@@ -15,6 +15,9 @@ import type { ResumeUploadResult } from '../lib/analysisSession'
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
+const buildRoleAnalysisContext = (role: string, company: string) =>
+  `Evaluate this resume for the ${role.trim()} role at ${company.trim()}. Assess evidence of software design, REST APIs, debugging and troubleshooting, Git, unit testing, code review, and cross-functional collaboration. Consider relevant technical skills, projects, education, communication, and measurable outcomes for this target role.`
+
 export default function ResumeUpload() {
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -32,7 +35,6 @@ export default function ResumeUpload() {
   const [messageTone, setMessageTone] = useState<'success' | 'error' | 'info'>('info')
   const [targetRole, setTargetRole] = useState(isDemoMode ? demoAnalysisSession.role ?? '' : analysisSession.role || profile?.preferredRole || '')
   const [targetCompany, setTargetCompany] = useState(isDemoMode ? demoAnalysisSession.company ?? '' : analysisSession.company || profile?.preferredCompany || '')
-  const [jobDescription, setJobDescription] = useState(isDemoMode ? demoAnalysisSession.jobDescription ?? '' : analysisSession.jobDescription || '')
 
   const handleFileSelection = (file: File | null) => {
     if (!file) {
@@ -141,12 +143,13 @@ export default function ResumeUpload() {
       navigate('/dashboard/resume-analysis')
       return
     }
-    if (!targetRole.trim() || !targetCompany.trim() || jobDescription.trim().length < 80) return
+    if (!targetRole.trim() || !targetCompany.trim()) return
 
     setAnalyzing(true)
     setMessage('Comparing your resume with the target role…')
     setMessageTone('info')
     try {
+      const jobDescription = buildRoleAnalysisContext(targetRole, targetCompany)
       const matchResponse = await api.post('/resume/analyze', {
         resumeText: uploadedResume.preview,
         jobDescription: jobDescription.trim(),
@@ -177,7 +180,7 @@ export default function ResumeUpload() {
     }
   }
 
-  const canAnalyze = Boolean(uploadedResume && targetRole.trim() && targetCompany.trim() && jobDescription.trim().length >= 80 && !selectedFile)
+  const canAnalyze = Boolean(uploadedResume && targetRole.trim() && targetCompany.trim() && !selectedFile)
 
   return (
     <PageShell
@@ -245,14 +248,13 @@ export default function ResumeUpload() {
             <div className="mt-4 grid gap-4">
               <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Role</span><input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Associate Software Engineer" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
               <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Company</span><input value={targetCompany} onChange={(event) => setTargetCompany(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Atlassian" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
-              <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Job description</span><textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Paste the responsibilities and requirements for the target role…" className="min-h-40 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm leading-6 outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /><span className="mt-1 block text-xs text-slate-500">{jobDescription.trim().length} characters · Use the complete role description for a more useful comparison.</span></label>
             </div>
           </div>
 
           <div className="mt-6 rounded-xl border border-slate-200 p-4">
             <p className="text-sm font-semibold">Step 3 · Analyze Resume</p>
             <p className="mt-1 text-sm text-slate-500">Analysis becomes available after the resume and target opportunity are ready.</p>
-            {uploadedResume && !selectedFile ? <PrimaryButton className="mt-4 w-full" onClick={handleAnalyze} disabled={!canAnalyze} loading={analyzing} disabledReason="Add the company, role, and a job description of at least 80 characters"><Sparkles className="mr-2 size-4" />Analyze Resume</PrimaryButton> : <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Upload the resume in Step 1 to unlock analysis.</p>}
+            {uploadedResume && !selectedFile ? <PrimaryButton className="mt-4 w-full" onClick={handleAnalyze} disabled={!canAnalyze} loading={analyzing} disabledReason="Add the target company and role"><Sparkles className="mr-2 size-4" />Analyze Resume</PrimaryButton> : <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Upload the resume in Step 1 to unlock analysis.</p>}
           </div>
         </Card>
 
@@ -295,7 +297,7 @@ export default function ResumeUpload() {
 
             <div className="mt-6 rounded-xl border border-slate-200 p-4">
               <p className="text-sm font-semibold">{targetRole.trim() || 'Target role not added'}</p>
-              <p className="mt-2 text-sm text-slate-500">{isDemoMode ? 'This sample target and job description are isolated from authenticated analysis data.' : jobDescription.trim() ? 'The job description is ready for comparison.' : 'Add the role and job description in the resume workspace before continuing.'}</p>
+              <p className="mt-2 text-sm text-slate-500">{isDemoMode ? 'This sample target is isolated from authenticated analysis data.' : targetRole.trim() && targetCompany.trim() ? `RefAI will analyze your resume for this role at ${targetCompany.trim()}.` : 'Add the target role and company before continuing.'}</p>
             </div>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
