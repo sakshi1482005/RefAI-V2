@@ -1,18 +1,66 @@
-# RefAI
+# 🚀 RefAI
 
-RefAI is an AI-assisted referral platform that helps students compare a resume
-with a target job, generate an evidence-based Candidate Trust Card, find
-employees, request a referral, and track the request. Employees receive only
-the referral requests assigned to them and can review the linked candidate
-evidence before making a decision.
+> **AI-powered referral platform that helps students earn trusted referrals through evidence-based AI evaluation.**
 
-## Technology
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?logo=supabase)
+![Groq](https://img.shields.io/badge/Groq-AI-orange)
 
-- Frontend: React, Vite, TypeScript, Tailwind CSS
-- Backend: FastAPI, Pydantic, Groq, ChromaDB
-- Platform: Supabase Auth, PostgreSQL, Row Level Security, and private Storage
+---
 
-## Project structure
+# Problem
+
+Students often struggle to obtain referrals because they lack professional networks. Employees are also hesitant to refer unknown candidates without evidence of their skills and job readiness.
+
+# Solution
+
+RefAI bridges this gap by analyzing a student's resume against a target job description, generating an AI-powered **Candidate Trust Card**, recommending improvements, and enabling employees to make informed referral decisions backed by evidence.
+
+---
+
+# Tech Stack
+
+### Frontend
+- React
+- Vite
+- TypeScript
+- Tailwind CSS
+
+### Backend
+- FastAPI
+- Pydantic
+- Groq LLM
+- ChromaDB
+
+### Platform
+- Supabase Authentication
+- PostgreSQL
+- Row Level Security (RLS)
+- Private Supabase Storage
+
+---
+
+# Features
+
+- ✅ Resume Analysis
+- ✅ AI Candidate Trust Card
+- ✅ ATS Compatibility Evaluation
+- ✅ Personalized Action Plan
+- ✅ Student Profile Management
+- ✅ Employee Search
+- ✅ Referral Request Workflow
+- ✅ Referral Status Tracking
+- ✅ Employee Review Dashboard
+- ✅ Secure Resume Storage
+- ✅ Google Authentication
+- ✅ Role-Based Authorization
+- ✅ PostgreSQL Row Level Security
+
+---
+
+# Project Structure
 
 ```text
 RefAI/
@@ -22,17 +70,21 @@ RefAI/
 └── README.md
 ```
 
-## Prerequisites
+---
+
+# Prerequisites
 
 - Node.js 18 or newer
 - Python 3.11 or newer
 - A Supabase project
 - A Groq API key
-- A private Supabase Storage bucket for resumes (default: `resumes`)
+- A private Supabase Storage bucket (default: `resumes`)
 
-Never place the Supabase service-role key in the frontend environment.
+> **Never place the Supabase Service Role Key in the frontend environment.**
 
-## 1. Configure Supabase
+---
+
+# Configure Supabase
 
 Run the migrations in chronological order:
 
@@ -44,8 +96,9 @@ supabase/migrations/202607250001_student_profile_branch.sql
 supabase/migrations/202607250002_student_profile_fields.sql
 ```
 
-The final two migrations are additive and safe to rerun. They ensure the
-existing `student_profiles` table contains:
+The last two migrations are additive and safe to rerun.
+
+They ensure `student_profiles` contains:
 
 ```text
 branch
@@ -58,23 +111,30 @@ github
 portfolio
 ```
 
-The `student_profiles.profile_id` value must match the authenticated Supabase
-user ID and must be unique for upserts.
+The `student_profiles.profile_id` must match the authenticated Supabase User ID and remain unique.
 
-Create a private Storage bucket named `resumes`, or set a different bucket name
-through `RESUME_STORAGE_BUCKET`.
+Create a private Storage bucket named:
 
-For Google OAuth, add the application callback URL to the Supabase redirect
-allowlist:
+```text
+resumes
+```
+
+or configure a custom bucket using:
+
+```text
+RESUME_STORAGE_BUCKET
+```
+
+For Google OAuth, add these redirect URLs:
 
 ```text
 http://localhost:5173/auth/callback
 https://your-frontend.example/auth/callback
 ```
 
-## 2. Start the backend
+---
 
-### PowerShell
+# Backend Setup
 
 ```powershell
 cd backend
@@ -84,20 +144,20 @@ python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Configure `backend/.env`:
+## Backend Environment Variables
 
-```dotenv
+```env
 GROQ_API_KEY=your-groq-api-key
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_KEY=your-service-role-key
-SUPABASE_JWT_SECRET=
+SUPABASE_JWT_SECRET=your-jwt-secret
 RESUME_STORAGE_BUCKET=resumes
 CHROMA_PERSIST_DIR=./chroma_data
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,https://your-frontend.example
 ```
 
-Start FastAPI:
+Start the backend:
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -106,17 +166,22 @@ Start FastAPI:
 Verify:
 
 ```text
-Health: http://localhost:8000/health
-API docs: http://localhost:8000/docs
+Health:
+http://localhost:8000/health
+
+API Docs:
+http://localhost:8000/docs
 ```
 
-Expected health response:
+Expected response:
 
 ```json
 {"status":"ok"}
 ```
 
-## 3. Start the frontend
+---
+
+# Frontend Setup
 
 Open another PowerShell terminal:
 
@@ -126,9 +191,9 @@ npm install
 Copy-Item .env.example .env
 ```
 
-Configure `frontend/.env`:
+## Frontend Environment Variables
 
-```dotenv
+```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_API_BASE_URL=http://localhost:8000
@@ -146,35 +211,50 @@ Open:
 http://localhost:5173
 ```
 
-Restart Vite after changing frontend environment variables.
+Restart Vite whenever environment variables change.
 
-## Main application flow
+---
 
-### Student
+# Application Workflow
+
+## Student
 
 ```text
-Sign in
-→ Complete profile
-→ Upload resume
-→ Enter target role, company, and job description
-→ Run analysis
-→ Review Action Plan
-→ Generate Trust Card
-→ Find an employee
-→ Send referral request
-→ Track status
+Sign In
+      ↓
+Complete Profile
+      ↓
+Upload Resume
+      ↓
+Enter Company, Role & Job Description
+      ↓
+Run AI Analysis
+      ↓
+Review Action Plan
+      ↓
+Generate Candidate Trust Card
+      ↓
+Find Employee
+      ↓
+Send Referral Request
+      ↓
+Track Referral Status
 ```
 
-### Employee
+## Employee
 
 ```text
-Sign in
-→ Complete professional profile
-→ View assigned referral requests
-→ Open candidate review
-→ Review the authorized resume
-→ Review the persisted Trust Card
-→ Make and confirm a referral decision
+Sign In
+      ↓
+Complete Professional Profile
+      ↓
+View Assigned Referral Requests
+      ↓
+Review Candidate Resume
+      ↓
+Review Candidate Trust Card
+      ↓
+Approve / Reject Referral
 ```
 
 Authenticated requests use:
@@ -183,37 +263,47 @@ Authenticated requests use:
 Authorization: Bearer <supabase-user-access-token>
 ```
 
-The frontend must never send the Supabase anon key as the user access token.
+The frontend must **never** send the Supabase Anon Key as the user access token.
 
-## Important API endpoints
+---
+
+# Important API Endpoints
 
 ```text
 GET  /health
+
 GET  /auth/student-profile
 PUT  /auth/student-profile
+
 POST /resume/upload
 POST /resume/analyze
 GET  /resume/analysis/latest
+
 POST /trust-card/generate
+
 GET  /referral/employees
+
 POST /referral/requests
 GET  /referral/requests
+
 GET  /referral/employee/queue
 GET  /referral/employee/requests/{request_id}
 GET  /referral/employee/requests/{request_id}/resume
 GET  /referral/employee/requests/{request_id}/trust-card
 ```
 
-## Validation
+---
 
-### Backend tests
+# Testing
+
+## Backend
 
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-### Frontend checks
+## Frontend
 
 ```powershell
 cd frontend
@@ -221,91 +311,151 @@ npm run typecheck
 npm run build
 ```
 
-## Troubleshooting
+---
 
-### Profile cannot be saved
+# Troubleshooting
 
-Confirm the backend is running and then inspect the API response from:
+## Profile cannot be saved
+
+Verify the backend is running.
+
+Inspect:
 
 ```text
 PUT http://localhost:8000/auth/student-profile
 ```
 
-If PostgreSQL reports that a `student_profiles` column does not exist, apply the
-student-profile migrations listed above. Profile saves use an upsert on
-`profile_id`; they do not create duplicate rows.
+If PostgreSQL reports missing columns, rerun the student profile migrations.
 
-### CORS error
+---
 
-Confirm `CORS_ORIGINS` includes the exact frontend origin without a trailing
-slash:
+## CORS Error
+
+Ensure:
 
 ```text
 http://localhost:5173
 http://127.0.0.1:5173
 ```
 
-An unauthenticated protected request may return `401` or `403`, but it should
-still contain `Access-Control-Allow-Origin`.
+are present inside `CORS_ORIGINS`.
 
-### Resume upload fails
+Even unauthenticated requests should include:
+
+```text
+Access-Control-Allow-Origin
+```
+
+---
+
+## Resume Upload Fails
 
 Verify:
 
-- The backend service-role key is configured.
-- The private Storage bucket exists.
-- `RESUME_STORAGE_BUCKET` matches the bucket name.
-- The uploaded file is a readable PDF smaller than 10 MB.
+- Backend Service Role Key is configured.
+- Private Storage bucket exists.
+- `RESUME_STORAGE_BUCKET` matches the bucket.
+- Uploaded file is a readable PDF under **10 MB**.
 
-### Analysis is unavailable after navigation
+---
 
-Check both requests:
+## Analysis Not Available
+
+Verify both endpoints:
 
 ```text
 POST /resume/analyze
-GET  /resume/analysis/latest
+
+GET /resume/analysis/latest
 ```
 
-The POST returns success only after the analysis has been persisted for the
-authenticated student.
+The latest analysis becomes available only after successful persistence.
 
-## Deployment
+---
 
-### Backend on Render
+# Deployment
+
+## Backend (Render)
 
 ```text
-Root directory: backend
-Build command: pip install -r requirements.txt
-Start command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Root Directory : backend
+
+Build Command :
+pip install -r requirements.txt
+
+Start Command :
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
-Add all backend environment variables in Render. Set `CORS_ORIGINS` to the
-deployed frontend URL.
-
-### Frontend on Vercel
-
-```text
-Root directory: frontend
-Framework preset: Vite
-Build command: npm run build
-Output directory: dist
-```
+Configure all backend environment variables in Render.
 
 Set:
 
 ```text
+CORS_ORIGINS=https://your-frontend.example
+```
+
+---
+
+## Frontend (Vercel)
+
+```text
+Root Directory : frontend
+
+Framework :
+Vite
+
+Build Command :
+npm run build
+
+Output Directory :
+dist
+```
+
+Environment Variables:
+
+```text
 VITE_SUPABASE_URL
+
 VITE_SUPABASE_ANON_KEY
+
 VITE_API_BASE_URL=https://your-render-backend.example
 ```
 
-Add the deployed frontend callback URL to the Supabase Auth redirect allowlist.
+Also add the deployed frontend callback URL to the Supabase OAuth Redirect Allow List.
 
-## Security notes
+---
 
-- Keep resumes in a private Storage bucket.
-- Keep `SUPABASE_SERVICE_KEY` on the backend only.
-- Use RLS and server-side role checks for student and employee authorization.
-- Employee candidate access must be authorized through the referral-request ID.
-- Demo Mode data must remain isolated from authenticated production data.
 
+# AI Stack
+
+- Groq LLM for resume reasoning
+- ChromaDB for semantic retrieval
+- Prompt-engineered trust evaluation
+- Rule-based candidate scoring pipeline
+
+---
+
+# Future Scope
+
+- AI Mock Interviews
+- Referral Success Prediction
+- Company-specific Resume Optimization
+- Personalized Learning Roadmaps
+- Interview Scheduling
+- Employee Reputation Score
+
+---
+
+# Team
+
+- **Sakshi Mesare**
+- **Arya Wade**
+- **Santoshini Nahak**
+- **Yukta Methwale**
+
+---
+
+# License
+
+This project is intended for educational and hackathon purposes.
