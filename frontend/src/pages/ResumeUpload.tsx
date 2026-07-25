@@ -11,7 +11,7 @@ import { friendlyErrorMessage, requireOnline } from '../lib/requestSafety'
 import { parseResumeAnalysisResponse, parseResumeUploadResponse } from '../lib/resumeContract'
 import { useAnalysisSession } from '../hooks/useAnalysisSession'
 import { useCurrentUser } from '../hooks/useCurrentUser'
-import type { ResumeUploadResult } from '../lib/analysisSession'
+import type { AnalysisSession, ResumeUploadResult } from '../lib/analysisSession'
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
@@ -165,10 +165,26 @@ export default function ResumeUpload() {
       }, { timeout: 30_000 })
       const analysisResult = parseResumeAnalysisResponse(matchResponse.data, matchResponse.status)
       if (import.meta.env.DEV) console.debug('[RefAI resume analysis response]', { endpoint: '/resume/analyze', status: matchResponse.status, responseShape: Object.keys(analysisResult).sort() })
+      const freshSession: AnalysisSession = {
+        analysisId: analysisResult.analysisId,
+        upload: uploadedResume,
+        matchScore: {
+          overall: analysisResult.overall,
+          roleFit: analysisResult.roleFit,
+          proof: analysisResult.proof,
+          gaps: analysisResult.gaps,
+        },
+        analysis: analysisResult,
+        jobDescription,
+        role: targetRole.trim(),
+        company: targetCompany.trim(),
+        analyzedAt: new Date().toISOString(),
+        processingTimeMs: uploadedResume.processingTimeMs + analysisResult.processingTimeMs,
+      }
       setMessage('Resume uploaded and analyzed successfully.')
       setMessageTone('success')
       toast({ title: 'Analysis ready', description: 'Review the role match and evidence before generating your Trust Card.', tone: 'success' })
-      navigate('/dashboard/resume-analysis')
+      navigate('/dashboard/resume-analysis', { state: { analysisSession: freshSession } })
     } catch (error) {
       const errorMessage = friendlyErrorMessage(error, 'RefAI could not analyze this resume. Please try again.')
 

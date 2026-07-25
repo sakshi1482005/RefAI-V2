@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.security import get_current_user
-from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeDirectoryItem, EmployeeReferralQueueItem, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView, ReferralMessageRequest, ReferralMessageResponse, ReferralRequestDetail, ReferralRequestSummary, ReferralStatusHistoryEntry, TrustCardResponse
+from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeDirectoryItem, EmployeeProfessionalProfile, EmployeeProfessionalProfileUpdate, EmployeeReferralQueueItem, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView, ReferralMessageRequest, ReferralMessageResponse, ReferralRequestDetail, ReferralRequestSummary, ReferralStatusHistoryEntry, TrustCardResponse
 from app.services.groq_client import AIServiceUnavailable, generate_referral_message
 from app.services.referral_requests import InvalidReferralTransition, ReferralForbidden, ReferralNotFound, ReferralRequestService, ReferralUnavailable
 
@@ -38,6 +38,18 @@ def employee_directory(user: dict = Depends(get_current_user)):
 @router.get("/employee/queue", response_model=list[EmployeeReferralQueueItem])
 def employee_queue(user: dict = Depends(get_current_user)):
     try: return service.employee_queue(user["sub"])
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.get("/employee/profile", response_model=EmployeeProfessionalProfile)
+def employee_profile(user: dict = Depends(get_current_user)):
+    try: return service.employee_profile(user["sub"])
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.put("/employee/profile", response_model=EmployeeProfessionalProfile)
+def save_employee_profile(payload: EmployeeProfessionalProfileUpdate, user: dict = Depends(get_current_user)):
+    try: return service.save_employee_profile(user["sub"], payload)
     except Exception as exc: _raise_referral_error(exc)
 
 

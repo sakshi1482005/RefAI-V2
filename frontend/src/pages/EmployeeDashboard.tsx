@@ -9,7 +9,7 @@ import { employeeReviewHref, employeeStatusLabel } from '../lib/employeeWorkflow
 import { parseEmployeeQueue } from '../lib/employeeQueueContract'
 import { api } from '../lib/apiClient'
 import { FriendlyRequestError, friendlyErrorMessage } from '../lib/requestSafety'
-import type { EmployeeReferralQueueItem } from '../types'
+import type { EmployeeProfessionalProfile, EmployeeReferralQueueItem } from '../types'
 
 type CandidateQueueItem = { id: string; name: string; college: string | null; role: string; company: string; trustScore: number | null; overallMatch: number | null; status: string; time: string; demo?: boolean }
 
@@ -20,6 +20,12 @@ export default function EmployeeDashboard() {
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState<unknown>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [company, setCompany] = useState('')
+  const [designation, setDesignation] = useState('')
+  const [savedCompany, setSavedCompany] = useState('')
+  const [professionalProfileLoading, setProfessionalProfileLoading] = useState(!isDemoMode)
+  const [professionalProfileSaving, setProfessionalProfileSaving] = useState(false)
+  const [professionalProfileFeedback, setProfessionalProfileFeedback] = useState<{ tone: 'error' | 'success'; message: string } | null>(null)
   const referralSent = isDemoMode && hasReachedDemoStage(demoJourneyStage, 'referral-sent')
 
   useEffect(() => {
@@ -34,6 +40,22 @@ export default function EmployeeDashboard() {
     return () => { active = false }
   }, [isDemoMode, reloadKey])
 
+  useEffect(() => {
+    if (isDemoMode) { setProfessionalProfileLoading(false); setProfessionalProfileFeedback(null); return }
+    let active = true
+    setProfessionalProfileLoading(true)
+    api.get<EmployeeProfessionalProfile>('/referral/employee/profile').then(({ data }) => {
+      if (!active) return
+      setCompany(data.company ?? '')
+      setDesignation(data.designation ?? '')
+      setSavedCompany(data.company ?? '')
+      setProfessionalProfileFeedback(null)
+    }).catch((profileError) => {
+      if (active) setProfessionalProfileFeedback({ tone: 'error', message: friendlyErrorMessage(profileError, 'We could not load your professional profile. Please try again.') })
+    }).finally(() => { if (active) setProfessionalProfileLoading(false) })
+    return () => { active = false }
+  }, [isDemoMode])
+
   const demoStatus = demoDecision === 'approved' ? 'Approved' : demoDecision === 'declined' ? 'Declined' : demoDecision === 'more_info_requested' ? 'More information requested' : 'Pending'
   const queue: CandidateQueueItem[] = isDemoMode
     ? referralSent ? [{ id: DEMO_CANDIDATE_ID, name: demoEmployeeReview.candidateName, college: 'PES University', role: demoEmployeeReview.role, company: demoEmployeeReview.company, trustScore: 91, overallMatch: demoEmployeeReview.match, status: demoStatus, time: demoEmployeeReview.submitted, demo: true }] : []
@@ -47,6 +69,29 @@ export default function EmployeeDashboard() {
   const errorKind = error instanceof FriendlyRequestError ? error.kind : 'unknown'
   const errorText = error ? friendlyErrorMessage(error, 'We could not load your referral queue. Please try again.') : null
   const review = (candidate: CandidateQueueItem) => navigate(isDemoMode ? `/employee/review/${candidate.id}` : employeeReviewHref({ id: candidate.id }))
+  const saveProfessionalProfile = async () => {
+    const normalizedCompany = company.trim()
+    if (!normalizedCompany || professionalProfileSaving) {
+      if (!normalizedCompany) setProfessionalProfileFeedback({ tone: 'error', message: 'Company Name is required.' })
+      return
+    }
+    setProfessionalProfileSaving(true)
+    setProfessionalProfileFeedback(null)
+    try {
+      const { data } = await api.put<EmployeeProfessionalProfile>('/referral/employee/profile', { company: normalizedCompany, designation: designation.trim() || null })
+      setCompany(data.company ?? '')
+      setDesignation(data.designation ?? '')
+      setSavedCompany(data.company ?? '')
+      setProfessionalProfileFeedback({ tone: 'success', message: 'Professional profile saved. Students can now see your company in the employee directory.' })
+    } catch (profileError) {
+      const message = profileError instanceof FriendlyRequestError && profileError.kind === 'validation'
+        ? 'Enter a valid company name before saving your professional profile.'
+        : friendlyErrorMessage(profileError, 'We could not save your professional profile. Please try again.')
+      setProfessionalProfileFeedback({ tone: 'error', message })
+    } finally {
+      setProfessionalProfileSaving(false)
+    }
+  }
 
   return <PageShell eyebrow="Employee portal" title="Review incoming referral requests" description="Open a request to inspect the candidate evidence and Trust Card before making a referral decision." action={<PrimaryButton onClick={() => document.getElementById('candidate-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View Candidates</PrimaryButton>}>
     <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -63,7 +108,7 @@ export default function EmployeeDashboard() {
         </Card>
       </section>
 
-      <section className="space-y-6"><Card className="p-6 sm:p-8"><div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><BriefcaseBusiness className="size-5" /></div><div><h3 className="text-lg font-semibold">Quick actions</h3><p className="mt-1 text-sm text-slate-500">Continue with the first request assigned to you.</p></div></div><div className="mt-6 space-y-3"><PrimaryButton className="w-full" onClick={() => queue[0] && review(queue[0])} disabled={loading || queue.length === 0} disabledReason="No assigned requests are currently available">Open next review</PrimaryButton><SecondaryButton className="w-full" onClick={() => setReloadKey((key) => key + 1)}><RefreshCw className="mr-2 size-4" />Refresh requests</SecondaryButton></div></Card>
+      <section className="space-y-6">{!isDemoMode ? <Card className="p-6 sm:p-8"><div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><BriefcaseBusiness className="size-5" /></div><div><h3 className="text-lg font-semibold">Professional Profile</h3><p className="mt-1 text-sm text-slate-500">Shown to students in the employee directory.</p></div></div>{professionalProfileLoading ? <div className="mt-6 space-y-4"><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /></div> : <form className="mt-6 space-y-4" onSubmit={(event) => { event.preventDefault(); void saveProfessionalProfile() }}><label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Company Name</span><input value={company} onChange={(event) => setCompany(event.target.value)} required maxLength={200} autoComplete="organization" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10" placeholder="Company name" /></label><label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Designation / Job Title <span className="font-normal normal-case tracking-normal">(optional)</span></span><input value={designation} onChange={(event) => setDesignation(event.target.value)} maxLength={200} autoComplete="organization-title" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10" placeholder="Software Engineer" /></label>{professionalProfileFeedback ? <InlineFeedback tone={professionalProfileFeedback.tone}>{professionalProfileFeedback.message}</InlineFeedback> : null}<PrimaryButton className="w-full" type="submit" loading={professionalProfileSaving} disabled={!company.trim()} disabledReason="Company Name is required">{savedCompany ? 'Update profile' : 'Save profile'}</PrimaryButton></form>}</Card> : null}<Card className="p-6 sm:p-8"><div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><BriefcaseBusiness className="size-5" /></div><div><h3 className="text-lg font-semibold">Quick actions</h3><p className="mt-1 text-sm text-slate-500">Continue with the first request assigned to you.</p></div></div><div className="mt-6 space-y-3"><PrimaryButton className="w-full" onClick={() => queue[0] && review(queue[0])} disabled={loading || queue.length === 0} disabledReason="No assigned requests are currently available">Open next review</PrimaryButton><SecondaryButton className="w-full" onClick={() => setReloadKey((key) => key + 1)}><RefreshCw className="mr-2 size-4" />Refresh requests</SecondaryButton></div></Card>
         <Card className="p-6 sm:p-8"><div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><MessageSquareText className="size-5" /></div><div><h3 className="text-lg font-semibold">Recent decisions</h3><p className="mt-1 text-sm text-slate-500">Completed employee decisions will appear here.</p></div></div>{!isDemoMode && requests.filter((request) => ['approved', 'declined', 'referred'].includes(request.status)).length === 0 ? <EmptyState className="mt-6" title="No completed decisions yet" description="Review an assigned request to move it forward." icon={CheckCircle2} /> : null}</Card>
       </section>
     </div>

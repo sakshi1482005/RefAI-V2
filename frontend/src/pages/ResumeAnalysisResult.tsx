@@ -1,31 +1,52 @@
-import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Gauge, Search, Sparkles, Target, Zap, FileText } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Gauge, Search, Sparkles, Target, Zap, FileText, RefreshCw } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import PageShell from '../components/dashboard/PageShell'
-import { AnimatedNumber, Card, EmptyState, MetricTooltip, PrimaryButton, ScoreExplanation, SecondaryButton } from '../components/dashboard/primitives'
-import { useAnalysisSession } from '../hooks/useAnalysisSession'
-import { buildResumeInsights, buildScoreReasons } from '../lib/aiInsights'
+import { AnimatedNumber, Card, EmptyState, InlineFeedback, MetricTooltip, PrimaryButton, ScoreExplanation, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
+import { useAnalysisSessionResource } from '../hooks/useAnalysisSession'
 import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
 import { DEMO_ATS_SCORE, demoEmployeeReview } from '../lib/demoData'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
 import { useToast } from '../components/feedback/ToastProvider'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../lib/apiClient'
-import { friendlyErrorMessage, requireOnline } from '../lib/requestSafety'
+import { FriendlyRequestError, friendlyErrorMessage, requireOnline } from '../lib/requestSafety'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { getStudentWorkflowState } from '../lib/studentWorkflow'
 import ActionPlanPanel from '../components/dashboard/ActionPlanPanel'
+import type { AnalysisSession } from '../lib/analysisSession'
+import { parseTrustCardResponse } from '../lib/resumeContract'
 
 
 export default function ResumeAnalysisResult() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { toast } = useToast()
   const { profile } = useCurrentUser()
-  const session = useAnalysisSession()
+  const routedSession = (location.state as { analysisSession?: AnalysisSession } | null)?.analysisSession
+  const analysisResource = useAnalysisSessionResource(routedSession)
+  const { session } = analysisResource
   const { isDemoMode, demoJourneyStage, setDemoJourneyStage } = useDemoMode()
   const [generatingTrustCard, setGeneratingTrustCard] = useState(false)
+
+  const trustCardErrorMessage = (error: unknown) => {
+    if (!(error instanceof FriendlyRequestError)) {
+      return friendlyErrorMessage(error, 'Trust Card generation failed. Please retry.')
+    }
+    if (error.status === 401) return 'Authentication expired. Please sign in again.'
+    if (error.status === 404 && error.detail === 'Persisted resume analysis was not found.') {
+      return 'No completed resume analysis found.'
+    }
+    if (error.kind === 'network') return 'Unable to connect to the RefAI backend.'
+    if (error.detail) return `Trust Card generation failed: ${error.detail}`
+    return error.message
+  }
+
+  useEffect(() => {
+    if (routedSession) navigate(location.pathname, { replace: true, state: null })
+  }, [location.pathname, navigate, routedSession])
+
   const workflow = getStudentWorkflowState({ profile, session })
-  const insights = session.matchScore ? buildResumeInsights(session.matchScore, session.role) : null
-  const scoreReasons = session.matchScore ? buildScoreReasons(session.matchScore, isDemoMode) : []
+  const scoreReasons = session.analysis?.scoreReasons ?? []
   const metrics = [
     { label: 'Resume', value: session.upload ? 'Processed' : 'Unavailable', description: isDemoMode ? `${session.upload?.fileName} · Demo` : session.upload?.fileName ?? 'Upload a resume to begin', icon: FileText },
     { label: 'Extracted chunks', value: session.upload ? String(session.upload.chunkCount) : '—', score: session.upload?.chunkCount, description: isDemoMode ? 'Sample analyzed sections' : 'Returned by the resume upload API', icon: CheckCircle2 },
@@ -66,25 +87,46 @@ export default function ResumeAnalysisResult() {
     setGeneratingTrustCard(true)
     try {
       requireOnline()
-      await api.post('/trust-card/generate', {
+      const { data, status } = await api.post<unknown>('/trust-card/generate', {
         candidateName: profile?.fullName || profile?.email || 'Candidate',
         analysisId: session.analysisId,
       }, { timeout: 45_000 })
+      const trustCard = parseTrustCardResponse(data, status)
+      const nextSession = { ...session, trustCard }
       sessionStorage.setItem('refai_trust_card_celebration', 'pending')
       toast({ title: 'Trust Card generated', description: 'Review the AI summary and supporting match signals before continuing.', tone: 'success' })
-      navigate('/dashboard/trust-card')
+      navigate('/dashboard/trust-card', { state: { analysisSession: nextSession } })
     } catch (error) {
-      toast({ title: 'Trust Card could not be generated', description: friendlyErrorMessage(error, 'The AI summary service is temporarily unavailable. Your resume analysis is still saved.'), tone: 'error' })
+      toast({ title: 'Trust Card could not be generated', description: trustCardErrorMessage(error), tone: 'error' })
     } finally {
       setGeneratingTrustCard(false)
     }
   }
 
+  if (analysisResource.loading && !session.matchScore) {
+    return <PageShell eyebrow="Analysis result" title="Loading analysis..." description="RefAI is loading your latest completed resume analysis.">
+      <Card className="p-6 sm:p-8"><div className="space-y-4"><Skeleton className="h-8 w-64" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div></Card>
+    </PageShell>
+  }
+
+  if (analysisResource.error) {
+    return <PageShell eyebrow="Analysis result" title="Could not load resume analysis" description="Your saved analysis could not be retrieved from the backend.">
+      <InlineFeedback tone="error">{friendlyErrorMessage(analysisResource.error, 'Could not load resume analysis. Please retry.')}</InlineFeedback>
+      <div className="mt-6 flex flex-wrap gap-3"><PrimaryButton onClick={analysisResource.retry}><RefreshCw className="mr-2 size-4" />Retry</PrimaryButton><SecondaryButton onClick={() => navigate('/dashboard')}>Back to Dashboard</SecondaryButton></div>
+    </PageShell>
+  }
+
+  if (analysisResource.notFound || !session.matchScore) {
+    return <PageShell eyebrow="Analysis result" title="No completed analysis found" description="The backend confirmed that this student account has no completed resume analysis.">
+      <EmptyState icon={FileText} title="No completed analysis found" description="Upload and analyze a resume first." action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Upload Resume</PrimaryButton>} />
+    </PageShell>
+  }
+
   return (
     <PageShell
       eyebrow="Analysis result"
-      title={session.matchScore ? 'Review your resume-to-role evidence' : 'Resume analysis is not available yet'}
-      description={session.matchScore ? 'RefAI compared your resume with the target role. Review what raised or limited the score, then open the Trust Card.' : 'Upload a resume and add a job description first. RefAI needs both before it can explain role fit, proof, and gaps.'}
+      title="Review your resume-to-role evidence"
+      description="RefAI compared your resume with the target role. Review what raised or limited the score, then open the Trust Card."
       action={
         <div className="flex flex-wrap gap-3">
           <SecondaryButton onClick={() => navigate('/dashboard/resume')}>Back to Resume</SecondaryButton>
@@ -150,7 +192,7 @@ export default function ResumeAnalysisResult() {
               </div>
             </div>
 
-            {session.analysis ? <div className="mt-6 space-y-3">{session.analysis.strengths.map((strength) => <div key={strength} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-sm leading-6 text-emerald-900">{strength}</p></div>)}<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold text-slate-900">Readiness summary</p><p className="mt-2 text-sm leading-6 text-slate-700">{session.analysis.readinessSummary}</p></div></div> : insights ? <div className="mt-6 space-y-3"><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-sm font-semibold text-emerald-950">{insights.strength.title}</p><p className="mt-2 text-sm leading-6 text-emerald-800">{insights.strength.description}</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-semibold text-amber-950">{insights.weakness.title}</p><p className="mt-2 text-sm leading-6 text-amber-800">{insights.weakness.description}</p></div></div> : <EmptyState className="mt-6" title="Build role-fit evidence" description="Upload a current resume and compare it with a complete job description. RefAI will explain the strongest score and the limiting weakness." icon={CheckCircle2} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Open Resume Workspace</PrimaryButton>} />}
+            {session.analysis ? <div className="mt-6 space-y-3">{session.analysis.strengths.map((strength) => <div key={strength} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-sm leading-6 text-emerald-900">{strength}</p></div>)}{session.analysis.weaknesses.map((weakness) => <div key={weakness} className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm leading-6 text-amber-900">{weakness}</p></div>)}<div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold text-slate-900">Readiness summary</p><p className="mt-2 text-sm leading-6 text-slate-700">{session.analysis.readinessSummary}</p></div></div> : <EmptyState className="mt-6" title="Build role-fit evidence" description="Upload a current resume and compare it with a complete job description. RefAI will explain the strongest score and the limiting weakness." icon={CheckCircle2} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Open Resume Workspace</PrimaryButton>} />}
           </Card>
 
           <Card className="p-6 sm:p-8">
@@ -164,17 +206,17 @@ export default function ResumeAnalysisResult() {
               </div>
             </div>
 
-            {session.analysis ? <div className="mt-6 space-y-3">{session.analysis.learningRecommendations.map((recommendation, index) => <div key={recommendation} className="flex items-start gap-3 rounded-xl border border-slate-200 p-4"><div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold">{index + 1}</div><p className="text-sm leading-6 text-slate-700">{recommendation}</p></div>)}</div> : insights ? <div className="mt-6 space-y-3">{insights.improvements.map((item, index) => <div key={item.title} className="flex items-start gap-3 rounded-xl border border-slate-200 p-4"><div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold">{index + 1}</div><div><p className="text-sm font-semibold">{item.title}</p><p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p></div></div>)}</div> : <EmptyState className="mt-6" title="Unlock targeted recommendations" description="Complete a role analysis to identify exactly which score is limiting readiness and why the suggested change should improve it." icon={Search} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Analyze Target Role</PrimaryButton>} />}
+            {session.analysis ? <div className="mt-6 space-y-3">{session.analysis.learningRecommendations.map((recommendation, index) => <div key={recommendation} className="flex items-start gap-3 rounded-xl border border-slate-200 p-4"><div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold">{index + 1}</div><p className="text-sm leading-6 text-slate-700">{recommendation}</p></div>)}</div> : <EmptyState className="mt-6" title="Unlock targeted recommendations" description="Complete a role analysis to identify exactly which score is limiting readiness and why the suggested change should improve it." icon={Search} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Analyze Target Role</PrimaryButton>} />}
           </Card>
 
           <Card className="p-6 sm:p-8">
             <div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Zap className="size-5" /></div><div><h3 className="text-lg font-semibold">ATS guidance</h3><p className="mt-1 text-sm text-slate-500">Tips tied directly to RefAI’s lexical coverage model.</p></div></div>
-            {insights ? <div className="mt-6 space-y-3">{insights.atsTips.map((tip) => <div key={tip.title} className="rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">{tip.title}</p><p className="mt-2 text-sm leading-6 text-slate-600">{tip.description}</p></div>)}</div> : <EmptyState className="mt-6" title="ATS guidance needs a target job" description="Upload a resume and provide a job description so RefAI can explain terminology coverage and repeated proof using your actual scores." icon={Zap} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Analyze for ATS</PrimaryButton>} />}
+            {session.analysis ? <div className="mt-6 space-y-3">{session.analysis.atsGuidance.map((tip) => <div key={tip.title} className="rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">{tip.title}</p><p className="mt-2 text-sm leading-6 text-slate-600">{tip.description}</p></div>)}</div> : <EmptyState className="mt-6" title="ATS guidance needs a target job" description="Upload a resume and provide a job description so RefAI can explain terminology coverage and repeated proof using your actual scores." icon={Zap} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Analyze for ATS</PrimaryButton>} />}
           </Card>
 
           <Card className="p-6 sm:p-8">
             <div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Gauge className="size-5" /></div><div><h3 className="text-lg font-semibold">Interview and hiring signals</h3><p className="mt-1 text-sm text-slate-500">Readiness guidance without unsupported outcome claims.</p></div></div>
-            {insights ? <div className="mt-6 rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">{insights.interviewReadiness.title}</p><p className="mt-2 text-sm leading-6 text-slate-600">{insights.interviewReadiness.description}</p></div> : null}
+            {session.analysis ? <div className="mt-6 rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">{session.analysis.interviewReadiness.title}</p><p className="mt-2 text-sm leading-6 text-slate-600">{session.analysis.interviewReadiness.description}</p></div> : null}
             <EmptyState className="mt-4" title="Hiring probability is not available" description="RefAI has no historical hiring-outcome model or labeled company decision data. Match scores describe resume-to-job coverage and must not be presented as a probability of being hired." icon={BriefcaseBusiness} action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate('/dashboard/trust-card')}>Review Referral Readiness</PrimaryButton><SecondaryButton onClick={() => navigate('/dashboard#ai-recommendations')}>Prepare for Interviews</SecondaryButton></div>} />
           </Card>
 

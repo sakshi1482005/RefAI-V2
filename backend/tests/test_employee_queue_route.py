@@ -19,6 +19,15 @@ class QueueServiceStub:
         return [] if self.item is None else [self.item]
 
 
+class EmployeeProfileServiceStub:
+    def __init__(self): self.saved_actor = None
+    def employee_profile(self, actor_id):
+        return {"profileId": actor_id, "company": "Acme", "designation": "Engineer"}
+    def save_employee_profile(self, actor_id, payload):
+        self.saved_actor = actor_id
+        return {"profileId": actor_id, "company": payload.company, "designation": payload.designation}
+
+
 class EmployeeQueueRouteTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
@@ -77,6 +86,22 @@ class EmployeeQueueRouteTests(unittest.TestCase):
         app.dependency_overrides[get_current_user] = invalid_user
         response = self.client.get("/referral/employee/queue", headers={"Authorization": "Bearer expired"})
         self.assertEqual(response.status_code, 401)
+
+    def test_employee_profile_routes_use_authenticated_employee_id(self):
+        employee_id = str(uuid4())
+        app.dependency_overrides[get_current_user] = lambda: {"sub": employee_id}
+        stub = EmployeeProfileServiceStub()
+        original = referral.service
+        referral.service = stub
+        try:
+            loaded = self.client.get("/referral/employee/profile", headers={"Authorization": "Bearer test"})
+            saved = self.client.put("/referral/employee/profile", json={"company": "RefAI Labs", "designation": "Staff Engineer"}, headers={"Authorization": "Bearer test"})
+        finally:
+            referral.service = original
+        self.assertEqual(loaded.status_code, 200)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["company"], "RefAI Labs")
+        self.assertEqual(stub.saved_actor, employee_id)
 
 
 if __name__ == "__main__": unittest.main()

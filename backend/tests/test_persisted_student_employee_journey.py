@@ -5,7 +5,7 @@ import unittest
 
 from app.models.schemas import CreateReferralRequest
 from app.services.referral_requests import ReferralRequestService
-from app.services.student_persistence import StudentPersistenceService
+from app.services.student_persistence import StudentPersistenceError, StudentPersistenceService
 from test_referral_requests import FakeRepository
 
 
@@ -33,8 +33,82 @@ class AnalysisRepository:
         cards = [card for card in self.referrals.cards.values() if card["student_id"] == student_id and card.get("analysis_id") == analysis_id]
         return cards[-1] if cards else None
 
+    def get_role(self, user_id): return self.referrals.get_role(user_id)
+    def get_auth_metadata(self, user_id): return self.referrals.get_auth_metadata(user_id)
+    def get_student_education(self, student_id): return self.referrals.get_student_education(student_id)
+    def upsert_student_education(self, student_id, values):
+        row = {"profile_id": student_id, **values}
+        self.referrals.student_education[student_id] = row
+        return row
+
 
 class PersistedJourneyTests(unittest.TestCase):
+    def test_analysis_success_requires_complete_persistence_context(self):
+        database = FakeRepository()
+        analyses = AnalysisRepository(database)
+        incomplete = SimpleNamespace(
+            resumeId=None, fileName=None, chunkCount=None, storagePath=None,
+            storageStatus=None, indexed=None, uploadProcessingTimeMs=None,
+            targetRole=None, targetCompany=None, resumeText="resume",
+            jobDescription="job",
+        )
+        with self.assertRaises(StudentPersistenceError):
+            StudentPersistenceService(analyses).save_analysis(database.student, incomplete, {})
+
+    def test_latest_analysis_without_trust_card_does_not_require_profile_data(self):
+        database = FakeRepository()
+        analyses = AnalysisRepository(database)
+        persistence = StudentPersistenceService(analyses)
+        upload = SimpleNamespace(
+            resumeId="resume-no-card", fileName="resume.pdf", chunkCount=2,
+            storagePath=f"{database.student}/resume-no-card.pdf", storageStatus="stored",
+            indexed=True, uploadProcessingTimeMs=20, targetRole="Engineer",
+            targetCompany="Acme", resumeText="Python API project",
+            jobDescription="Build Python APIs",
+        )
+        analysis = {
+            "overall": 75, "roleFit": 80, "proof": 70, "gaps": 20,
+            "analysisStatus": "complete", "matchedSkills": ["Python"], "missingSkills": [],
+            "missingRequirements": [], "actionPlan": [], "strengths": ["Python evidence"],
+            "evidence": ["Python API"], "resumeSectionsUsed": ["Projects"],
+            "readinessSummary": "Prepared", "learningRecommendations": [],
+            "confidence": 82, "processingTimeMs": 80,
+        }
+        saved = persistence.save_analysis(database.student, upload, analysis)
+        analyses.get_student_education = lambda _: (_ for _ in ()).throw(AssertionError("Profile lookup was not expected"))
+        latest = persistence.latest_session(database.student)
+        self.assertEqual(str(latest["analysisId"]), str(saved["analysisId"]))
+        self.assertEqual(latest["matchScore"]["overall"], 75)
+
+    def test_complete_student_profile_upsert_is_reloaded_after_refresh(self):
+        database = FakeRepository()
+        analyses = AnalysisRepository(database)
+        update = SimpleNamespace(
+            college="RefAI College", degree="B.Tech", branch="Computer Science",
+            graduationYear="2028", preferredRole="Software Engineer",
+            preferredCompany="RefAI", skills=["Python", "React"], bio="Student builder",
+            linkedinUrl="https://linkedin.com/in/student",
+            githubUrl="https://github.com/student",
+            portfolioUrl="https://student.example",
+        )
+        saved = StudentPersistenceService(analyses).save_profile(database.student, update)
+        reloaded = StudentPersistenceService(analyses).get_profile(database.student)
+        self.assertEqual(saved, reloaded)
+        self.assertEqual(reloaded["college"], "RefAI College")
+        self.assertEqual(reloaded["skills"], ["Python", "React"])
+        self.assertEqual(reloaded["preferredRole"], "Software Engineer")
+        self.assertEqual(list(database.student_education), [database.student])
+
+    def test_student_education_upsert_is_reloaded_from_profile_id(self):
+        database = FakeRepository()
+        analyses = AnalysisRepository(database)
+        education = SimpleNamespace(college="RefAI College", degree="B.Tech", branch="Computer Science", graduationYear="2027")
+        saved = StudentPersistenceService(analyses).save_education(database.student, education)
+        reloaded = StudentPersistenceService(analyses).get_education(database.student)
+        self.assertEqual(saved, reloaded)
+        self.assertEqual(reloaded["branch"], "Computer Science")
+        self.assertEqual(list(database.student_education), [database.student])
+
     def test_student_logout_does_not_remove_employee_queue_candidate(self):
         database = FakeRepository()
         analyses = AnalysisRepository(database)

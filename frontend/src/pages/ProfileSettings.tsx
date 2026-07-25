@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom'
 import { useDemoMode } from '../context/DemoModeContext'
 import { demoStudent } from '../lib/demoData'
 import { friendlyErrorMessage, requireOnline, retryRead, withRequestTimeout } from '../lib/requestSafety'
+import { api } from '../lib/apiClient'
+import type { StudentProfileData } from '../types'
 
 type ResumeVisibility = 'private' | 'referrers' | 'public'
 
@@ -179,8 +181,7 @@ export default function ProfileSettings() {
   const [editing, setEditing] = useState(false)
   const [initializing, setInitializing] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [localOnly, setLocalOnly] = useState(false)
-  const [storageKey, setStorageKey] = useState('refai-profile:current-user')
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<NotificationPreferences>(DEFAULT_NOTIFICATIONS)
   const [savedNotifications, setSavedNotifications] = useState<NotificationPreferences>(DEFAULT_NOTIFICATIONS)
   const [savingNotifications, setSavingNotifications] = useState(false)
@@ -206,7 +207,6 @@ export default function ProfileSettings() {
       try {
         if (isDemoMode) {
           const next: ProfileForm = { fullName: demoStudent.fullName, headline: demoStudent.headline, college: demoStudent.college, degree: demoStudent.degree, branch: demoStudent.branch, graduationYear: demoStudent.graduationYear, skills: demoStudent.skills.join(', '), bio: demoStudent.bio, linkedinUrl: demoStudent.linkedinUrl, githubUrl: demoStudent.githubUrl, portfolioUrl: demoStudent.portfolioUrl, preferredRole: demoStudent.preferredRole, preferredCompany: demoStudent.preferredCompany, resumeVisibility: 'referrers', profilePhoto: demoStudent.avatarUrl }
-          setStorageKey('refai-profile:demo-isolated')
           setForm(next)
           setSavedForm(next)
           setInitializing(false)
@@ -221,27 +221,38 @@ export default function ProfileSettings() {
 
         const user = data.user
         const fromSupabase = user ? profileFromMetadata(user.user_metadata ?? {}, user.email ?? '') : EMPTY_PROFILE
-        const userKey = `refai-profile:${user?.id ?? 'current-user'}`
         let next = fromSupabase
 
-        const cached = window.localStorage.getItem(userKey)
-        if (cached) next = { ...fromSupabase, ...(JSON.parse(cached) as Partial<ProfileForm>) }
+        if (user) {
+          try {
+            const { data: savedProfile } = await api.get<StudentProfileData>('/auth/student-profile')
+            next = {
+              ...next,
+              college: String(savedProfile.college ?? next.college),
+              degree: String(savedProfile.degree ?? next.degree),
+              branch: String(savedProfile.branch ?? next.branch),
+              graduationYear: String(savedProfile.graduationYear ?? next.graduationYear),
+              skills: savedProfile.skills.length ? savedProfile.skills.join(', ') : next.skills,
+              bio: String(savedProfile.bio ?? next.bio),
+              linkedinUrl: String(savedProfile.linkedinUrl ?? next.linkedinUrl),
+              githubUrl: String(savedProfile.githubUrl ?? next.githubUrl),
+              portfolioUrl: String(savedProfile.portfolioUrl ?? next.portfolioUrl),
+              preferredRole: String(savedProfile.preferredRole ?? next.preferredRole),
+              preferredCompany: String(savedProfile.preferredCompany ?? next.preferredCompany),
+            }
+            setProfileLoadError(null)
+          } catch (error) {
+            setProfileLoadError(friendlyErrorMessage(error, 'Your saved profile could not be loaded from the database.'))
+          }
+        }
 
-        setStorageKey(userKey)
         setForm(next)
         setSavedForm(next)
-      } catch {
+      } catch (error) {
         if (!active) return
-        try {
-          const cached = window.localStorage.getItem('refai-profile:current-user')
-          const next = cached ? { ...EMPTY_PROFILE, ...(JSON.parse(cached) as Partial<ProfileForm>) } : EMPTY_PROFILE
-          setForm(next)
-          setSavedForm(next)
-          setLocalOnly(Boolean(cached))
-        } catch {
-          setForm(EMPTY_PROFILE)
-          setSavedForm(EMPTY_PROFILE)
-        }
+        setForm(EMPTY_PROFILE)
+        setSavedForm(EMPTY_PROFILE)
+        setProfileLoadError(friendlyErrorMessage(error, 'Your profile could not be loaded.'))
       } finally {
         if (active) setInitializing(false)
       }
@@ -301,6 +312,21 @@ export default function ProfileSettings() {
 
     try {
       requireOnline()
+      if (!isDemoMode) {
+        await api.put<StudentProfileData>('/auth/student-profile', {
+          college: normalized.college.trim() || null,
+          degree: normalized.degree.trim() || null,
+          branch: normalized.branch.trim() || null,
+          graduationYear: normalized.graduationYear || null,
+          preferredRole: normalized.preferredRole.trim() || null,
+          preferredCompany: normalized.preferredCompany.trim() || null,
+          skills: normalized.skills.split(',').map((skill) => skill.trim()).filter(Boolean),
+          bio: normalized.bio.trim() || null,
+          linkedinUrl: normalized.linkedinUrl.trim() || null,
+          githubUrl: normalized.githubUrl.trim() || null,
+          portfolioUrl: normalized.portfolioUrl.trim() || null,
+        })
+      }
       const { error } = await withRequestTimeout(supabase.auth.updateUser({
         data: {
           full_name: normalized.fullName,
@@ -322,25 +348,16 @@ export default function ProfileSettings() {
       if (error) throw error
 
       // TODO: Move profilePhoto to Supabase Storage when a profile-photo bucket is configured.
-      window.localStorage.setItem(storageKey, JSON.stringify(normalized))
-      setLocalOnly(false)
-      toast({ title: 'Profile saved', description: 'Your profile details were synced with Supabase.', tone: 'success' })
+      setForm(normalized)
+      setSavedForm(normalized)
+      setEditing(false)
+      setProfileLoadError(null)
+      toast({ title: 'Profile saved successfully', description: 'Your profile details were saved to Supabase.', tone: 'success' })
     } catch (error) {
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(normalized))
-      } catch {
-        toast({ title: 'Profile could not be saved', description: 'Supabase and local browser storage were unavailable.', tone: 'error' })
-        setSaving(false)
-        return
-      }
-      setLocalOnly(true)
-      toast({ title: 'Profile saved on this device', description: friendlyErrorMessage(error, 'Cloud sync is unavailable. Your changes are safely stored on this device.'), tone: 'info' })
+      toast({ title: 'Profile could not be saved', description: friendlyErrorMessage(error, 'Your profile could not be saved to Supabase. Please try again.'), tone: 'error' })
+    } finally {
+      setSaving(false)
     }
-
-    setForm(normalized)
-    setSavedForm(normalized)
-    setEditing(false)
-    setSaving(false)
   }
 
   const saveNotificationPreferences = async () => {
@@ -378,7 +395,7 @@ export default function ProfileSettings() {
       ) : <div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => navigate('/dashboard')}>Back to Dashboard</SecondaryButton><SecondaryButton onClick={() => setEditing(true)} disabled={busy || isDemoMode} disabledReason={isDemoMode ? 'The demo profile is read-only and isolated from authenticated profiles' : 'Profile details are still loading'}><Pencil className="mr-2 size-4" />Edit profile</SecondaryButton><PrimaryButton onClick={() => navigate('/dashboard/resume')}>Continue to Resume</PrimaryButton></div>}
     >
       {profileError ? <InlineFeedback tone="error">{friendlyErrorMessage(profileError, 'Account details could not be loaded. Refresh the page to try again.')}</InlineFeedback> : null}
-      {localOnly ? <InlineFeedback tone="info">Your latest edits are saved on this device. Supabase sync can be retried the next time you edit and save.</InlineFeedback> : null}
+      {profileLoadError ? <InlineFeedback tone="error">{profileLoadError}</InlineFeedback> : null}
 
       <div id="profile" className="grid scroll-mt-24 gap-6 lg:grid-cols-[1.25fr_0.75fr]">
         <Card className="p-6 sm:p-8">

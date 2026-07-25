@@ -1,7 +1,12 @@
 const DEFAULT_TIMEOUT_MS = 15_000
 
 export class FriendlyRequestError extends Error {
-  constructor(public readonly kind: 'offline' | 'timeout' | 'auth' | 'rate-limit' | 'validation' | 'server' | 'network' | 'unknown', message: string) {
+  constructor(
+    public readonly kind: 'offline' | 'timeout' | 'auth' | 'rate-limit' | 'validation' | 'server' | 'network' | 'unknown',
+    message: string,
+    public readonly status?: number,
+    public readonly detail?: string,
+  ) {
     super(message)
     this.name = 'FriendlyRequestError'
   }

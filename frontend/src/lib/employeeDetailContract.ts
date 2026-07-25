@@ -8,6 +8,8 @@ const nullableString = (value: unknown) => value === null || typeof value === 's
 const nullableScore = (value: unknown) => value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100)
 const nullableStrings = (value: unknown) => value === null || (Array.isArray(value) && value.every((item) => typeof item === 'string'))
 const nullableObjects = (value: unknown) => value === null || (Array.isArray(value) && value.every(object))
+const education = (value: unknown) => object(value) && nullableString(value.college) && nullableString(value.degree)
+  && nullableString(value.branch) && (value.graduationYear === null || typeof value.graduationYear === 'string' || typeof value.graduationYear === 'number')
 
 function analysis(value: unknown): value is EmployeeAnalysisSummary | null {
   if (value === null) return true
@@ -44,6 +46,6 @@ export function parseEmployeeTrustCard(value: unknown): EmployeeTrustCardView {
     || !nullableStrings(value.strengths) || !nullableStrings(value.evidence)
     || !nullableString(value.readiness) || !nullableString(value.recommendation) || !nullableString(value.summary)
     || !nullableStrings(value.riskSignals) || !nullableString(value.scoreFormula)
-    || !nullableObjects(value.scoreBreakdown) || !nullableString(value.generatedAt)) fail('Trust Card')
+    || !nullableObjects(value.scoreBreakdown) || !nullableString(value.generatedAt) || !education(value.education)) fail('Trust Card')
   return value as unknown as EmployeeTrustCardView
 }

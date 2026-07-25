@@ -50,6 +50,45 @@ class ActionPlanItem(BaseModel):
     nextStep: str
 
 
+class ExplainedInsight(BaseModel):
+    title: str
+    description: str
+
+
+class StudentEducation(BaseModel):
+    college: str | None = None
+    degree: str | None = None
+    branch: str | None = None
+    graduationYear: str | int | None = None
+
+
+class StudentEducationUpdate(BaseModel):
+    college: str | None = Field(default=None, max_length=120)
+    degree: str | None = Field(default=None, max_length=100)
+    branch: str | None = Field(default=None, max_length=100)
+    graduationYear: str | int | None = None
+
+
+class StudentProfile(StudentEducation):
+    preferredRole: str | None = None
+    preferredCompany: str | None = None
+    skills: list[str] = Field(default_factory=list)
+    bio: str | None = None
+    linkedinUrl: str | None = None
+    githubUrl: str | None = None
+    portfolioUrl: str | None = None
+
+
+class StudentProfileUpdate(StudentEducationUpdate):
+    preferredRole: str | None = Field(default=None, max_length=100)
+    preferredCompany: str | None = Field(default=None, max_length=120)
+    skills: list[str] = Field(default_factory=list, max_length=20)
+    bio: str | None = Field(default=None, max_length=500)
+    linkedinUrl: str | None = Field(default=None, max_length=300)
+    githubUrl: str | None = Field(default=None, max_length=300)
+    portfolioUrl: str | None = Field(default=None, max_length=300)
+
+
 class MatchAnalysisResponse(MatchScore):
     analysisStatus: Literal["complete"]
     matchedSkills: list[str]
@@ -57,11 +96,15 @@ class MatchAnalysisResponse(MatchScore):
     missingRequirements: list[ActionPlanItem]
     actionPlan: list[ActionPlanItem] = Field(max_length=5)
     strengths: list[str]
+    weaknesses: list[str]
     evidence: list[str]
     resumeSectionsUsed: list[str]
     readinessSummary: str
     learningRecommendations: list[str]
     confidence: int = Field(ge=0, le=100)
+    scoreReasons: list[str]
+    atsGuidance: list[ExplainedInsight]
+    interviewReadiness: ExplainedInsight
     processingTimeMs: int
     analysisId: UUID | None = None
 
@@ -94,6 +137,17 @@ class EmployeeDirectoryItem(BaseModel):
     designation: str | None = None
 
 
+class EmployeeProfessionalProfile(BaseModel):
+    profileId: UUID
+    company: str | None = None
+    designation: str | None = None
+
+
+class EmployeeProfessionalProfileUpdate(BaseModel):
+    company: str = Field(min_length=1, max_length=200)
+    designation: str | None = Field(default=None, max_length=200)
+
+
 class TrustScoreFactor(BaseModel):
     key: str
     label: str
@@ -116,6 +170,7 @@ class TrustCardResponse(BaseModel):
     referralReadiness: Literal["Ready to request referral", "Improve before requesting", "Not ready yet"]
     recommendation: Literal["Ready for referral", "Review before referring", "Not ready yet"]
     strengths: list[str]
+    weaknesses: list[str]
     missingSkills: list[str]
     missingRequirements: list[ActionPlanItem]
     actionPlan: list[ActionPlanItem] = Field(max_length=5)
@@ -123,7 +178,9 @@ class TrustCardResponse(BaseModel):
     riskSignals: list[str]
     scoreFormula: str
     scoreBreakdown: list[TrustScoreFactor]
+    scoreReasons: list[str]
     aiSummary: str
+    education: StudentEducation = Field(default_factory=StudentEducation)
 
 
 class ReferralMessageRequest(BaseModel):
@@ -244,6 +301,7 @@ class EmployeeTrustCardView(BaseModel):
     scoreFormula: str | None = None
     scoreBreakdown: list[TrustScoreFactor] | None = None
     generatedAt: datetime | None = None
+    education: StudentEducation = Field(default_factory=StudentEducation)
 
 
 class EmployeeDecisionUpdate(BaseModel):

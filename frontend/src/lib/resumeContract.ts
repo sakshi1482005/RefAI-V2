@@ -1,5 +1,5 @@
 import type { ResumeUploadResult } from './analysisSession'
-import type { ResumeAnalysisResult } from '../types'
+import type { ResumeAnalysisResult, TrustCardResult } from '../types'
 import { FriendlyRequestError } from './requestSafety'
 
 type JsonRecord = Record<string, unknown>
@@ -55,28 +55,101 @@ function isActionPlanItem(value: unknown) {
     && ['critical', 'important', 'optional'].includes(String(value.priority))
 }
 
+function isExplainedInsight(value: unknown) {
+  return isRecord(value) && typeof value.title === 'string' && typeof value.description === 'string'
+}
+
+function isNullableEducationValue(value: unknown) {
+  return value === null || typeof value === 'string' || typeof value === 'number'
+}
+
+export function parseTrustCardResponse(value: unknown, status: number, endpoint = '/trust-card/generate'): TrustCardResult {
+  if (!isRecord(value)) contractFailure(endpoint, status, value, ['valid JSON object'])
+  const required = [
+    'id', 'candidateName', 'role', 'overallMatch', 'roleFit', 'proofScore', 'gapScore',
+    'confidence', 'trustScore', 'referralReadiness', 'recommendation', 'strengths', 'weaknesses',
+    'missingSkills', 'missingRequirements', 'actionPlan', 'evidence', 'riskSignals',
+    'scoreFormula', 'scoreBreakdown', 'scoreReasons', 'aiSummary', 'education',
+  ]
+  const missing = missingFields(value, required)
+  if (missing.length > 0) contractFailure(endpoint, status, value, missing)
+  const scoreFields = ['overallMatch', 'roleFit', 'proofScore', 'gapScore', 'confidence', 'trustScore']
+  const scoresValid = scoreFields.every((field) => typeof value[field] === 'number')
+  const stringFields = ['id', 'candidateName', 'role', 'referralReadiness', 'recommendation', 'scoreFormula', 'aiSummary']
+  const stringsValid = stringFields.every((field) => typeof value[field] === 'string')
+  const stringArraysValid = ['strengths', 'weaknesses', 'missingSkills', 'evidence', 'riskSignals', 'scoreReasons'].every(
+    (field) => Array.isArray(value[field]) && (value[field] as unknown[]).every((item) => typeof item === 'string'),
+  )
+  const plansValid = ['missingRequirements', 'actionPlan'].every(
+    (field) => Array.isArray(value[field]) && (value[field] as unknown[]).every(isActionPlanItem),
+  )
+  const breakdownValid = Array.isArray(value.scoreBreakdown) && value.scoreBreakdown.every((factor) => (
+    isRecord(factor)
+    && ['key', 'label', 'reason'].every((field) => typeof factor[field] === 'string')
+    && ['weight', 'score', 'contribution'].every((field) => typeof factor[field] === 'number')
+  ))
+  const education = value.education
+  const educationValid = isRecord(education)
+    && ['college', 'degree', 'branch', 'graduationYear'].every((field) => isNullableEducationValue(education[field]))
+  if (!scoresValid || !stringsValid || !stringArraysValid || !plansValid || !breakdownValid || !educationValid) {
+    contractFailure(endpoint, status, value, [
+      ...(!scoresValid ? ['numeric Trust Card scores'] : []),
+      ...(!stringsValid ? ['typed Trust Card text fields'] : []),
+      ...(!stringArraysValid ? ['Trust Card evidence arrays'] : []),
+      ...(!plansValid ? ['structured Trust Card action plan'] : []),
+      ...(!breakdownValid ? ['scoreBreakdown'] : []),
+      ...(!educationValid ? ['education'] : []),
+    ])
+  }
+  return value as unknown as TrustCardResult
+}
+
 export function parseResumeAnalysisResponse(value: unknown, status: number): ResumeAnalysisResult {
   const endpoint = '/resume/analyze'
   if (!isRecord(value)) contractFailure(endpoint, status, value, ['valid JSON object'])
-  const required = ['overall', 'roleFit', 'proof', 'gaps', 'analysisStatus', 'matchedSkills', 'missingSkills', 'missingRequirements', 'actionPlan', 'strengths', 'evidence', 'resumeSectionsUsed', 'readinessSummary', 'learningRecommendations', 'confidence', 'processingTimeMs']
+  const required = ['analysisId', 'overall', 'roleFit', 'proof', 'gaps', 'analysisStatus', 'matchedSkills', 'missingSkills', 'missingRequirements', 'actionPlan', 'strengths', 'weaknesses', 'evidence', 'resumeSectionsUsed', 'readinessSummary', 'learningRecommendations', 'confidence', 'scoreReasons', 'atsGuidance', 'interviewReadiness', 'processingTimeMs']
   const missing = missingFields(value, required)
   if (missing.length > 0) contractFailure(endpoint, status, value, missing)
   const numbersValid = ['overall', 'roleFit', 'proof', 'gaps', 'confidence', 'processingTimeMs'].every((field) => typeof value[field] === 'number')
-  const stringArraysValid = ['matchedSkills', 'missingSkills', 'strengths', 'evidence', 'resumeSectionsUsed', 'learningRecommendations'].every(
+  const stringArraysValid = ['matchedSkills', 'missingSkills', 'strengths', 'weaknesses', 'evidence', 'resumeSectionsUsed', 'learningRecommendations', 'scoreReasons'].every(
     (field) => Array.isArray(value[field]) && (value[field] as unknown[]).every((item) => typeof item === 'string'),
   )
   const actionPlanArraysValid = ['missingRequirements', 'actionPlan'].every(
     (field) => Array.isArray(value[field]) && (value[field] as unknown[]).every(isActionPlanItem),
   )
-  if (!numbersValid || !stringArraysValid || !actionPlanArraysValid || value.analysisStatus !== 'complete' || typeof value.readinessSummary !== 'string') {
+  const insightsValid = Array.isArray(value.atsGuidance) && value.atsGuidance.every(isExplainedInsight) && isExplainedInsight(value.interviewReadiness)
+  if (!numbersValid || !stringArraysValid || !actionPlanArraysValid || !insightsValid || value.analysisStatus !== 'complete' || typeof value.readinessSummary !== 'string' || typeof value.analysisId !== 'string') {
     const invalid = [
       ...(!numbersValid ? ['numeric score/timing fields'] : []),
       ...(!stringArraysValid ? ['string-array analysis fields'] : []),
       ...(!actionPlanArraysValid ? ['structured missingRequirements/actionPlan fields'] : []),
+      ...(!insightsValid ? ['backend-generated guidance fields'] : []),
       ...(value.analysisStatus !== 'complete' ? ['analysisStatus'] : []),
       ...(typeof value.readinessSummary !== 'string' ? ['readinessSummary'] : []),
+      ...(typeof value.analysisId !== 'string' ? ['analysisId'] : []),
     ]
     contractFailure(endpoint, status, value, invalid)
   }
   return value as unknown as ResumeAnalysisResult
+}
+
+export function parsePersistedAnalysisSessionResponse(value: unknown, status: number) {
+  const endpoint = '/resume/analysis/latest'
+  if (!isRecord(value)) contractFailure(endpoint, status, value, ['valid JSON object'])
+  const required = ['analysisId', 'upload', 'matchScore', 'analysis', 'trustCard', 'jobDescription', 'role', 'company', 'analyzedAt', 'processingTimeMs']
+  const missing = missingFields(value, required)
+  if (missing.length > 0) contractFailure(endpoint, status, value, missing)
+  if (!isRecord(value.matchScore)) contractFailure(endpoint, status, value, ['matchScore'])
+  const matchScore = value.matchScore
+  const scoresValid = ['overall', 'roleFit', 'proof', 'gaps'].every((field) => typeof matchScore[field] === 'number')
+  if (
+    typeof value.analysisId !== 'string' || !scoresValid ||
+    typeof value.jobDescription !== 'string' || typeof value.role !== 'string' ||
+    typeof value.company !== 'string' || typeof value.analyzedAt !== 'string' ||
+    typeof value.processingTimeMs !== 'number'
+  ) contractFailure(endpoint, status, value, ['valid typed persisted analysis fields'])
+  parseResumeUploadResponse(value.upload, status)
+  parseResumeAnalysisResponse(value.analysis, status)
+  if (value.trustCard !== null) parseTrustCardResponse(value.trustCard, status, endpoint)
+  return value
 }

@@ -11,9 +11,13 @@ def _meaningful_tokens(text: str) -> list[str]:
     return [token for token in re.findall(r"[a-z0-9+#.]+", text.lower()) if len(token) > 2]
 
 
-def compute_match_score(resume_text: str, job_description: str) -> dict:
+def _analysis_context(job_description: str, target_role: str | None = None) -> str:
+    return "\n".join(part.strip() for part in (target_role or "", job_description) if part.strip())
+
+
+def compute_match_score(resume_text: str, job_description: str, target_role: str | None = None) -> dict:
     """Compute weighted coverage over canonical phrase-level requirements."""
-    requirements = extract_requirements(job_description)
+    requirements = extract_requirements(_analysis_context(job_description, target_role))
     if not resume_text.strip() or not requirements:
         return {"overall": 0, "roleFit": 0, "proof": 0, "gaps": 100}
     total_weight = sum(PRIORITY_WEIGHT[item["priority"]] for item in requirements)
@@ -29,15 +33,15 @@ def compute_match_score(resume_text: str, job_description: str) -> dict:
     }
 
 
-def build_match_analysis(resume_text: str, job_description: str) -> dict:
+def build_match_analysis(resume_text: str, job_description: str, target_role: str | None = None) -> dict:
     """Return the score plus the transparent evidence fields used by the UI."""
     started_resume_tokens = _meaningful_tokens(resume_text)
-    requirements = extract_requirements(job_description)
+    requirements = extract_requirements(_analysis_context(job_description, target_role))
     if not requirements:
         raise InsufficientJobRequirements(
             "No meaningful skills, tools, practices, experience, degree, or certification requirements were found."
         )
-    score = compute_match_score(resume_text, job_description)
+    score = compute_match_score(resume_text, job_description, target_role)
     matched_requirements = [item for item in requirements if requirement_occurrences(resume_text, item) >= 1]
     missing_requirement_items = [item for item in requirements if requirement_occurrences(resume_text, item) == 0]
     matched_skills = [item["requirement"] for item in matched_requirements]
@@ -46,9 +50,18 @@ def build_match_analysis(resume_text: str, job_description: str) -> dict:
     action_plan = missing_requirements[:5]
 
     strengths = [
+        *([f"Matched requirements include {', '.join(matched_skills[:5])}."] if matched_skills else []),
         f"{score['roleFit']}% of weighted job requirements have supporting resume evidence.",
         f"{score['proof']}% of weighted requirements are reinforced by repeated evidence.",
     ]
+    weaknesses = [
+        f"{item['requirement']} is a {item['priority']} {item['category']} with no supporting resume evidence."
+        for item in missing_requirement_items[:5]
+    ]
+    if not weaknesses and score["proof"] < score["roleFit"]:
+        weaknesses = [
+            f"Repeated evidence trails requirement coverage by {score['roleFit'] - score['proof']} percentage points."
+        ]
     section_names = ["Summary", "Experience", "Projects", "Skills", "Education", "Certifications"]
     resume_sections_used = [section for section in section_names if re.search(rf"\b{section}\b", resume_text, re.IGNORECASE)]
     if not resume_sections_used:
@@ -70,6 +83,38 @@ def build_match_analysis(resume_text: str, job_description: str) -> dict:
     input_coverage = min(1.0, len(started_resume_tokens) / 300) * 20
     requirement_coverage = min(1.0, len(requirements) / 8) * 20
     confidence = round(min(95, 55 + input_coverage + requirement_coverage))
+    score_reasons = [
+        f"Role Fit is {score['roleFit']}% because that share of weighted requirements appears in the resume.",
+        f"Proof is {score['proof']}% because matched requirements must appear in at least two resume contexts.",
+        f"Gap Score is {score['gaps']}% because those weighted requirements have no supporting resume evidence.",
+        f"Overall Match is {score['overall']}%, the rounded average of Role Fit and Proof.",
+    ]
+    ats_guidance = [
+        {
+            "title": "Use authentic requirement terminology",
+            "description": (
+                f"Keep the exact terminology for supported requirements such as {', '.join(matched_skills[:3])} in project or experience evidence."
+                if matched_skills
+                else "No target requirements were matched. Add only terminology that truthfully describes completed work."
+            ),
+        },
+        {
+            "title": "Prioritize unsupported requirements",
+            "description": (
+                f"The highest-priority missing requirements are {', '.join(item['requirement'] for item in missing_requirement_items[:3])}."
+                if missing_requirement_items
+                else "No requirement gaps were detected; preserve readable headings and measurable evidence."
+            ),
+        },
+    ]
+    interview_readiness = {
+        "title": "Evidence is ready for interview follow-up" if score["proof"] >= 70 else "Prepare stronger evidence before interviews",
+        "description": (
+            f"Proof coverage is {score['proof']}%. Prepare concise examples for {', '.join(matched_skills[:3])}."
+            if matched_skills
+            else f"Proof coverage is {score['proof']}%. Build truthful project or experience evidence for the target requirements."
+        ),
+    }
 
     return {
         **score,
@@ -79,16 +124,20 @@ def build_match_analysis(resume_text: str, job_description: str) -> dict:
         "missingRequirements": missing_requirements,
         "actionPlan": action_plan,
         "strengths": strengths,
+        "weaknesses": weaknesses,
         "evidence": evidence,
         "resumeSectionsUsed": resume_sections_used,
         "readinessSummary": readiness_summary,
         "learningRecommendations": learning_recommendations,
         "confidence": confidence,
+        "scoreReasons": score_reasons,
+        "atsGuidance": ats_guidance,
+        "interviewReadiness": interview_readiness,
     }
 
 
 def build_trust_card(candidate_name: str, role: str, resume_text: str, job_description: str) -> dict:
-    analysis = build_match_analysis(resume_text, job_description)
+    analysis = build_match_analysis(resume_text, job_description, role)
     match_score = {key: analysis[key] for key in ("overall", "roleFit", "proof", "gaps")}
     confidence = analysis["confidence"]
     completeness = round(100 * sum(bool(value.strip()) for value in (candidate_name, role, resume_text, job_description)) / 4)
@@ -144,6 +193,7 @@ def build_trust_card(candidate_name: str, role: str, resume_text: str, job_descr
         "referralReadiness": referral_readiness,
         "recommendation": recommendation,
         "strengths": analysis["strengths"],
+        "weaknesses": analysis["weaknesses"],
         "missingSkills": analysis["missingSkills"],
         "missingRequirements": analysis["missingRequirements"],
         "actionPlan": analysis["actionPlan"],
@@ -151,5 +201,6 @@ def build_trust_card(candidate_name: str, role: str, resume_text: str, job_descr
         "riskSignals": risk_signals,
         "scoreFormula": "30% Overall Match + 25% Role Fit + 15% Proof Score + 15% Confidence + 10% Completeness + 5% Gap Resilience",
         "scoreBreakdown": score_breakdown,
+        "scoreReasons": analysis["scoreReasons"],
         "aiSummary": summary,
     }

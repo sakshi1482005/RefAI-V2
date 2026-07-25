@@ -20,7 +20,7 @@ def score_match(
         user["sub"], len(payload.resumeText), len(payload.jobDescription),
     )
     try:
-        result = run_resume_analysis(payload.resumeText, payload.jobDescription)
+        result = run_resume_analysis(payload.resumeText, payload.jobDescription, payload.targetRole)
     except ResumeAnalysisUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="The analysis service returned an invalid result. Please try again.") from exc
     logger.info(

@@ -27,7 +27,6 @@ import {
 import { Avatar, Badge, Card, EmptyState, IconButton, Logo, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton, SectionHeading, Skeleton } from "../components/dashboard/primitives";
 import { useAnalysisSession } from "../hooks/useAnalysisSession";
 import StudentNavigation from "../components/dashboard/StudentNavigation";
-import { buildScoreReasons } from "../lib/aiInsights";
 import { hasReachedDemoStage, useDemoMode } from "../context/DemoModeContext";
 import DemoModeBanner from "../components/dashboard/DemoModeBanner";
 import { DEMO_ATS_SCORE, demoEmployee, demoReferral, demoReferralRequestNote } from "../lib/demoData";
@@ -39,6 +38,7 @@ import { getStudentWorkflowState } from "../lib/studentWorkflow";
 import { api } from "../lib/apiClient";
 import { friendlyErrorMessage } from "../lib/requestSafety";
 import type { EmployeeDirectoryItem, ReferralRequestSummary, ReferralStatus } from "../types";
+import { educationLines } from "../lib/education";
 
 /*
  * RefAI Student Dashboard
@@ -120,6 +120,21 @@ export default function StudentDashboard() {
     ? (demoReferralSent ? [{ id: 'demo-referral', employee: demoReferral.employee, initials: demoReferral.employeeInitials, company: demoReferral.company, role: demoReferral.role, date: demoReferral.requestedAt, status: demoDecision === 'pending' ? 'Pending' : demoDecision === 'approved' ? 'Approved' : demoDecision === 'more_info_requested' ? 'More Info Requested' : 'Declined' }] : [])
     : persistedRequests.map((request) => { const employee = employees.find((item) => item.id === request.employeeId); return { id: request.id, employee: employee?.name || 'Assigned employee', initials: employee?.initials || 'AE', company: request.targetCompany, role: request.targetRole, date: new Date(request.createdAt).toLocaleDateString(), status: statusLabel(request.status) }; });
   const readinessScore = analysisSession.trustCard?.trustScore ?? null;
+  const educationDetails = educationLines({
+    college: analysisSession.trustCard?.education?.college || profile?.college || null,
+    degree: analysisSession.trustCard?.education?.degree || profile?.degree || null,
+    branch: analysisSession.trustCard?.education?.branch || profile?.branch || null,
+    graduationYear: analysisSession.trustCard?.education?.graduationYear || profile?.graduationYear || null,
+  });
+  const profileSummary = [
+    profile?.headline,
+    profile?.bio,
+    profile?.skills?.length ? profile.skills.slice(0, 3).join(" · ") : "",
+    educationDetails[0],
+    profile?.preferredRole && profile?.preferredCompany
+      ? `${profile.preferredRole} at ${profile.preferredCompany}`
+      : profile?.preferredRole || profile?.preferredCompany,
+  ].find((detail) => detail?.trim());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [copied, setCopied] = useState(false);
@@ -161,7 +176,7 @@ export default function StudentDashboard() {
     return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   }, []);
   const firstName = profile?.fullName?.split(/\s+/)[0] || "there";
-  const scoreReasons = useMemo(() => analysisSession.matchScore ? buildScoreReasons(analysisSession.matchScore, isDemoMode) : [], [analysisSession.matchScore, isDemoMode]);
+  const scoreReasons = analysisSession.trustCard?.scoreReasons ?? analysisSession.analysis?.scoreReasons ?? [];
   const primaryNextAction = workflow.primaryAction;
   const isPrimaryWorkflowAction = (href: string) => href === primaryNextAction.href;
 
@@ -381,16 +396,16 @@ export default function StudentDashboard() {
                 />
                 <h3 className="mt-5 text-2xl font-semibold">{analysisSession.trustCard?.candidateName || profile?.fullName || "Candidate"}</h3>
                 <p className="mt-1.5 text-sm text-slate-400">
-                  Profile details not available
+                  {profileLoading ? "Loading profile details..." : profileSummary || "Profile details not available"}
                 </p>
 
                 <div className="mt-6 flex items-center gap-2">
                   <BriefcaseBusiness className="size-4 text-slate-400" />
                   <span className="text-sm">Target: {analysisSession.trustCard?.role || analysisSession.role || "Not available"}</span>
                 </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <GraduationCap className="size-4 text-slate-400" />
-                  <span className="text-sm">Education data not available</span>
+                <div className="mt-3 flex items-start gap-2">
+                  <GraduationCap className="mt-1 size-4 shrink-0 text-slate-400" />
+                  <div className="text-sm">{educationDetails.length ? educationDetails.map((line) => <p key={line}>{line}</p>) : <span>Educational data not available</span>}</div>
                 </div>
               </div>
 

@@ -8,6 +8,7 @@ from app.core.security import get_current_user
 from app.main import app
 from app.services.groq_client import AIServiceUnavailable, generate_trust_summary
 from app.services.resume_analysis import ResumeAnalysisInputError, ResumeAnalysisUnavailable, run_resume_analysis
+from app.services.trust_card_engine import build_match_analysis, build_trust_card
 
 
 def action_item():
@@ -24,9 +25,13 @@ def service_output():
         "overall": 72, "roleFit": 80, "proof": 64, "gaps": 20,
         "analysisStatus": "complete", "matchedSkills": ["Python"], "missingSkills": ["FastAPI"],
         "missingRequirements": [action_item()], "actionPlan": [action_item()],
-        "strengths": ["Strong Python evidence"], "evidence": ["Python appears in projects"],
+        "strengths": ["Strong Python evidence"], "weaknesses": ["FastAPI evidence is missing"],
+        "evidence": ["Python appears in projects"],
         "resumeSectionsUsed": ["Projects"], "readinessSummary": "Improve API evidence.",
         "learningRecommendations": ["Build an API"], "confidence": 81,
+        "scoreReasons": ["Role Fit is based on weighted requirements."],
+        "atsGuidance": [{"title": "Use authentic terminology", "description": "Keep Python attached to project evidence."}],
+        "interviewReadiness": {"title": "Prepare evidence", "description": "Explain the Python project."},
     }
 
 
@@ -73,6 +78,66 @@ class ResumeAnalysisContractTests(unittest.TestCase):
         with patch("app.services.groq_client._client", return_value=malformed_client):
             with self.assertRaises(AIServiceUnavailable):
                 generate_trust_summary("resume", "job", {"overall": 70})
+
+    def test_different_resumes_change_scores_for_the_same_job_description(self):
+        job = "Python and FastAPI are required. AWS is preferred."
+        strong = build_match_analysis(
+            "Projects Python FastAPI AWS. Experience delivering Python FastAPI AWS services.",
+            job,
+            "Python Engineer",
+        )
+        weak = build_match_analysis(
+            "Projects React TypeScript. Experience building React interfaces.",
+            job,
+            "Python Engineer",
+        )
+        self.assertGreater(strong["overall"], weak["overall"])
+        self.assertNotEqual(strong["matchedSkills"], weak["matchedSkills"])
+        self.assertNotEqual(strong["actionPlan"], weak["actionPlan"])
+
+    def test_same_resume_changes_for_different_job_descriptions(self):
+        resume = "Projects Python FastAPI APIs. Experience delivering Python FastAPI APIs."
+        backend_job = build_match_analysis(resume, "Python and FastAPI are required. AWS is preferred.", "Backend Engineer")
+        frontend_job = build_match_analysis(resume, "React and TypeScript are required. Cypress is preferred.", "Frontend Engineer")
+        self.assertGreater(backend_job["overall"], frontend_job["overall"])
+        self.assertNotEqual(backend_job["missingSkills"], frontend_job["missingSkills"])
+        self.assertNotEqual(backend_job["actionPlan"], frontend_job["actionPlan"])
+
+    def test_action_plan_priorities_follow_job_description_language(self):
+        result = build_match_analysis(
+            "Built a Python project.",
+            "FastAPI is required. AWS is preferred.",
+            "Python Engineer",
+        )
+        priorities = {item["requirement"]: item["priority"] for item in result["actionPlan"]}
+        self.assertEqual(priorities["FastAPI"], "critical")
+        self.assertEqual(priorities["AWS"], "optional")
+
+    @patch("app.services.trust_card_engine.generate_trust_summary", return_value="Dynamic summary")
+    def test_trust_card_changes_for_different_resumes(self, _summary):
+        job = "Python and FastAPI are required. AWS is preferred."
+        strong = build_trust_card(
+            "Candidate", "Python Engineer",
+            "Projects Python FastAPI AWS. Experience delivering Python FastAPI AWS services.",
+            job,
+        )
+        weak = build_trust_card(
+            "Candidate", "Python Engineer",
+            "Projects React TypeScript. Experience building React interfaces.",
+            job,
+        )
+        self.assertGreater(strong["trustScore"], weak["trustScore"])
+        self.assertNotEqual(strong["referralReadiness"], weak["referralReadiness"])
+        self.assertNotEqual(strong["actionPlan"], weak["actionPlan"])
+
+    @patch("app.services.trust_card_engine.generate_trust_summary", return_value="Dynamic summary")
+    def test_trust_card_changes_for_different_job_descriptions(self, _summary):
+        resume = "Projects Python FastAPI APIs. Experience delivering Python FastAPI APIs."
+        backend = build_trust_card("Candidate", "Backend Engineer", resume, "Python and FastAPI are required. AWS is preferred.")
+        frontend = build_trust_card("Candidate", "Frontend Engineer", resume, "React and TypeScript are required. Cypress is preferred.")
+        self.assertNotEqual(backend["trustScore"], frontend["trustScore"])
+        self.assertNotEqual(backend["missingSkills"], frontend["missingSkills"])
+        self.assertNotEqual(backend["scoreReasons"], frontend["scoreReasons"])
 
 
 if __name__ == "__main__": unittest.main()

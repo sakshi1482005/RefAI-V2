@@ -1,12 +1,11 @@
-import { ArrowRight, BriefcaseBusiness, Check, GraduationCap, ShieldCheck, Sparkles, UserCheck } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, Check, GraduationCap, RefreshCw, ShieldCheck, Sparkles, UserCheck } from 'lucide-react'
 import PageShell from '../components/dashboard/PageShell'
-import { AnimatedNumber, Avatar, Badge, Card, EmptyState, MetricTooltip, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton } from '../components/dashboard/primitives'
+import { AnimatedNumber, Avatar, Badge, Card, EmptyState, InlineFeedback, MetricTooltip, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../components/feedback/ToastProvider'
 import { useEffect, useMemo, useState } from 'react'
-import { useAnalysisSession } from '../hooks/useAnalysisSession'
-import { useNavigate } from 'react-router-dom'
-import { buildScoreReasons, matchScoreFromTrustCard } from '../lib/aiInsights'
+import { useAnalysisSessionResource } from '../hooks/useAnalysisSession'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useDemoMode } from '../context/DemoModeContext'
 import ConfettiBurst from '../components/feedback/ConfettiBurst'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
@@ -15,21 +14,33 @@ import TrustScoreExplanation from '../components/dashboard/TrustScoreExplanation
 import { getStudentWorkflowState } from '../lib/studentWorkflow'
 import ActionPlanPanel from '../components/dashboard/ActionPlanPanel'
 import RefAILogo from '../components/branding/RefAILogo'
+import { educationLines } from '../lib/education'
+import type { AnalysisSession } from '../lib/analysisSession'
+import { friendlyErrorMessage } from '../lib/requestSafety'
 
 export default function TrustCard() {
   const { profile } = useCurrentUser()
   const { isDemoMode } = useDemoMode()
   const navigate = useNavigate()
+  const location = useLocation()
   const { toast } = useToast()
-  const analysisSession = useAnalysisSession()
+  const routedSession = (location.state as { analysisSession?: AnalysisSession } | null)?.analysisSession
+  const analysisResource = useAnalysisSessionResource(routedSession)
+  const analysisSession = analysisResource.session
   const workflow = getStudentWorkflowState({ profile, session: analysisSession })
   const { trustCard } = analysisSession
   const [copied, setCopied] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const candidateName = trustCard?.candidateName || profile?.fullName || 'Candidate'
   const summary = trustCard?.aiSummary ?? ''
-  const matchScore = trustCard ? matchScoreFromTrustCard(trustCard) : null
-  const scoreReasons = matchScore ? buildScoreReasons(matchScore, isDemoMode) : []
+  const scoreReasons = trustCard?.scoreReasons ?? []
+  const education = {
+    college: trustCard?.education?.college || profile?.college || null,
+    degree: trustCard?.education?.degree || profile?.degree || null,
+    branch: trustCard?.education?.branch || profile?.branch || null,
+    graduationYear: trustCard?.education?.graduationYear || profile?.graduationYear || null,
+  }
+  const educationDetails = educationLines(education)
   const signals = useMemo(() => trustCard ? [
     { label: 'Trust Score', value: String(trustCard.trustScore), score: trustCard.trustScore },
     { label: isDemoMode ? 'Resume Match' : 'Overall Match', value: `${trustCard.overallMatch}%`, score: trustCard.overallMatch },
@@ -84,6 +95,19 @@ export default function TrustCard() {
     }
   }
 
+  if (analysisResource.loading && !trustCard) {
+    return <PageShell eyebrow="Trust card" title="Loading Trust Card..." description="RefAI is loading your latest persisted Trust Card.">
+      <Card className="p-6 sm:p-8"><div className="space-y-4"><Skeleton className="h-8 w-64" /><Skeleton className="h-48 w-full" /><Skeleton className="h-24 w-full" /></div></Card>
+    </PageShell>
+  }
+
+  if (analysisResource.error && !trustCard) {
+    return <PageShell eyebrow="Trust card" title="Could not load Trust Card" description="Your saved Trust Card could not be retrieved from the backend.">
+      <InlineFeedback tone="error">{friendlyErrorMessage(analysisResource.error, 'Could not load the saved Trust Card. Please retry.')}</InlineFeedback>
+      <div className="mt-6 flex flex-wrap gap-3"><PrimaryButton onClick={analysisResource.retry}><RefreshCw className="mr-2 size-4" />Retry</PrimaryButton><SecondaryButton onClick={() => navigate('/dashboard/resume-analysis')}>Back to Analysis</SecondaryButton></div>
+    </PageShell>
+  }
+
   return (
     <><ConfettiBurst active={celebrate} onComplete={() => setCelebrate(false)} /><PageShell
       eyebrow="Trust card"
@@ -124,7 +148,7 @@ export default function TrustCard() {
               </div>
               <div className="flex items-center gap-2">
                 <GraduationCap className="size-4 text-slate-400" />
-                <span>{profile?.college && profile?.degree ? `${profile.degree} · ${profile.college}` : 'Education details not added'}</span>
+                <div>{educationDetails.length ? educationDetails.map((line) => <p key={line}>{line}</p>) : <span>Educational data not available</span>}</div>
               </div>
             </div>
           </div>

@@ -96,7 +96,7 @@ export default function Hero() {
           <p className="hero-copy fade delay-2">RefAI compares resumes with job descriptions, explains the resulting fit, and creates an AI Trust Card for a more structured referral review.</p>
           <div className="hero-actions fade delay-3">
             <Link className="btn btn-primary" to="/dashboard" onClick={enterDemoMode}>Explore Live Demo</Link>
-            <a className="btn btn-secondary" href="#demo">See how it Works!</a>
+            <a className="btn btn-secondary" href="#how-it-works">See how it Works!</a>
           </div>
           <div className="trust-strip fade delay-3" aria-label="Trust indicators">
             <div className="avatar-stack">

@@ -26,7 +26,7 @@ def analyze_resume(payload: MatchScoreRequest, user: dict = Depends(get_current_
         user["sub"], len(payload.resumeText), len(payload.jobDescription),
     )
     try:
-        result = run_resume_analysis(payload.resumeText, payload.jobDescription)
+        result = run_resume_analysis(payload.resumeText, payload.jobDescription, payload.targetRole)
         return persistence_service.save_analysis(user["sub"], payload, result)
     except ResumeAnalysisInputError as exc:
         raise HTTPException(
@@ -45,7 +45,14 @@ def analyze_resume(payload: MatchScoreRequest, user: dict = Depends(get_current_
 
 @router.get("/analysis/latest", response_model=PersistedAnalysisSessionResponse)
 def latest_analysis(user: dict = Depends(get_current_user)):
-    result = persistence_service.latest_session(user["sub"])
+    try:
+        result = persistence_service.latest_session(user["sub"])
+    except StudentPersistenceError as exc:
+        logger.exception("Latest resume analysis read failed user=%s", user["sub"])
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The saved resume analysis could not be loaded. Please retry.",
+        ) from exc
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No persisted resume analysis is available.")
     return result

@@ -16,6 +16,11 @@ export interface ActionPlanItem {
   nextStep: string
 }
 
+export interface ExplainedInsight {
+  title: string
+  description: string
+}
+
 export interface ResumeAnalysisResult extends MatchScore {
   analysisId?: string
   analysisStatus: 'complete'
@@ -24,11 +29,15 @@ export interface ResumeAnalysisResult extends MatchScore {
   missingRequirements: ActionPlanItem[]
   actionPlan: ActionPlanItem[]
   strengths: string[]
+  weaknesses: string[]
   evidence: string[]
   resumeSectionsUsed: string[]
   readinessSummary: string
   learningRecommendations: string[]
   confidence: number
+  scoreReasons: string[]
+  atsGuidance: ExplainedInsight[]
+  interviewReadiness: ExplainedInsight
   processingTimeMs: number
 }
 
@@ -44,6 +53,23 @@ export interface TrustScoreFactor {
   reason: string
 }
 
+export interface StudentEducation {
+  college: string | null
+  degree: string | null
+  branch: string | null
+  graduationYear: string | number | null
+}
+
+export interface StudentProfileData extends StudentEducation {
+  preferredRole: string | null
+  preferredCompany: string | null
+  skills: string[]
+  bio: string | null
+  linkedinUrl: string | null
+  githubUrl: string | null
+  portfolioUrl: string | null
+}
+
 export interface TrustCardResult {
   id?: string
   candidateName: string
@@ -57,6 +83,7 @@ export interface TrustCardResult {
   referralReadiness: ReferralReadiness
   recommendation: EmployeeRecommendation
   strengths: string[]
+  weaknesses: string[]
   missingSkills: string[]
   missingRequirements: ActionPlanItem[]
   actionPlan: ActionPlanItem[]
@@ -64,7 +91,9 @@ export interface TrustCardResult {
   riskSignals: string[]
   scoreFormula: string
   scoreBreakdown: TrustScoreFactor[]
+  scoreReasons: string[]
   aiSummary: string
+  education: StudentEducation
 }
 
 export type ReferralStatus = 'pending' | 'under_review' | 'more_info_requested' | 'approved' | 'declined' | 'referred'
@@ -164,6 +193,7 @@ export interface EmployeeTrustCardView {
   scoreFormula: string | null
   scoreBreakdown: TrustScoreFactor[] | null
   generatedAt: string | null
+  education: StudentEducation
 }
 
 export interface ReferralStatusHistoryEntry {
@@ -179,6 +209,12 @@ export interface ReferralStatusHistoryEntry {
 export interface EmployeeDirectoryItem {
   id: string
   name: string
+  company: string | null
+  designation: string | null
+}
+
+export interface EmployeeProfessionalProfile {
+  profileId: string
   company: string | null
   designation: string | null
 }

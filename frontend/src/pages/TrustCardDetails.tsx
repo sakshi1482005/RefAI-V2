@@ -6,7 +6,6 @@ import { Avatar, Badge, Card, EmptyState, PrimaryButton, ProgressBar, ScoreExpla
 import { useDemoMode } from '../context/DemoModeContext'
 import { DEMO_ATS_SCORE, demoAnalysisSession, demoEmployeeReview } from '../lib/demoData'
 import { useToast } from '../components/feedback/ToastProvider'
-import { buildScoreReasons, matchScoreFromTrustCard } from '../lib/aiInsights'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
 import TrustScoreExplanation from '../components/dashboard/TrustScoreExplanation'
 import AuthenticatedTrustCardDetails from '../components/dashboard/AuthenticatedTrustCardDetails'
@@ -34,7 +33,7 @@ export default function TrustCardDetails() {
     { label: 'Confidence', value: `${trustCard.confidence}%`, score: trustCard.confidence },
     { label: 'Gaps', value: `${trustCard.gapScore}%`, score: trustCard.gapScore },
   ] : signals
-  const scoreReasons = trustCard ? buildScoreReasons(matchScoreFromTrustCard(trustCard), true) : []
+  const scoreReasons = trustCard?.scoreReasons ?? []
   const copySummary = async () => {
     try {
       await navigator.clipboard.writeText(summary)

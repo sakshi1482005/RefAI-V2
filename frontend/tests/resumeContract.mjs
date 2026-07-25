@@ -12,10 +12,16 @@ const actionItem = {
   evidenceSuggestion: 'Add a project outcome', estimatedEffort: '2 hours', nextStep: 'Update the resume',
 }
 const valid = {
+  analysisId: '00000000-0000-0000-0000-000000000001',
   overall: 72, roleFit: 80, proof: 64, gaps: 20, analysisStatus: 'complete',
   matchedSkills: ['Python'], missingSkills: ['FastAPI'], missingRequirements: [actionItem], actionPlan: [actionItem],
-  strengths: ['Strong Python evidence'], evidence: ['Python appears in projects'], resumeSectionsUsed: ['Projects'],
-  readinessSummary: 'Improve API evidence.', learningRecommendations: ['Build an API'], confidence: 81, processingTimeMs: 12,
+  strengths: ['Strong Python evidence'], weaknesses: ['FastAPI evidence is missing'],
+  evidence: ['Python appears in projects'], resumeSectionsUsed: ['Projects'],
+  readinessSummary: 'Improve API evidence.', learningRecommendations: ['Build an API'], confidence: 81,
+  scoreReasons: ['Role Fit is based on weighted requirements.'],
+  atsGuidance: [{ title: 'Use authentic terminology', description: 'Keep Python attached to project evidence.' }],
+  interviewReadiness: { title: 'Prepare evidence', description: 'Explain the Python project.' },
+  processingTimeMs: 12,
 }
 const expectReject = (payload, label) => {
   try { parseResumeAnalysisResponse(payload, 200) } catch { return }
@@ -38,8 +44,11 @@ try {
     'from fastapi.testclient import TestClient',
     'from app.main import app',
     'from app.core.security import get_current_user',
+    'from app.api.routes import resume',
+    'from types import SimpleNamespace',
     'app.dependency_overrides[get_current_user] = lambda: {"sub": "contract-test-student"}',
-    'response = TestClient(app).post("/resume/analyze", json={"resumeText": "Skills: Python FastAPI SQL. Projects: Built a FastAPI service with Python and SQL.", "jobDescription": "Requires Python, FastAPI, SQL, testing, and cloud deployment."}, headers={"Authorization": "Bearer test"})',
+    'resume.persistence_service = SimpleNamespace(save_analysis=lambda student_id, payload, result: {**result, "analysisId": "00000000-0000-0000-0000-000000000002"})',
+    'response = TestClient(app).post("/resume/analyze", json={"resumeText": "Skills: Python FastAPI SQL. Projects: Built a FastAPI service with Python and SQL.", "jobDescription": "Requires Python, FastAPI, SQL, testing, and cloud deployment.", "targetRole": "Backend Engineer"}, headers={"Authorization": "Bearer test"})',
     'print(json.dumps({"status": response.status_code, "body": response.json()}))',
   ].join(';')], { cwd: backendRoot, encoding: 'utf8' })
   if (endpoint.status !== 0) throw new Error(endpoint.stderr || 'Backend contract process failed')

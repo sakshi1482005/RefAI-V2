@@ -24,11 +24,11 @@ def _shape(value: Any) -> Any:
     return type(value).__name__
 
 
-def run_resume_analysis(resume_text: str, job_description: str) -> dict:
+def run_resume_analysis(resume_text: str, job_description: str, target_role: str | None = None) -> dict:
     """Build and strictly serialize the one canonical resume-analysis response."""
     started_at = perf_counter()
     try:
-        raw = build_match_analysis(resume_text, job_description)
+        raw = build_match_analysis(resume_text, job_description, target_role)
     except InsufficientJobRequirements as exc:
         raise ResumeAnalysisInputError(str(exc)) from exc
     except Exception as exc:

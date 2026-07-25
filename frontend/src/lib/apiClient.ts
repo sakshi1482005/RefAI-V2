@@ -49,6 +49,10 @@ api.interceptors.response.use(undefined, async (error: unknown) => {
   }
 
   const status = axiosError.response?.status
+  const responseData = axiosError.response?.data
+  const backendDetail = typeof responseData === 'object' && responseData !== null && 'detail' in responseData && typeof responseData.detail === 'string'
+    ? responseData.detail
+    : undefined
   console.error('[RefAI API request failed]', {
     method: config?.method?.toUpperCase(),
     endpoint: config?.url,
@@ -81,5 +85,5 @@ api.interceptors.response.use(undefined, async (error: unknown) => {
   else if (status && status >= 500 && (config?.url?.includes('/resume/analyze') || config?.url?.includes('/match/score'))) { kind = 'server'; fallback = 'The analysis service is temporarily unavailable. Your uploaded resume remains available in this session.' }
   else if (status && status >= 500) { kind = 'server'; fallback = 'The RefAI backend is temporarily unavailable. Please try again shortly.' }
 
-  return Promise.reject(new FriendlyRequestError(kind, friendlyErrorMessage(axiosError, fallback)))
+  return Promise.reject(new FriendlyRequestError(kind, friendlyErrorMessage(axiosError, fallback), status, backendDetail))
 })

@@ -4,7 +4,6 @@ import PageShell from '../components/dashboard/PageShell'
 import { Avatar, Badge, Card, EmptyState, PrimaryButton, ScoreExplanation, SecondaryButton } from '../components/dashboard/primitives'
 import { useDemoMode } from '../context/DemoModeContext'
 import { DEMO_ATS_SCORE, demoAnalysisSession, demoEmployeeReview } from '../lib/demoData'
-import { buildScoreReasons, matchScoreFromTrustCard } from '../lib/aiInsights'
 import AuthenticatedCandidateReview from '../components/dashboard/AuthenticatedCandidateReview'
 
 // TODO: Populate when a candidate-detail API is available.
@@ -25,7 +24,7 @@ export default function CandidateReview() {
     { label: 'AI recommendation', value: demoAnalysisSession.trustCard?.recommendation ?? 'Not ready yet' },
     { label: 'Review status', value: demoDecision === 'pending' ? demoEmployeeReview.status : demoDecision === 'approved' ? 'Approved' : demoDecision === 'more_info_requested' ? 'More information requested' : 'Declined' },
   ] : reviewSignals
-  const scoreReasons = isDemoMode && demoAnalysisSession.trustCard ? buildScoreReasons(matchScoreFromTrustCard(demoAnalysisSession.trustCard), true) : []
+  const scoreReasons = isDemoMode ? demoAnalysisSession.trustCard?.scoreReasons ?? [] : []
 
   return (
     <PageShell

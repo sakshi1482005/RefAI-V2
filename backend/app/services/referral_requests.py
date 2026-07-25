@@ -4,7 +4,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from app.db.supabase_client import supabase
-from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate
+from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeProfessionalProfileUpdate
 from app.services.resume_storage import SIGNED_RESUME_TTL_SECONDS, create_resume_signed_url, find_latest_student_resume
 
 
@@ -31,6 +31,7 @@ class ReferralRepository(Protocol):
     def get_trust_card(self, trust_card_id: str) -> dict[str, Any] | None: ...
     def get_profile(self, student_id: str) -> dict[str, Any] | None: ...
     def get_auth_metadata(self, student_id: str) -> dict[str, Any]: ...
+    def get_student_education(self, student_id: str) -> dict[str, Any] | None: ...
     def find_resume(self, student_id: str) -> dict[str, Any] | None: ...
     def sign_resume(self, path: str, expires_in: int) -> str: ...
     def create_request(self, values: dict[str, Any]) -> dict[str, Any]: ...
@@ -41,6 +42,8 @@ class ReferralRepository(Protocol):
     def list_history(self, request_id: str) -> list[dict[str, Any]]: ...
     def persist_trust_card(self, student_id: str, payload: dict[str, Any], analysis_id: str | None = None) -> dict[str, Any]: ...
     def list_employees(self) -> list[dict[str, Any]]: ...
+    def get_employee_profile(self, profile_id: str) -> dict[str, Any] | None: ...
+    def upsert_employee_profile(self, profile_id: str, company: str, designation: str | None) -> dict[str, Any]: ...
 
 
 class SupabaseReferralRepository:
@@ -63,6 +66,14 @@ class SupabaseReferralRepository:
             return (user.user_metadata or {}) if user else {}
         except Exception:
             return {}
+
+    def get_student_education(self, student_id: str) -> dict[str, Any] | None:
+        try:
+            rows = supabase.table("student_profiles").select("profile_id,college,degree,branch,graduation_year").eq("profile_id", student_id).limit(1).execute().data or []
+        except Exception as exc:
+            if "student_profiles.branch" not in str(exc) or "does not exist" not in str(exc): raise
+            rows = supabase.table("student_profiles").select("profile_id,college,degree,graduation_year").eq("profile_id", student_id).limit(1).execute().data or []
+        return rows[0] if rows else None
 
     def find_resume(self, student_id: str) -> dict[str, Any] | None:
         return find_latest_student_resume(student_id)
@@ -104,7 +115,10 @@ class SupabaseReferralRepository:
     def persist_trust_card(self, student_id: str, payload: dict[str, Any], analysis_id: str | None = None) -> dict[str, Any]:
         values = {"student_id": student_id, "payload": payload, "analysis_id": analysis_id}
         query = supabase.table("trust_cards")
-        rows = (query.upsert(values, on_conflict="analysis_id").execute().data if analysis_id else query.insert(values).execute().data) or []
+        try:
+            rows = (query.upsert(values, on_conflict="analysis_id").execute().data if analysis_id else query.insert(values).execute().data) or []
+        except Exception as exc:
+            raise ReferralError("Trust Card database write failed") from exc
         if not rows: raise ReferralError("Trust Card was not persisted")
         return rows[0]
 
@@ -117,6 +131,18 @@ class SupabaseReferralRepository:
         details_by_profile = {str(details["profile_id"]): details for details in employee_profiles}
         return [{**profile, **details_by_profile.get(str(profile["id"]), {})} for profile in profiles]
 
+    def get_employee_profile(self, profile_id: str) -> dict[str, Any] | None:
+        rows = supabase.table("employee_profiles").select("profile_id,company,designation").eq("profile_id", profile_id).limit(1).execute().data or []
+        return rows[0] if rows else None
+
+    def upsert_employee_profile(self, profile_id: str, company: str, designation: str | None) -> dict[str, Any]:
+        rows = supabase.table("employee_profiles").upsert(
+            {"profile_id": profile_id, "company": company, "designation": designation},
+            on_conflict="profile_id",
+        ).execute().data or []
+        if not rows: raise ReferralError("Professional profile was not saved")
+        return rows[0]
+
 
 class ReferralRequestService:
     def __init__(self, repository: ReferralRepository | None = None): self.repository = repository or SupabaseReferralRepository()
@@ -125,6 +151,16 @@ class ReferralRequestService:
         role = self.repository.get_role(user_id)
         if role not in {"student", "employee"}: raise ReferralForbidden("A protected profile role is required")
         return role
+
+    def _student_education(self, student_id: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        education = self.repository.get_student_education(student_id) or {}
+        metadata = metadata if metadata is not None else self.repository.get_auth_metadata(student_id)
+        return {
+            "college": education.get("college") or metadata.get("college") or None,
+            "degree": education.get("degree") or metadata.get("degree") or None,
+            "branch": education.get("branch") or metadata.get("branch") or None,
+            "graduationYear": education.get("graduation_year") or metadata.get("graduation_year") or None,
+        }
 
     def create(self, actor_id: str, payload: CreateReferralRequest) -> dict[str, Any]:
         if self._role(actor_id) != "student": raise ReferralForbidden("Student access is required")
@@ -237,6 +273,7 @@ class ReferralRequestService:
             "summary": payload.get("aiSummary"), "riskSignals": payload.get("riskSignals"),
             "scoreFormula": payload.get("scoreFormula"), "scoreBreakdown": payload.get("scoreBreakdown"),
             "generatedAt": card.get("created_at"),
+            "education": self._student_education(str(row["student_id"]), metadata),
         }
 
     def update_status(self, actor_id: str, request_id: str, update: EmployeeDecisionUpdate) -> dict[str, Any]:
@@ -259,7 +296,7 @@ class ReferralRequestService:
         if str(request[field]) != actor_id: raise ReferralForbidden("Trust Card access denied")
         card = self.repository.get_trust_card(str(request["trust_card_id"]))
         if not card: raise ReferralNotFound("Trust Card not found")
-        return {"id": card["id"], **card["payload"]}
+        return {"id": card["id"], **card["payload"], "education": self._student_education(str(request["student_id"]))}
 
     def persist_trust_card(self, student_id: str, payload: dict[str, Any], analysis_id: str | None = None) -> dict[str, Any]:
         if self._role(student_id) != "student": raise ReferralForbidden("Student access is required")
@@ -277,3 +314,24 @@ class ReferralRequestService:
                 "designation": row.get("designation") or metadata.get("designation") or metadata.get("job_title") or metadata.get("headline"),
             })
         return employees
+
+    def employee_profile(self, actor_id: str) -> dict[str, Any]:
+        if self._role(actor_id) != "employee": raise ReferralForbidden("Employee access is required")
+        row = self.repository.get_employee_profile(actor_id) or {}
+        return {
+            "profileId": actor_id,
+            "company": row.get("company"),
+            "designation": row.get("designation"),
+        }
+
+    def save_employee_profile(self, actor_id: str, update: EmployeeProfessionalProfileUpdate) -> dict[str, Any]:
+        if self._role(actor_id) != "employee": raise ReferralForbidden("Employee access is required")
+        company = update.company.strip()
+        if not company: raise ReferralError("Company name is required")
+        designation = update.designation.strip() if update.designation and update.designation.strip() else None
+        row = self.repository.upsert_employee_profile(actor_id, company, designation)
+        return {
+            "profileId": actor_id,
+            "company": row.get("company"),
+            "designation": row.get("designation"),
+        }

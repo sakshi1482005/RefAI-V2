@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import unittest
 
-from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView
+from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeProfessionalProfileUpdate, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView
 from app.services.referral_requests import InvalidReferralTransition, ReferralForbidden, ReferralRequestService
 
 
@@ -15,6 +15,8 @@ class FakeRepository:
         self.cards = {self.card_id: {"id": self.card_id, "student_id": self.student, "payload": {"candidateName": "Student", "role": "Engineer", "trustScore": 82, "overallMatch": 79}}}
         self.profile_data = {self.student: {"full_name": "Student One", "college": "RefAI College"}}
         self.auth_metadata = {self.student: {"degree": "B.Tech", "graduation_year": "2026"}}
+        self.student_education = {self.student: {"profile_id": self.student, "college": "RefAI College", "degree": "B.Tech", "branch": "Computer Science", "graduation_year": "2026"}}
+        self.employee_profiles = {self.employee: {"profile_id": self.employee, "company": "Acme", "designation": "Engineer"}}
         self.resumes = {self.student: {"path": f"{self.student}/resume.pdf", "file_name": "resume.pdf"}}
         self.requests, self.history_rows = {}, []
 
@@ -22,6 +24,7 @@ class FakeRepository:
     def get_trust_card(self, trust_card_id): return self.cards.get(trust_card_id)
     def get_profile(self, student_id): return self.profile_data.get(student_id)
     def get_auth_metadata(self, student_id): return self.auth_metadata.get(student_id, {})
+    def get_student_education(self, student_id): return self.student_education.get(student_id)
     def find_resume(self, student_id): return self.resumes.get(student_id)
     def sign_resume(self, path, expires_in): return f"https://storage.test/signed/{path}?expires={expires_in}"
     def create_request(self, values):
@@ -49,7 +52,12 @@ class FakeRepository:
         self.cards[card_id] = row
         return row
     def list_employees(self):
-        return [{"id": self.employee, "full_name": "Employee One", "company": "Acme", "designation": "Engineer"}]
+        return [{"id": self.employee, "full_name": "Employee One", **self.employee_profiles.get(self.employee, {})}]
+    def get_employee_profile(self, profile_id): return self.employee_profiles.get(profile_id)
+    def upsert_employee_profile(self, profile_id, company, designation):
+        row = {"profile_id": profile_id, "company": company, "designation": designation}
+        self.employee_profiles[profile_id] = row
+        return row
 
 
 class ReferralRequestTests(unittest.TestCase):
@@ -113,6 +121,21 @@ class ReferralRequestTests(unittest.TestCase):
         directory = self.service.employee_directory(self.repository.student)
         self.assertEqual(directory[0]["company"], "Legacy Co")
         self.assertEqual(directory[0]["designation"], "Senior Engineer")
+    def test_employee_can_upsert_professional_profile_and_directory_uses_it(self):
+        saved = self.service.save_employee_profile(self.repository.employee, EmployeeProfessionalProfileUpdate(company="  RefAI Labs  ", designation="  Staff Engineer  "))
+        self.assertEqual((saved["company"], saved["designation"]), ("RefAI Labs", "Staff Engineer"))
+        loaded = self.service.employee_profile(self.repository.employee)
+        self.assertEqual(loaded, saved)
+        directory = self.service.employee_directory(self.repository.student)
+        self.assertEqual((directory[0]["company"], directory[0]["designation"]), ("RefAI Labs", "Staff Engineer"))
+        self.assertEqual(len(self.repository.employee_profiles), 1)
+    def test_student_cannot_edit_employee_professional_profile(self):
+        with self.assertRaises(ReferralForbidden):
+            self.service.save_employee_profile(self.repository.student, EmployeeProfessionalProfileUpdate(company="Wrong Company"))
+    def test_employee_directory_returns_no_company_only_when_none_is_saved(self):
+        self.repository.employee_profiles.clear()
+        self.repository.auth_metadata[self.repository.employee] = {}
+        self.assertIsNone(self.service.employee_directory(self.repository.student)[0]["company"])
     def test_employee_queue_excludes_detail_payloads(self):
         self.create()
         item = self.service.employee_queue(self.repository.employee)[0]
@@ -130,6 +153,7 @@ class ReferralRequestTests(unittest.TestCase):
         self.assertEqual(resume["expiresIn"], 600)
         self.assertTrue(resume["signedUrl"].startswith("https://storage.test/signed/"))
         self.assertEqual(card["trustCardId"], self.repository.card_id)
+        self.assertEqual(card["education"]["branch"], "Computer Science")
         EmployeeReferralRequestView.model_validate(detail)
         EmployeeResumeAccess.model_validate(resume)
         EmployeeTrustCardView.model_validate(card)
