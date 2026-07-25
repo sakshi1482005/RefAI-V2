@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Bell, Camera, KeyRound, Mail, Pencil, ShieldCheck, Sparkles, UserCircle2, X } from 'lucide-react'
 import PageShell from '../components/dashboard/PageShell'
 import { Badge, Card, InlineFeedback, PrimaryButton, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
@@ -181,6 +181,7 @@ export default function ProfileSettings() {
   const [editing, setEditing] = useState(false)
   const [initializing, setInitializing] = useState(true)
   const [saving, setSaving] = useState(false)
+  const saveInFlight = useRef(false)
   const [profileLoadError, setProfileLoadError] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<NotificationPreferences>(DEFAULT_NOTIFICATIONS)
   const [savedNotifications, setSavedNotifications] = useState<NotificationPreferences>(DEFAULT_NOTIFICATIONS)
@@ -293,7 +294,7 @@ export default function ProfileSettings() {
   }
 
   const saveProfile = async () => {
-    if (saving) return
+    if (saveInFlight.current) return
     const nextErrors = validateProfile(form)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) {
@@ -308,7 +309,9 @@ export default function ProfileSettings() {
       fullName: form.fullName.trim(),
       skills: form.skills.split(',').map((skill) => skill.trim()).filter(Boolean).join(', '),
     }
+    saveInFlight.current = true
     setSaving(true)
+    setProfileLoadError(null)
 
     try {
       requireOnline()
@@ -356,6 +359,7 @@ export default function ProfileSettings() {
     } catch (error) {
       toast({ title: 'Profile could not be saved', description: friendlyErrorMessage(error, 'Your profile could not be saved to Supabase. Please try again.'), tone: 'error' })
     } finally {
+      saveInFlight.current = false
       setSaving(false)
     }
   }

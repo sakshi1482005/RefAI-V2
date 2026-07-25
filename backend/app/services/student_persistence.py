@@ -42,16 +42,22 @@ class SupabaseStudentPersistenceRepository:
             return {}
 
     def get_student_education(self, student_id: str) -> dict[str, Any] | None:
-        rows = (
-            supabase.table("student_profiles")
-            .select("profile_id,college,degree,branch,graduation_year,preferred_role,preferred_company,skills,bio,linkedin,github,portfolio")
-            .eq("profile_id", student_id).limit(1).execute().data or []
-        )
+        try:
+            rows = (
+                supabase.table("student_profiles")
+                .select("profile_id,college,degree,branch,graduation_year,preferred_role,preferred_company,skills,bio,linkedin,github,portfolio")
+                .eq("profile_id", student_id).limit(1).execute().data or []
+            )
+        except Exception as exc:
+            raise StudentPersistenceError("Student profile database read failed") from exc
         return rows[0] if rows else None
 
     def upsert_student_education(self, student_id: str, values: dict[str, Any]) -> dict[str, Any]:
         payload = {"profile_id": student_id, **values}
-        rows = supabase.table("student_profiles").upsert(payload, on_conflict="profile_id").execute().data or []
+        try:
+            rows = supabase.table("student_profiles").upsert(payload, on_conflict="profile_id").execute().data or []
+        except Exception as exc:
+            raise StudentPersistenceError("Student profile database write failed") from exc
         if not rows: raise StudentPersistenceError("Student education was not persisted")
         return rows[0]
 

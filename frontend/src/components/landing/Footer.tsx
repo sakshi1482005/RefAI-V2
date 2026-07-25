@@ -32,7 +32,7 @@ export default function Footer() {
           <div className="footer-heading">Contact & Get Started</div>
           <a href="/auth">Create Trust Card</a>
           <a id="login" href="/auth">Login</a>
-          <a href="#contact" aria-current="location">Hackathon contact</a>
+          
         </div>
       </div>
 

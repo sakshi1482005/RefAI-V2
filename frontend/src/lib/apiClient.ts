@@ -50,6 +50,8 @@ api.interceptors.response.use(undefined, async (error: unknown) => {
 
   const status = axiosError.response?.status
   const responseData = axiosError.response?.data
+  const isStudentProfileRequest = config?.url?.includes('/auth/student-profile') ?? false
+  const isStudentProfileSave = isStudentProfileRequest && method === 'PUT'
   const backendDetail = typeof responseData === 'object' && responseData !== null && 'detail' in responseData && typeof responseData.detail === 'string'
     ? responseData.detail
     : undefined
@@ -65,9 +67,11 @@ api.interceptors.response.use(undefined, async (error: unknown) => {
   let fallback = 'RefAI could not complete that request. Please try again.'
   if (!navigator.onLine) { kind = 'offline'; fallback = 'You appear to be offline. Reconnect and try again.' }
   else if (axiosError.code === 'ECONNABORTED' || axiosError.code === 'ETIMEDOUT') { kind = 'timeout'; fallback = 'The request took too long. Check your connection and try again.' }
-  else if (!axiosError.response) { kind = 'network'; fallback = 'RefAI could not reach the service. Check your connection and try again.' }
+  else if (!axiosError.response) { kind = 'network'; fallback = isStudentProfileRequest ? 'Unable to connect to the RefAI backend.' : 'RefAI could not reach the service. Check your connection and try again.' }
   else if (status === 401) { kind = 'auth'; fallback = 'Your session has expired. Sign in again and retry.' }
   else if (status === 403) { kind = 'auth'; fallback = 'You do not have permission to perform this action.' }
+  else if (status === 422 && isStudentProfileSave) { kind = 'validation'; fallback = `Profile validation failed${backendDetail ? `: ${backendDetail}` : '. Review the highlighted fields and try again.'}` }
+  else if (status && status >= 500 && isStudentProfileSave) { kind = 'server'; fallback = `Profile could not be saved${backendDetail ? `: ${backendDetail}` : '. Please try again.'}` }
   else if (status === 404 && config?.url?.includes('/resume/upload')) { fallback = 'The resume upload service could not be found. Check that the RefAI backend is running and VITE_API_BASE_URL points to it.' }
   else if (status === 404 && (config?.url?.includes('/resume/analyze') || config?.url?.includes('/match/score'))) { fallback = 'The resume analysis service could not be found. Check the backend connection and try again.' }
   else if (status === 404 && config?.url?.includes('/trust-card/generate')) { fallback = 'The Trust Card service could not be found. Check the backend connection and try again.' }

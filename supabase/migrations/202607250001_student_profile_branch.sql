@@ -2,7 +2,7 @@
 -- Additive and safe to rerun; no existing data is changed or removed.
 
 alter table public.student_profiles
-  add column if not exists branch text;
+  add column if not exists branch text,
   add column if not exists preferred_role text,
   add column if not exists preferred_company text,
   add column if not exists skills text[] not null default '{}'::text[],
