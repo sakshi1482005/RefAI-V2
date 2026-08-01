@@ -194,8 +194,8 @@ export default function Action() {
                   <span className="risk-stat-value">88%</span>
                 </div>
                 <div className="stat-box">
-                  <span className="risk-stat-label">ATS Score</span>
-                  <span className="risk-stat-value">93</span>
+                  <span className="risk-stat-label">Resume quality</span>
+                  <span className="risk-stat-value">Strong</span>
                 </div>
                 <div className="stat-box">
                   <span className="risk-stat-label">Reviewer</span>
@@ -310,7 +310,7 @@ export default function Action() {
               </div>
 
             </div>
-            <p className="demo-score-why"><strong>Meera Shah’s review:</strong> Ananya’s 91 Trust Score combines an 88% Resume Match, 93 ATS Score, and consistent React, FastAPI, SQL, and collaboration evidence.</p>
+            <p className="demo-score-why"><strong>Meera Shah’s review:</strong> Ananya’s 91 Candidate Trust Score is supported by strong resume evidence and consistent React, FastAPI, SQL, and collaboration evidence.</p>
           </div>
         </Reveal>
       </div>

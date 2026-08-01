@@ -1,0 +1,42 @@
+import { expect, test } from '@playwright/test'
+const email = process.env.E2E_STUDENT_EMAIL
+const password = process.env.E2E_STUDENT_PASSWORD
+test.skip(!email || !password, 'Set E2E_STUDENT_EMAIL and E2E_STUDENT_PASSWORD for the authenticated isolation run.')
+
+test('Demo Mode state is isolated from an authenticated session and refresh', async ({ page }) => {
+  await page.goto('/?demo=1')
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByText(/Demo Mode/i).first()).toBeVisible()
+  await page.evaluate(() => {
+    sessionStorage.setItem('refai_demo_decision', 'approved')
+    sessionStorage.setItem('refai_demo_journey_stage', 'referral-sent')
+    sessionStorage.setItem('refai_analysis_session:demo', JSON.stringify({ trustCard: { id: 'demo-trust-card-only' }, upload: { storagePath: 'demo-user/demo-resume.pdf' } }))
+  })
+  await page.goto('/dashboard/trust-card')
+  await expect(page.getByText(/Candidate Trust Score|Trust Score/i).first()).toBeVisible()
+  await page.goto('/employee/review/demo-referral-001')
+  await expect(page.getByText(/Candidate Review|candidate/i).first()).toBeVisible()
+  await page.goto('/employee/decision/demo-referral-001')
+  await page.getByRole('button', { name: /Approve referral/i }).click()
+  await expect(page.getByText(/Approved/i).first()).toBeVisible()
+  await page.goto('/auth')
+  await page.getByLabel(/email/i).fill(email!)
+  await page.getByLabel(/password/i).fill(password!)
+  await page.getByRole('button', { name: /sign in|login/i }).click()
+  await page.waitForURL(/dashboard|employee/)
+  const productionCalls: string[] = []
+  page.on('request', request => { if (request.url().includes('/referral/') || request.url().includes('/resume/')) productionCalls.push(request.url()) })
+  await page.reload(); await page.waitForLoadState('networkidle')
+  expect(productionCalls.some(url => url.includes('/resume/analysis/latest') || url.includes('/referral/'))).toBeTruthy()
+  const storage = await page.evaluate(() => ({ session: { ...sessionStorage }, body: document.body.innerText }))
+  expect(storage.session['refai_demo_mode']).toBeUndefined()
+  expect(storage.session['refai_demo_decision']).toBeUndefined()
+  expect(storage.session['refai_demo_journey_stage']).toBeUndefined()
+  expect(storage.body).not.toContain('demo-trust-card-only')
+  expect(storage.body).not.toContain('demo-resume.pdf')
+  await page.getByRole('button', { name: /profile|account/i }).first().click().catch(() => {})
+  const logout = page.getByRole('button', { name: /sign out|log out/i }).or(page.getByRole('link', { name: /sign out|log out/i }))
+  await logout.first().click()
+  await page.goto('/?demo=1'); await page.waitForLoadState('networkidle')
+  expect(await page.locator('body').innerText()).not.toContain(email!)
+})

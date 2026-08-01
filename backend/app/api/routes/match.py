@@ -9,6 +9,8 @@ from app.models.schemas import MatchScoreRequest, MatchAnalysisResponse
 router = APIRouter(prefix="/match", tags=["match"])
 logger = logging.getLogger(__name__)
 
+# Deprecated compatibility endpoint. New authenticated flows must use
+# POST /resume/analyze, which persists the analysis for refresh-safe workflows.
 
 @router.post("/score", response_model=MatchAnalysisResponse)
 def score_match(

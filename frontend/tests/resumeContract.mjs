@@ -21,6 +21,11 @@ const valid = {
   scoreReasons: ['Role Fit is based on weighted requirements.'],
   atsGuidance: [{ title: 'Use authentic terminology', description: 'Keep Python attached to project evidence.' }],
   interviewReadiness: { title: 'Prepare evidence', description: 'Explain the Python project.' },
+  jobDescriptionClassification: {
+    requiredSkills: ['Python'], preferredSkills: ['FastAPI'], responsibilities: ['Build APIs'],
+    experienceExpectations: [], educationOrCertificationExpectations: [],
+  },
+  usedGeneralRoleExpectations: false,
   processingTimeMs: 12,
 }
 const expectReject = (payload, label) => {
@@ -47,8 +52,8 @@ try {
     'from app.api.routes import resume',
     'from types import SimpleNamespace',
     'app.dependency_overrides[get_current_user] = lambda: {"sub": "contract-test-student"}',
-    'resume.persistence_service = SimpleNamespace(save_analysis=lambda student_id, payload, result: {**result, "analysisId": "00000000-0000-0000-0000-000000000002"})',
-    'response = TestClient(app).post("/resume/analyze", json={"resumeText": "Skills: Python FastAPI SQL. Projects: Built a FastAPI service with Python and SQL.", "jobDescription": "Requires Python, FastAPI, SQL, testing, and cloud deployment.", "targetRole": "Backend Engineer"}, headers={"Authorization": "Bearer test"})',
+    'resume.persistence_service = SimpleNamespace(save_analysis=lambda student_id, payload, result, **kwargs: {**result, "analysisId": "00000000-0000-0000-0000-000000000002"})',
+    'response = TestClient(app).post("/resume/analyze", json={"resumeText": "Skills: Python FastAPI SQL. Projects: Built a FastAPI service with Python and SQL, tests, deployment, and measurable API outcomes.", "jobDescription": "We require Python, FastAPI, SQL, automated testing, and cloud deployment experience. The engineer will design maintainable REST APIs, collaborate with product teams, review code, troubleshoot production services, and document measurable delivery outcomes. Docker and AWS experience are preferred.", "targetRole": "Backend Engineer"}, headers={"Authorization": "Bearer test"})',
     'print(json.dumps({"status": response.status_code, "body": response.json()}))',
   ].join(';')], { cwd: backendRoot, encoding: 'utf8' })
   if (endpoint.status !== 0) throw new Error(endpoint.stderr || 'Backend contract process failed')

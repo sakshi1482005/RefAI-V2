@@ -1,4 +1,4 @@
-import type { MatchScore, ResumeAnalysisResult, TrustCardResult } from '../types'
+import type { JobDescriptionClassification, MatchScore, ResumeAnalysisResult, TrustCardResult } from '../types'
 
 const LEGACY_STORAGE_KEY = 'refai_analysis_session'
 const STORAGE_KEY_PREFIX = 'refai_analysis_session:'
@@ -29,6 +29,8 @@ export type AnalysisSession = {
   jobDescription?: string
   role?: string
   company?: string
+  jobDescriptionClassification?: JobDescriptionClassification
+  usedGeneralRoleExpectations?: boolean
   analyzedAt?: string
   processingTimeMs?: number
 }

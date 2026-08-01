@@ -1,12 +1,6 @@
--- Keep student education in the existing student_profiles record.
--- Additive and safe to rerun; no existing data is changed or removed.
+-- Compatibility migration for projects that predate the profile foundation.
+-- The foundation already creates branch on fresh projects; this remains a safe
+-- no-op there and adds only the historical branch field on older projects.
 
 alter table public.student_profiles
-  add column if not exists branch text,
-  add column if not exists preferred_role text,
-  add column if not exists preferred_company text,
-  add column if not exists skills text[] not null default '{}'::text[],
-  add column if not exists bio text,
-  add column if not exists linkedin text,
-  add column if not exists github text,
-  add column if not exists portfolio text;
+  add column if not exists branch text;

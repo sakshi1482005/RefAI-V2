@@ -52,17 +52,20 @@ api.interceptors.response.use(undefined, async (error: unknown) => {
   const responseData = axiosError.response?.data
   const isStudentProfileRequest = config?.url?.includes('/auth/student-profile') ?? false
   const isStudentProfileSave = isStudentProfileRequest && method === 'PUT'
+  const isExpectedEmptyAnalysis = status === 404 && config?.url?.includes('/resume/analysis/latest')
   const backendDetail = typeof responseData === 'object' && responseData !== null && 'detail' in responseData && typeof responseData.detail === 'string'
     ? responseData.detail
     : undefined
-  console.error('[RefAI API request failed]', {
-    method: config?.method?.toUpperCase(),
-    endpoint: config?.url,
-    baseURL: config?.baseURL,
-    status,
-    code: axiosError.code,
-    response: axiosError.response?.data,
-  })
+  if (!isExpectedEmptyAnalysis) {
+    console.error('[RefAI API request failed]', {
+      method: config?.method?.toUpperCase(),
+      endpoint: config?.url,
+      baseURL: config?.baseURL,
+      status,
+      code: axiosError.code,
+      response: axiosError.response?.data,
+    })
+  }
   let kind: FriendlyRequestError['kind'] = 'unknown'
   let fallback = 'RefAI could not complete that request. Please try again.'
   if (!navigator.onLine) { kind = 'offline'; fallback = 'You appear to be offline. Reconnect and try again.' }
@@ -75,6 +78,7 @@ api.interceptors.response.use(undefined, async (error: unknown) => {
   else if (status === 404 && config?.url?.includes('/resume/upload')) { fallback = 'The resume upload service could not be found. Check that the RefAI backend is running and VITE_API_BASE_URL points to it.' }
   else if (status === 404 && (config?.url?.includes('/resume/analyze') || config?.url?.includes('/match/score'))) { fallback = 'The resume analysis service could not be found. Check the backend connection and try again.' }
   else if (status === 404 && config?.url?.includes('/trust-card/generate')) { fallback = 'The Trust Card service could not be found. Check the backend connection and try again.' }
+  else if (status === 404 && config?.url?.includes('/resume/analysis/latest')) { fallback = 'No saved resume analysis is available yet.' }
   else if (status === 404 && config?.url?.includes('/referral/employee/requests/') && config?.url?.endsWith('/resume')) { fallback = 'No private resume is available for this assigned referral request.' }
   else if (status === 404 && config?.url?.includes('/referral/employee/requests/') && config?.url?.endsWith('/trust-card')) { fallback = 'No persisted Trust Card is available for this assigned referral request.' }
   else if (status === 404 && config?.url?.includes('/referral/employee/requests/')) { fallback = 'This referral request was not found or is no longer available.' }

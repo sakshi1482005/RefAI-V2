@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Bell, LayoutDashboard, Settings, ShieldCheck, ArrowRight, Menu, X, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Settings, ShieldCheck, ArrowRight, Menu, X, type LucideIcon } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { IconButton, Logo } from './primitives'
 import StudentNavigation from './StudentNavigation'
@@ -8,6 +8,7 @@ import NetworkStatusBanner from '../feedback/NetworkStatusBanner'
 import { useSectionReveal } from '../../hooks/useSectionReveal'
 import RecommendedNextStep from './RecommendedNextStep'
 import ProfileMenu from './ProfileMenu'
+import NotificationCentre from './NotificationCentre'
 
 type NavItem = {
   label: string
@@ -66,9 +67,7 @@ export default function PageShell({ title, description, eyebrow, action, childre
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            <IconButton label="Notifications unavailable" disabled disabledReason="Notifications are not available yet">
-              <Bell className="size-[18px]" />
-            </IconButton>
+            <NotificationCentre />
             <IconButton label={isEmployeePortal ? 'Employee settings unavailable' : 'Settings'} onClick={isEmployeePortal ? undefined : () => navigate('/settings')} disabled={isEmployeePortal} disabledReason={isEmployeePortal ? 'Employee settings are not available yet' : undefined}>
               <Settings className="size-[18px]" />
             </IconButton>

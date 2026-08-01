@@ -9,6 +9,8 @@ from app.main import app
 from app.services.groq_client import AIServiceUnavailable, generate_trust_summary
 from app.services.resume_analysis import ResumeAnalysisInputError, ResumeAnalysisUnavailable, run_resume_analysis
 from app.services.trust_card_engine import build_match_analysis, build_trust_card
+from app.services.requirement_extractor import classify_job_description, general_expectations_for_role
+from app.models.schemas import MatchScoreRequest
 
 
 def action_item():
@@ -40,6 +42,40 @@ class ResumeAnalysisContractTests(unittest.TestCase):
         with self.assertRaises(ResumeAnalysisInputError):
             run_resume_analysis("Built several software projects", "Designing and maintaining scalable applications")
 
+    def test_request_trims_and_preserves_real_job_description(self):
+        job = "  We require Python and FastAPI skills. You will design and maintain REST APIs, collaborate with product teams, and deliver tested services. Two years of relevant experience are required. AWS is preferred.  "
+        payload = MatchScoreRequest(resumeText="resume", jobDescription=job)
+        self.assertEqual(payload.jobDescription, job.strip())
+
+    def test_request_rejects_extremely_short_generic_job_description(self):
+        with self.assertRaises(ValueError):
+            MatchScoreRequest(resumeText="resume", jobDescription="Looking for a great software engineer.")
+
+    def test_request_accepts_omitted_job_description(self):
+        payload = MatchScoreRequest(resumeText="resume")
+        self.assertEqual(payload.jobDescription, "")
+
+    def test_general_role_expectations_are_deterministic_and_role_specific(self):
+        backend = general_expectations_for_role("Backend Engineer")
+        frontend = general_expectations_for_role("Frontend Engineer")
+        self.assertIn("REST APIs", backend)
+        self.assertIn("React", frontend)
+        self.assertNotEqual(backend, frontend)
+
+    def test_job_description_is_classified_deterministically(self):
+        job = (
+            "Python and FastAPI are required. AWS and Docker are preferred. "
+            "You will design REST APIs, maintain services, and collaborate with product teams. "
+            "A minimum of 2 years experience and a Bachelor's degree are required."
+        )
+        classification = classify_job_description(job)
+        self.assertIn("Python", classification["requiredSkills"])
+        self.assertIn("FastAPI", classification["requiredSkills"])
+        self.assertIn("AWS", classification["preferredSkills"])
+        self.assertTrue(classification["responsibilities"])
+        self.assertIn("2+ years of experience", classification["experienceExpectations"])
+        self.assertIn("Bachelor’s degree", classification["educationOrCertificationExpectations"])
+
     def test_valid_typed_response_uses_camel_case(self):
         with patch("app.services.resume_analysis.build_match_analysis", return_value=service_output()):
             result = run_resume_analysis("resume", "job")
@@ -67,7 +103,10 @@ class ResumeAnalysisContractTests(unittest.TestCase):
         app.dependency_overrides[get_current_user] = lambda: {"sub": "student-user"}
         try:
             with patch("app.api.routes.resume.run_resume_analysis", side_effect=ResumeAnalysisUnavailable("bad shape")):
-                response = TestClient(app).post("/resume/analyze", json={"resumeText": "resume", "jobDescription": "job"}, headers={"Authorization": "Bearer test"})
+                response = TestClient(app).post("/resume/analyze", json={
+                    "resumeText": "resume",
+                    "jobDescription": "Python and FastAPI are required. You will design REST APIs, maintain tested services, collaborate with product teams, and deliver reliable production software.",
+                }, headers={"Authorization": "Bearer test"})
         finally:
             app.dependency_overrides.clear()
         self.assertEqual(response.status_code, 502)

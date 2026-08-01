@@ -8,9 +8,11 @@ from app.core.security import get_current_user
 from app.services.resume_parser import extract_text, chunk_text
 from app.services.vector_store import upsert_resume_chunks
 from app.services.resume_storage import store_resume
-from app.models.schemas import MatchAnalysisResponse, MatchScoreRequest, PersistedAnalysisSessionResponse, ResumeUploadResponse
+from app.models.schemas import ImprovementSimulatorResponse, MatchAnalysisResponse, MatchScoreRequest, PersistedAnalysisSessionResponse, ResumeUploadResponse
 from app.services.resume_analysis import ResumeAnalysisInputError, ResumeAnalysisUnavailable, run_resume_analysis
-from app.services.student_persistence import StudentPersistenceError, StudentPersistenceService
+from app.services.student_persistence import StudentAnalysisNotFound, StudentPersistenceError, StudentPersistenceService
+from app.services.requirement_extractor import classify_job_description, general_expectations_for_role
+from app.services.analysis_reliability import assess_analysis_reliability
 
 router = APIRouter(prefix="/resume", tags=["resume"])
 MAX_RESUME_BYTES = 10 * 1024 * 1024
@@ -26,8 +28,22 @@ def analyze_resume(payload: MatchScoreRequest, user: dict = Depends(get_current_
         user["sub"], len(payload.resumeText), len(payload.jobDescription),
     )
     try:
-        result = run_resume_analysis(payload.resumeText, payload.jobDescription, payload.targetRole)
-        return persistence_service.save_analysis(user["sub"], payload, result)
+        used_general_expectations = not bool(payload.jobDescription)
+        effective_job_description = payload.jobDescription or general_expectations_for_role(payload.targetRole)
+        result = {
+            **run_resume_analysis(payload.resumeText, effective_job_description, payload.targetRole),
+            "jobDescriptionClassification": classify_job_description(effective_job_description),
+            "usedGeneralRoleExpectations": used_general_expectations,
+        }
+        result["analysisReliability"] = assess_analysis_reliability(
+            payload.resumeText,
+            result,
+            payload.jobDescription or None,
+            parsing_success=True,
+        )
+        return persistence_service.save_analysis(
+            user["sub"], payload, result, effective_job_description=effective_job_description
+        )
     except ResumeAnalysisInputError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -56,6 +72,16 @@ def latest_analysis(user: dict = Depends(get_current_user)):
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No persisted resume analysis is available.")
     return result
+
+
+@router.get("/analysis/improvement-simulator", response_model=ImprovementSimulatorResponse)
+def improvement_simulator(user: dict = Depends(get_current_user)):
+    try:
+        return persistence_service.improvement_simulator(user["sub"])
+    except StudentAnalysisNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except StudentPersistenceError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The improvement simulator could not load saved analyses.") from exc
 
 
 @router.post("/upload", response_model=ResumeUploadResponse)

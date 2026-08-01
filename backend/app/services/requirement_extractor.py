@@ -136,6 +136,73 @@ def extract_requirements(job_description: str) -> list[dict]:
     return sorted(found.values(), key=lambda item: (PRIORITY_ORDER[item["priority"]], item["category"], item["requirement"]))
 
 
+def classify_job_description(job_description: str) -> dict[str, list[str]]:
+    """Classify real JD content deterministically without generating scores."""
+    requirements = extract_requirements(job_description)
+    skill_categories = {
+        "programming language", "framework", "database", "cloud platform", "tool",
+        "testing technology", "software engineering practice", "collaboration requirement",
+    }
+    required_skills = [
+        item["requirement"] for item in requirements
+        if item["category"] in skill_categories and item["priority"] != "optional"
+    ]
+    preferred_skills = [
+        item["requirement"] for item in requirements
+        if item["category"] in skill_categories and item["priority"] == "optional"
+    ]
+    experience = [
+        item["requirement"] for item in requirements
+        if item["category"] == "experience requirement"
+    ]
+    education = [
+        item["requirement"] for item in requirements
+        if item["category"] in {"degree requirement", "certification requirement"}
+    ]
+    responsibility_markers = re.compile(
+        r"\b(responsib|design|develop|build|implement|maintain|manage|lead|collaborat|"
+        r"deliver|own|create|review|support|troubleshoot|analy[sz]e|coordinate)\w*\b"
+    )
+    responsibilities: list[str] = []
+    for sentence in _sentences(job_description):
+        if responsibility_markers.search(sentence) and len(sentence.split()) >= 4:
+            cleaned = sentence[0].upper() + sentence[1:] if sentence else sentence
+            if cleaned not in responsibilities:
+                responsibilities.append(cleaned)
+        if len(responsibilities) == 12:
+            break
+    return {
+        "requiredSkills": required_skills,
+        "preferredSkills": preferred_skills,
+        "responsibilities": responsibilities,
+        "experienceExpectations": experience,
+        "educationOrCertificationExpectations": education,
+    }
+
+
+def general_expectations_for_role(target_role: str | None) -> str:
+    """Build deterministic, non-employer-specific expectations when no JD is supplied."""
+    role = (target_role or "entry-level professional").strip()
+    normalized_role = role.lower()
+    role_requirements: list[str]
+    if any(term in normalized_role for term in ("front end", "frontend", "ui", "react")):
+        role_requirements = ["JavaScript", "TypeScript", "React", "unit testing"]
+    elif any(term in normalized_role for term in ("back end", "backend", "api", "server")):
+        role_requirements = ["REST APIs", "SQL", "unit testing", "debugging and troubleshooting"]
+    elif any(term in normalized_role for term in ("data", "analytics", "machine learning", "ml")):
+        role_requirements = ["Python", "SQL", "data structures and algorithms", "technical communication"]
+    elif any(term in normalized_role for term in ("cloud", "devops", "platform", "site reliability", "sre")):
+        role_requirements = ["Git", "CI/CD", "cloud deployment", "debugging and troubleshooting"]
+    else:
+        role_requirements = ["Git", "unit testing", "debugging and troubleshooting", "team collaboration"]
+    requirements = ", ".join(role_requirements)
+    return (
+        f"General expectations for an early-career {role} role include {requirements}. "
+        "Candidates should build and maintain reliable work, explain project decisions, "
+        "collaborate with a team, review their output, and provide truthful evidence of relevant skills."
+    )
+
+
 def requirement_occurrences(resume_text: str, requirement: dict) -> int:
     normalized = _normalized(resume_text)
     if requirement["category"] == "experience requirement":

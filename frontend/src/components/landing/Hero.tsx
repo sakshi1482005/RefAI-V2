@@ -145,7 +145,7 @@ export default function Hero() {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div className="score-pill">Demo readiness · 91</div>
-                    <div className="metric-label" style={{ marginTop: '8px', color: '#0e9368' }}>Resume analyzed · ATS 93</div>
+                    <div className="metric-label" style={{ marginTop: '8px', color: '#0e9368' }}>Resume evidence · Strong</div>
                     <div className="demo-score-why" style={{ maxWidth: '230px', textAlign: 'right' }}><strong>Why?</strong> Clear headings, readable text, and role-specific keywords.</div>
                   </div>
                 </div>
@@ -159,8 +159,8 @@ export default function Hero() {
                         <span className="risk-stat-value">88%</span>
                       </div>
                       <div>
-                        <span className="risk-stat-label">ATS Score</span>
-                        <span className="risk-stat-value">93</span>
+                        <span className="risk-stat-label">Resume quality</span>
+                  <span className="risk-stat-value">Strong</span>
                       </div>
                       <div>
                         <span className="risk-stat-label">Reviewer</span>

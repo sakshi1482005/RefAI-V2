@@ -1,4 +1,5 @@
 import json
+import re
 
 from pydantic_settings import BaseSettings
 
@@ -8,6 +9,28 @@ REQUIRED_CORS_ORIGINS = (
     "http://127.0.0.1:5173",
     "https://refaiog.vercel.app",
 )
+VERCEL_ORIGIN_REGEX = r"https://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.vercel\.app"
+
+
+def parse_cors_origins(raw_value: str | None) -> list[str]:
+    """Parse JSON arrays or common delimited environment-variable formats."""
+    raw = (raw_value or "").strip()
+    configured: list[str] = []
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+            configured = [str(origin) for origin in parsed] if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            configured = []
+    else:
+        configured = re.split(r"[,;\s]+", raw)
+
+    normalized = []
+    for origin in (*REQUIRED_CORS_ORIGINS, *configured):
+        clean = origin.strip().strip("\"'").rstrip("/")
+        if clean and clean not in normalized:
+            normalized.append(clean)
+    return normalized
 
 
 class Settings(BaseSettings):
@@ -25,19 +48,11 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        raw = self.cors_origins.strip()
-        configured: list[str]
-        if raw.startswith("["):
-            try:
-                parsed = json.loads(raw)
-                configured = [str(origin) for origin in parsed] if isinstance(parsed, list) else []
-            except json.JSONDecodeError:
-                configured = []
-        else:
-            configured = raw.split(",")
+        return parse_cors_origins(self.cors_origins)
 
-        normalized = [origin.strip().rstrip("/") for origin in (*REQUIRED_CORS_ORIGINS, *configured) if origin.strip()]
-        return list(dict.fromkeys(normalized))
+    @property
+    def cors_origin_regex(self) -> str:
+        return VERCEL_ORIGIN_REGEX
 
     @property
     def supabase_client_key(self) -> str:

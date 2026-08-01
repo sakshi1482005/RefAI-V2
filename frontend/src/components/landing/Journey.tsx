@@ -218,7 +218,7 @@ export default function Journey() {
                   <span className="hiw-muted">AI-generated</span>
                 </div>
                 <div className="hiw-msg-box">
-                  Hi Meera, I’m applying for the Associate Software Engineer role at Atlassian. My demo profile shows an 88% Resume Match, 93 ATS Score, and 91 Trust Score, supported by React, FastAPI, SQL, and collaboration examples. Would you be open to reviewing my Trust Card?
+                  Hi Meera, I’m applying for the Associate Software Engineer role at Atlassian. My demo profile shows strong resume evidence and a 91 Candidate Trust Score, supported by React, FastAPI, SQL, and collaboration examples. Would you be open to reviewing my Trust Card?
                 </div>
                 <div className="hiw-jd-actions">
                   <span className="hiw-btn hiw-btn-dark">➤ Send Request</span>

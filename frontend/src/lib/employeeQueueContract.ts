@@ -1,7 +1,7 @@
 import { FriendlyRequestError } from './requestSafety'
 import type { EmployeeReferralQueueItem, ReferralStatus } from '../types'
 
-const STATUSES = new Set<ReferralStatus>(['pending', 'under_review', 'more_info_requested', 'approved', 'declined', 'referred'])
+const STATUSES = new Set<ReferralStatus>(['draft', 'submitted', 'pending', 'under_review', 'more_info_requested', 'approved', 'referred', 'declined', 'withdrawn', 'expired'])
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'

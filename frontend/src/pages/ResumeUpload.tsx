@@ -14,9 +14,20 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import type { AnalysisSession, ResumeUploadResult } from '../lib/analysisSession'
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
+const MIN_JOB_DESCRIPTION_CHARS = 80
+const MAX_JOB_DESCRIPTION_CHARS = 50_000
 
-const buildRoleAnalysisContext = (role: string, company: string) =>
-  `Evaluate this resume for the ${role.trim()} role at ${company.trim()}. Assess evidence of software design, REST APIs, debugging and troubleshooting, Git, unit testing, code review, and cross-functional collaboration. Consider relevant technical skills, projects, education, communication, and measurable outcomes for this target role.`
+function validateJobDescription(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (trimmed.length < MIN_JOB_DESCRIPTION_CHARS || trimmed.split(/\s+/).length < 12) {
+    return 'Paste a fuller job description with specific skills, responsibilities, or experience expectations.'
+  }
+  if (trimmed.length > MAX_JOB_DESCRIPTION_CHARS) {
+    return `Job descriptions must be ${MAX_JOB_DESCRIPTION_CHARS.toLocaleString()} characters or fewer.`
+  }
+  return null
+}
 
 export default function ResumeUpload() {
   const navigate = useNavigate()
@@ -35,6 +46,12 @@ export default function ResumeUpload() {
   const [messageTone, setMessageTone] = useState<'success' | 'error' | 'info'>('info')
   const [targetRole, setTargetRole] = useState(isDemoMode ? demoAnalysisSession.role ?? '' : analysisSession.role || profile?.preferredRole || '')
   const [targetCompany, setTargetCompany] = useState(isDemoMode ? demoAnalysisSession.company ?? '' : analysisSession.company || profile?.preferredCompany || '')
+  const [jobDescription, setJobDescription] = useState(
+    isDemoMode ? demoAnalysisSession.jobDescription ?? '' :
+      analysisSession.usedGeneralRoleExpectations ? '' : analysisSession.jobDescription || '',
+  )
+  const [jobDescriptionTouched, setJobDescriptionTouched] = useState(false)
+  const jobDescriptionError = isDemoMode ? null : validateJobDescription(jobDescription)
 
   const handleFileSelection = (file: File | null) => {
     if (!file) {
@@ -143,16 +160,17 @@ export default function ResumeUpload() {
       navigate('/dashboard/resume-analysis')
       return
     }
-    if (!targetRole.trim() || !targetCompany.trim()) return
+    setJobDescriptionTouched(true)
+    if (!targetRole.trim() || !targetCompany.trim() || jobDescriptionError) return
 
     setAnalyzing(true)
     setMessage('Comparing your resume with the target role…')
     setMessageTone('info')
     try {
-      const jobDescription = buildRoleAnalysisContext(targetRole, targetCompany)
+      const exactJobDescription = jobDescription.trim()
       const matchResponse = await api.post('/resume/analyze', {
         resumeText: uploadedResume.preview,
-        jobDescription: jobDescription.trim(),
+        jobDescription: exactJobDescription,
         resumeId: uploadedResume.resumeId,
         fileName: uploadedResume.fileName,
         chunkCount: uploadedResume.chunkCount,
@@ -175,9 +193,11 @@ export default function ResumeUpload() {
           gaps: analysisResult.gaps,
         },
         analysis: analysisResult,
-        jobDescription,
+        jobDescription: exactJobDescription,
         role: targetRole.trim(),
         company: targetCompany.trim(),
+        jobDescriptionClassification: analysisResult.jobDescriptionClassification,
+        usedGeneralRoleExpectations: analysisResult.usedGeneralRoleExpectations,
         analyzedAt: new Date().toISOString(),
         processingTimeMs: uploadedResume.processingTimeMs + analysisResult.processingTimeMs,
       }
@@ -196,7 +216,7 @@ export default function ResumeUpload() {
     }
   }
 
-  const canAnalyze = Boolean(uploadedResume && targetRole.trim() && targetCompany.trim() && !selectedFile)
+  const canAnalyze = Boolean(uploadedResume && targetRole.trim() && targetCompany.trim() && !jobDescriptionError && !selectedFile)
 
   return (
     <PageShell
@@ -262,15 +282,18 @@ export default function ResumeUpload() {
               <p className="text-sm font-semibold">Step 2 · Target opportunity</p>
             </div>
             <div className="mt-4 grid gap-4">
-              <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Role</span><input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Associate Software Engineer" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
-              <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Company</span><input value={targetCompany} onChange={(event) => setTargetCompany(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Atlassian" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Role</span><input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Associate Software Engineer" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
+                <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Company</span><input value={targetCompany} onChange={(event) => setTargetCompany(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Atlassian" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
+              </div>
+              <label className="block"><span className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500"><span>Job Description (Optional)</span><span className="font-normal normal-case tracking-normal">{jobDescription.length.toLocaleString()}/{MAX_JOB_DESCRIPTION_CHARS.toLocaleString()}</span></span><p className="mb-3 text-xs leading-5 text-slate-500">Paste the job description if you have one. This helps RefAI compare your resume against the specific role and generate a more accurate Trust Card. You can skip this if you're only exploring opportunities.</p><textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} onBlur={() => setJobDescriptionTouched(true)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} maxLength={MAX_JOB_DESCRIPTION_CHARS + 1} rows={6} placeholder="Paste the employer’s job description here." className={`w-full resize-y rounded-xl border bg-white p-3 text-sm leading-6 outline-none transition focus:ring-2 disabled:bg-slate-100 ${jobDescriptionTouched && jobDescriptionError ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-100' : 'border-slate-300 focus:border-black focus:ring-black/10'}`} />{jobDescriptionTouched && jobDescriptionError ? <p className="mt-2 text-xs font-medium text-rose-700">{jobDescriptionError}</p> : null}</label>
             </div>
           </div>
 
           <div className="mt-6 rounded-xl border border-slate-200 p-4">
             <p className="text-sm font-semibold">Step 3 · Analyze Resume</p>
             <p className="mt-1 text-sm text-slate-500">Analysis becomes available after the resume and target opportunity are ready.</p>
-            {uploadedResume && !selectedFile ? <PrimaryButton className="mt-4 w-full" onClick={handleAnalyze} disabled={!canAnalyze} loading={analyzing} disabledReason="Add the target company and role"><Sparkles className="mr-2 size-4" />Analyze Resume</PrimaryButton> : <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Upload the resume in Step 1 to unlock analysis.</p>}
+            {uploadedResume && !selectedFile ? <PrimaryButton className="mt-4 w-full" onClick={handleAnalyze} disabled={!canAnalyze} loading={analyzing} disabledReason={jobDescriptionError || 'Add the target company and role'}><Sparkles className="mr-2 size-4" />Analyze Resume</PrimaryButton> : <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Upload the resume in Step 1 to unlock analysis.</p>}
           </div>
         </Card>
 

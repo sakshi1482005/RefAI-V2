@@ -74,7 +74,7 @@ export function ScoreExplanation({ points, title = 'Why did RefAI produce this r
   return <div className={cn('rounded-xl border border-slate-200 bg-slate-50 p-4', className)}><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</p><ul className="mt-3 space-y-2">{points.map((point) => <li key={point} className="flex items-start gap-2 text-sm leading-5 text-slate-700"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" aria-hidden="true" /><span>{point}</span></li>)}</ul></div>
 }
 
-export function Avatar({ initials, className, size = 'md' }: { initials: string; className?: string; size?: 'sm' | 'md' | 'lg' }) {
+export function Avatar({ initials, photoUrl, className, size = 'md' }: { initials: string; photoUrl?: string | null; className?: string; size?: 'sm' | 'md' | 'lg' }) {
   const sizes = {
     sm: 'size-9 text-xs',
     md: 'size-12 text-sm',
@@ -82,8 +82,8 @@ export function Avatar({ initials, className, size = 'md' }: { initials: string;
   }
 
   return (
-    <div className={cn('flex shrink-0 items-center justify-center rounded-full border border-slate-200 font-semibold', sizes[size], className ?? 'bg-slate-100 text-slate-700')} aria-hidden="true">
-      {initials}
+    <div className={cn('flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 font-semibold', sizes[size], className ?? 'bg-slate-100 text-slate-700')} aria-hidden="true">
+      {photoUrl ? <img src={photoUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" /> : initials}
     </div>
   )
 }

@@ -93,15 +93,15 @@ export default function About() {
                   <span className="risk-stat-value">88%</span>
                 </div>
                 <div className="stat-box">
-                  <span className="risk-stat-label">ATS Score</span>
-                  <span className="risk-stat-value">93</span>
+                  <span className="risk-stat-label">Resume quality</span>
+                  <span className="risk-stat-value">Strong</span>
                 </div>
                 <div className="stat-box">
                   <span className="risk-stat-label">Reviewer</span>
                   <span className="risk-stat-value">Meera</span>
                 </div>
               </div>
-              <p className="demo-score-why"><strong>Why 91?</strong> Strong project evidence, ATS-friendly formatting, leadership, and team collaboration outweigh the missing cloud certification.</p>
+              <p className="demo-score-why"><strong>Why 91?</strong> Strong project evidence, clear resume formatting, leadership, and team collaboration outweigh the missing cloud certification.</p>
               <div className="panel-footnote">&#10003; AI-generated demo · Review the source evidence</div>
             </div>
           </Reveal>

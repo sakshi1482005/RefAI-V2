@@ -53,7 +53,7 @@ export function useAnalysisSessionResource(initialSession?: AnalysisSession) {
       .catch((error) => {
         if (!active) return
         setPersistedSession({})
-        if (error instanceof FriendlyRequestError && error.status === 404 && error.detail === 'No persisted resume analysis is available.') setNotFound(true)
+        if (error instanceof FriendlyRequestError && error.status === 404) setNotFound(true)
         else setError(error)
       })
       .finally(() => { if (active) setLoading(false) })

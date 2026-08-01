@@ -1,30 +1,28 @@
 import { AlertTriangle, ArrowRight, BriefcaseBusiness, CheckCircle2, Clock3, FileCheck2, FileText, GraduationCap, MessageSquareText, ShieldCheck, Sparkles, UserCheck, XCircle } from 'lucide-react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import PageShell from '../components/dashboard/PageShell'
-import { Avatar, Badge, Card, EmptyState, PrimaryButton, ScoreExplanation, SecondaryButton } from '../components/dashboard/primitives'
+import { Avatar, Badge, Card, PrimaryButton, ScoreExplanation, SecondaryButton } from '../components/dashboard/primitives'
 import { useDemoMode } from '../context/DemoModeContext'
-import { DEMO_ATS_SCORE, demoAnalysisSession, demoEmployeeReview } from '../lib/demoData'
+import { demoAnalysisSession, demoEmployeeReview } from '../lib/demoData'
 import AuthenticatedCandidateReview from '../components/dashboard/AuthenticatedCandidateReview'
 
-// TODO: Populate when a candidate-detail API is available.
 const reviewSignals: Array<{ label: string; value: string }> = []
 
 export default function CandidateReview() {
   const { requestId } = useParams()
   const navigate = useNavigate()
   const { isDemoMode, demoDecision } = useDemoMode()
-  if (!isDemoMode && requestId) return <AuthenticatedCandidateReview requestId={requestId} />
-  const candidateName = isDemoMode ? demoEmployeeReview.candidateName : requestId ? `Candidate ${requestId}` : 'Candidate'
-  const signals = isDemoMode ? [
+  if (!isDemoMode) return requestId ? <AuthenticatedCandidateReview requestId={requestId} /> : null
+  const candidateName = demoEmployeeReview.candidateName
+  const signals = [
     { label: 'Target role', value: demoEmployeeReview.role },
     { label: 'Company', value: demoEmployeeReview.company },
     { label: 'Resume match', value: `${demoEmployeeReview.match}%` },
     { label: 'Trust Score', value: String(demoAnalysisSession.trustCard?.trustScore ?? '—') },
-    { label: 'ATS Score', value: String(DEMO_ATS_SCORE) },
     { label: 'AI recommendation', value: demoAnalysisSession.trustCard?.recommendation ?? 'Not ready yet' },
     { label: 'Review status', value: demoDecision === 'pending' ? demoEmployeeReview.status : demoDecision === 'approved' ? 'Approved' : demoDecision === 'more_info_requested' ? 'More information requested' : 'Declined' },
-  ] : reviewSignals
-  const scoreReasons = isDemoMode ? demoAnalysisSession.trustCard?.scoreReasons ?? [] : []
+  ]
+  const scoreReasons = demoAnalysisSession.trustCard?.scoreReasons ?? reviewSignals.map((signal) => `${signal.label}: ${signal.value}`)
 
   return (
     <PageShell
@@ -34,7 +32,7 @@ export default function CandidateReview() {
       action={
         <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
           <SecondaryButton onClick={() => navigate('/employee/dashboard')}>Back to Candidates</SecondaryButton>
-          <PrimaryButton onClick={() => navigate(`/employee/resume/${requestId ?? 'sg-001'}`)} disabled={!isDemoMode} disabledReason="Candidate resume data is not available"><FileText className="mr-2 size-4" />Next: Open Resume</PrimaryButton>
+          <PrimaryButton onClick={() => navigate(`/employee/resume/${requestId || demoEmployeeReview.candidateId}`)}><FileText className="mr-2 size-4" />Next: Open Resume</PrimaryButton>
         </div>
       }
     >
@@ -42,19 +40,18 @@ export default function CandidateReview() {
         <Card className="p-6 sm:p-8">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <Avatar initials={isDemoMode ? demoEmployeeReview.initials : '—'} size="lg" className="border-4 border-slate-200 bg-slate-100 text-slate-800" />
+              <Avatar initials={demoEmployeeReview.initials} size="lg" className="border-4 border-slate-200 bg-slate-100 text-slate-800" />
               <div>
                 <h2 className="text-xl font-semibold">{candidateName}</h2>
-                <p className="mt-1 text-sm text-slate-500">{isDemoMode ? `${demoEmployeeReview.role} · ${demoEmployeeReview.company}` : 'Candidate details are not available from the current API.'}</p>
+                <p className="mt-1 text-sm text-slate-500">{demoEmployeeReview.role} · {demoEmployeeReview.company}</p>
               </div>
             </div>
-            <Badge tone={isDemoMode ? 'warning' : 'neutral'}>
+            <Badge tone="warning">
               <ShieldCheck className="mr-1.5 size-3.5" />
-              {isDemoMode ? 'Demo candidate' : 'Data unavailable'}
+              Demo candidate
             </Badge>
           </div>
 
-          {!isDemoMode ? <EmptyState className="mt-6" title="Candidate evidence is not available yet" description="Resume signals, role fit, and verification details will appear when the candidate-detail service returns this profile." icon={ShieldCheck} action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate('/employee/dashboard')}>Back to Review Queue</PrimaryButton><SecondaryButton onClick={() => navigate(`/employee/resume/${requestId ?? 'sg-001'}`)}>Open Resume Viewer</SecondaryButton></div>} /> : null}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {signals.map((signal) => (
@@ -80,17 +77,17 @@ export default function CandidateReview() {
             </div>
 
             <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-              {isDemoMode ? demoEmployeeReview.reviewNote : 'No review note is available because the backend does not expose candidate review data.'}
+                {demoEmployeeReview.reviewNote}
             </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
               <Badge tone="warning">
                 <Clock3 className="mr-1.5 size-3.5" />
-                {isDemoMode ? demoDecision === 'pending' ? 'Awaiting employee review' : `${demoDecision === 'approved' ? 'Approved' : demoDecision === 'more_info_requested' ? 'More information requested' : 'Declined'} · Demo` : 'Status unavailable'}
+                {demoDecision === 'pending' ? 'Awaiting employee review' : `${demoDecision === 'approved' ? 'Approved' : demoDecision === 'more_info_requested' ? 'More information requested' : 'Declined'} · Demo`}
               </Badge>
               <Badge>
                 <UserCheck className="mr-1.5 size-3.5" />
-                {isDemoMode ? 'Resume evidence reviewed' : 'Verification unavailable'}
+                Resume evidence reviewed
               </Badge>
             </div>
           </Card>
@@ -124,8 +121,7 @@ export default function CandidateReview() {
         </div>
       </div>
 
-      {isDemoMode ? (
-        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
           <Card className="p-6 sm:p-8">
             <div className="flex items-center gap-3">
               <div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><FileCheck2 className="size-5" /></div>
@@ -183,8 +179,7 @@ export default function CandidateReview() {
             <div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Sparkles className="size-5" /></div><div><h3 className="text-lg font-semibold">AI summary</h3><p className="mt-1 text-sm text-slate-500">A balanced recommendation based on the displayed resume evidence.</p></div></div>
             <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5"><Badge tone="warning">Demo AI analysis</Badge><p className="mt-3 text-sm leading-7 text-slate-700">{demoEmployeeReview.aiSummary}</p></div>
           </Card>
-        </div>
-      ) : null}
+      </div>
     </PageShell>
   )
 }

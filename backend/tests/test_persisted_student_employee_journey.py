@@ -33,6 +33,10 @@ class AnalysisRepository:
         cards = [card for card in self.referrals.cards.values() if card["student_id"] == student_id and card.get("analysis_id") == analysis_id]
         return cards[-1] if cards else None
 
+    def analysis_history(self, student_id):
+        rows = [row for row in self.rows.values() if row["student_id"] == student_id]
+        return sorted(rows, key=lambda row: row["created_at"], reverse=True)
+
     def get_role(self, user_id): return self.referrals.get_role(user_id)
     def get_auth_metadata(self, user_id): return self.referrals.get_auth_metadata(user_id)
     def get_student_education(self, student_id): return self.referrals.get_student_education(student_id)
@@ -43,6 +47,37 @@ class AnalysisRepository:
 
 
 class PersistedJourneyTests(unittest.TestCase):
+    def test_improvement_simulator_compares_only_same_opportunity_and_score_version(self):
+        database = FakeRepository()
+        analyses = AnalysisRepository(database)
+        definitions = [
+            ("roleRequirementMatch", "Role Requirement Match", 30),
+            ("evidenceStrength", "Evidence Strength", 25),
+            ("projectExperienceRelevance", "Project and Experience Relevance", 20),
+            ("skillDepth", "Skill Depth", 15),
+            ("resumeEvidenceCompleteness", "Resume Evidence Completeness", 10),
+        ]
+        def payload(scores, version="trust-score-v4"):
+            return {"trustScore": sum(scores), "scoreVersion": version, "scoreBreakdown": [
+                {"key": key, "label": label, "score": score, "maximumScore": maximum,
+                 "potentialImprovementPoints": maximum - score, "evidenceMissing": [f"Missing {label}"],
+                 "evidenceFound": [f"Evidence {label}"], "improvementAction": f"Add truthful {label} evidence."}
+                for (key, label, maximum), score in zip(definitions, scores)
+            ]}
+        old_id, wrong_id, current_id = [str(uuid4()) for _ in range(3)]
+        base = {"student_id": database.student, "target_role": "Backend Engineer", "target_company": "Acme"}
+        analyses.rows[old_id] = {"id": old_id, "created_at": "2026-01-01T00:00:00Z", **base}
+        analyses.rows[wrong_id] = {"id": wrong_id, "created_at": "2026-02-01T00:00:00Z", **base, "target_company": "Other Co"}
+        analyses.rows[current_id] = {"id": current_id, "created_at": "2026-03-01T00:00:00Z", **base}
+        database.cards = {
+            "old": {"id": "old", "student_id": database.student, "analysis_id": old_id, "payload": payload((18, 12, 8, 6, 6))},
+            "wrong": {"id": "wrong", "student_id": database.student, "analysis_id": wrong_id, "payload": payload((30, 25, 20, 15, 10))},
+            "current": {"id": "current", "student_id": database.student, "analysis_id": current_id, "payload": payload((22, 17, 12, 8, 7))},
+        }
+        result = StudentPersistenceService(analyses).improvement_simulator(database.student)
+        self.assertEqual(result["comparison"]["previousScore"], 50)
+        self.assertEqual(result["comparison"]["currentScore"], 66)
+
     def test_analysis_success_requires_complete_persistence_context(self):
         database = FakeRepository()
         analyses = AnalysisRepository(database)
@@ -54,6 +89,55 @@ class PersistedJourneyTests(unittest.TestCase):
         )
         with self.assertRaises(StudentPersistenceError):
             StudentPersistenceService(analyses).save_analysis(database.student, incomplete, {})
+
+    def test_real_job_description_and_analysis_context_are_persisted(self):
+        database = FakeRepository()
+        analyses = AnalysisRepository(database)
+        job = "Python and FastAPI are required. Build and maintain REST APIs with unit tests and collaborate with product teams."
+        request = SimpleNamespace(
+            resumeId="resume-jd", fileName="resume.pdf", chunkCount=2,
+            storagePath=f"{database.student}/resume-jd.pdf", storageStatus="stored",
+            indexed=True, uploadProcessingTimeMs=10, targetRole="Backend Engineer",
+            targetCompany="RefAI", resumeText="Python FastAPI project", jobDescription=job,
+        )
+        result = {
+            "processingTimeMs": 20,
+            "jobDescriptionClassification": {
+                "requiredSkills": ["Python", "FastAPI"], "preferredSkills": [],
+                "responsibilities": ["Build and maintain REST APIs with unit tests"],
+                "experienceExpectations": [], "educationOrCertificationExpectations": [],
+            },
+            "usedGeneralRoleExpectations": False,
+        }
+        StudentPersistenceService(analyses).save_analysis(database.student, request, result)
+        row = next(iter(analyses.rows.values()))
+        self.assertEqual(row["job_description"], job)
+        self.assertFalse(row["used_general_role_expectations"])
+        self.assertEqual(row["job_description_classification"]["requiredSkills"], ["Python", "FastAPI"])
+
+    def test_general_role_context_is_persisted_for_downstream_features(self):
+        database = FakeRepository()
+        analyses = AnalysisRepository(database)
+        request = SimpleNamespace(
+            resumeId="resume-general", fileName="resume.pdf", chunkCount=2,
+            storagePath=f"{database.student}/resume-general.pdf", storageStatus="stored",
+            indexed=True, uploadProcessingTimeMs=10, targetRole="Backend Engineer",
+            targetCompany="RefAI", resumeText="Python API project", jobDescription="",
+        )
+        context = "General expectations for an early-career Backend Engineer role include REST APIs, SQL, unit testing, debugging and troubleshooting."
+        result = {
+            "processingTimeMs": 20, "jobDescriptionClassification": {
+                "requiredSkills": ["REST APIs", "SQL"], "preferredSkills": [],
+                "responsibilities": [], "experienceExpectations": [],
+                "educationOrCertificationExpectations": [],
+            }, "usedGeneralRoleExpectations": True,
+        }
+        StudentPersistenceService(analyses).save_analysis(
+            database.student, request, result, effective_job_description=context,
+        )
+        row = next(iter(analyses.rows.values()))
+        self.assertEqual(row["job_description"], context)
+        self.assertTrue(row["used_general_role_expectations"])
 
     def test_latest_analysis_without_trust_card_does_not_require_profile_data(self):
         database = FakeRepository()
@@ -146,7 +230,7 @@ class PersistedJourneyTests(unittest.TestCase):
         self.assertEqual(reloaded_student["analysisId"], saved["analysisId"])
         self.assertEqual(reloaded_student["trustCard"]["id"], card["id"])
         self.assertEqual(employee_queue[0]["id"], request["id"])
-        self.assertEqual(employee_queue[0]["status"], "pending")
+        self.assertEqual(employee_queue[0]["status"], "submitted")
 
 
 if __name__ == "__main__":

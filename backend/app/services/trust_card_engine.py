@@ -1,5 +1,6 @@
 from app.services.groq_client import AIServiceUnavailable, generate_trust_summary
 from app.services.requirement_extractor import PRIORITY_WEIGHT, build_gap, extract_requirements, requirement_occurrences
+from app.services.trust_score import compute_candidate_trust_score
 import re
 
 
@@ -136,30 +137,25 @@ def build_match_analysis(resume_text: str, job_description: str, target_role: st
     }
 
 
-def build_trust_card(candidate_name: str, role: str, resume_text: str, job_description: str) -> dict:
+def build_trust_card(
+    candidate_name: str,
+    role: str,
+    resume_text: str,
+    job_description: str,
+    similarity_provider=None,
+    relevance_source: str = "job_description",
+) -> dict:
     analysis = build_match_analysis(resume_text, job_description, role)
     match_score = {key: analysis[key] for key in ("overall", "roleFit", "proof", "gaps")}
     confidence = analysis["confidence"]
-    completeness = round(100 * sum(bool(value.strip()) for value in (candidate_name, role, resume_text, job_description)) / 4)
-    gap_resilience = max(0, 100 - match_score["gaps"])
-
-    # Trust Score is deterministic and is never an alias for Overall Match.
-    # Formula: 30% Overall Match + 25% Role Fit + 15% Proof/Evidence
-    #          + 15% Analysis Confidence + 10% Required-field Completeness
-    #          + 5% Gap Resilience (100 - Gap Score).
-    factor_specs = [
-        ("overallMatch", "Overall Match", 30, match_score["overall"], "Combined role alignment and repeated evidence."),
-        ("roleFit", "Role Fit", 25, match_score["roleFit"], "Meaningful job requirements represented in the resume."),
-        ("proofScore", "Proof Score", 15, match_score["proof"], "Matched requirements reinforced by repeated resume evidence."),
-        ("confidence", "Analysis Confidence", 15, confidence, "Confidence based on resume and job-description input coverage."),
-        ("completeness", "Required-field Completeness", 10, completeness, "Candidate, role, resume, and job description inputs supplied."),
-        ("gapResilience", "Gap Resilience", 5, gap_resilience, "Inverse of the missing-requirement Gap Score."),
-    ]
-    score_breakdown = [
-        {"key": key, "label": label, "weight": weight, "score": score, "contribution": round(score * weight / 100, 2), "reason": reason}
-        for key, label, weight, score, reason in factor_specs
-    ]
-    trust_score = round(sum(factor["contribution"] for factor in score_breakdown))
+    trust_result = compute_candidate_trust_score(
+        resume_text,
+        job_description,
+        role,
+        similarity_provider=similarity_provider,
+        relevance_source=relevance_source,
+    )
+    trust_score = trust_result["trustScore"]
     if trust_score >= 75:
         referral_readiness = "Ready to request referral"
         recommendation = "Ready for referral"
@@ -190,6 +186,7 @@ def build_trust_card(candidate_name: str, role: str, resume_text: str, job_descr
         "gapScore": match_score["gaps"],
         "confidence": confidence,
         "trustScore": trust_score,
+        "scoreVersion": trust_result["scoreVersion"],
         "referralReadiness": referral_readiness,
         "recommendation": recommendation,
         "strengths": analysis["strengths"],
@@ -199,8 +196,8 @@ def build_trust_card(candidate_name: str, role: str, resume_text: str, job_descr
         "actionPlan": analysis["actionPlan"],
         "evidence": analysis["evidence"],
         "riskSignals": risk_signals,
-        "scoreFormula": "30% Overall Match + 25% Role Fit + 15% Proof Score + 15% Confidence + 10% Completeness + 5% Gap Resilience",
-        "scoreBreakdown": score_breakdown,
+        "scoreFormula": trust_result["scoreFormula"],
+        "scoreBreakdown": trust_result["scoreBreakdown"],
         "scoreReasons": analysis["scoreReasons"],
         "aiSummary": summary,
     }

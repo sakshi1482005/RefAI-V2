@@ -4,7 +4,7 @@ import PageShell from '../components/dashboard/PageShell'
 import { AnimatedNumber, Card, EmptyState, InlineFeedback, MetricTooltip, PrimaryButton, ScoreExplanation, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
 import { useAnalysisSessionResource } from '../hooks/useAnalysisSession'
 import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
-import { DEMO_ATS_SCORE, demoEmployeeReview } from '../lib/demoData'
+import { demoEmployeeReview } from '../lib/demoData'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
 import { useToast } from '../components/feedback/ToastProvider'
 import { useEffect, useState } from 'react'
@@ -51,9 +51,6 @@ export default function ResumeAnalysisResult() {
     { label: 'Resume', value: session.upload ? 'Processed' : 'Unavailable', description: isDemoMode ? `${session.upload?.fileName} · Demo` : session.upload?.fileName ?? 'Upload a resume to begin', icon: FileText },
     { label: 'Extracted chunks', value: session.upload ? String(session.upload.chunkCount) : '—', score: session.upload?.chunkCount, description: isDemoMode ? 'Sample analyzed sections' : 'Returned by the resume upload API', icon: CheckCircle2 },
     { label: 'Resume Match', value: session.matchScore ? `${session.matchScore.overall}%` : '—', score: session.matchScore?.overall, suffix: '%', description: isDemoMode ? 'Demo match result' : session.matchScore ? 'Returned by the match API' : 'No completed match analysis', icon: Target },
-    ...(isDemoMode ? [
-      { label: 'ATS Score', value: String(DEMO_ATS_SCORE), score: DEMO_ATS_SCORE, description: 'Standardized Ananya Rao demo value', icon: Gauge },
-    ] : []),
     ...(session.trustCard ? [{ label: 'Trust Score', value: String(session.trustCard.trustScore), score: session.trustCard.trustScore, description: 'Backend-calculated weighted Trust Score', icon: Sparkles }] : []),
     { label: 'Target Role', value: session.role || '—', description: session.role ? 'Saved analysis target' : 'No target-role API is available', icon: Zap }
   ]
@@ -61,7 +58,6 @@ export default function ResumeAnalysisResult() {
     Resume: 'Shows whether RefAI has processed a resume for this analysis session.',
     'Extracted chunks': 'The number of resume text sections created for analysis—not a quality score.',
     'Resume Match': 'The combined role-fit and repeated-evidence score for this job description.',
-    'ATS Score': 'The standardized demo ATS readability score for Ananya’s resume.',
     'Trust Score': 'The standardized demo Trust Score shown across Ananya’s referral journey.',
     'Target Role': 'The role used to frame this analysis and its recommendations.',
   }
@@ -138,6 +134,7 @@ export default function ResumeAnalysisResult() {
         </div>
       }
     >
+      {!isDemoMode && session.usedGeneralRoleExpectations ? <div className="mb-6"><InlineFeedback tone="info">Analysis is based on general expectations for this role. Add a job description for more personalized insights.</InlineFeedback></div> : null}
       <AITransparencyPanel session={session} isDemoMode={isDemoMode} />
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -210,14 +207,14 @@ export default function ResumeAnalysisResult() {
           </Card>
 
           <Card className="p-6 sm:p-8">
-            <div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Zap className="size-5" /></div><div><h3 className="text-lg font-semibold">ATS guidance</h3><p className="mt-1 text-sm text-slate-500">Tips tied directly to RefAI’s lexical coverage model.</p></div></div>
-            {session.analysis ? <div className="mt-6 space-y-3">{session.analysis.atsGuidance.map((tip) => <div key={tip.title} className="rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">{tip.title}</p><p className="mt-2 text-sm leading-6 text-slate-600">{tip.description}</p></div>)}</div> : <EmptyState className="mt-6" title="ATS guidance needs a target job" description="Upload a resume and provide a job description so RefAI can explain terminology coverage and repeated proof using your actual scores." icon={Zap} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Analyze for ATS</PrimaryButton>} />}
+            <div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Zap className="size-5" /></div><div><h3 className="text-lg font-semibold">Resume evidence guidance</h3><p className="mt-1 text-sm text-slate-500">Tips tied directly to RefAI’s lexical coverage model.</p></div></div>
+            {session.analysis ? <div className="mt-6 space-y-3">{session.analysis.atsGuidance.map((tip) => <div key={tip.title} className="rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">{tip.title}</p><p className="mt-2 text-sm leading-6 text-slate-600">{tip.description}</p></div>)}</div> : <EmptyState className="mt-6" title="Resume evidence guidance needs a target role" description="Upload a resume and provide a job description so RefAI can explain terminology coverage and repeated proof using your actual scores." icon={Zap} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Analyze Resume</PrimaryButton>} />}
           </Card>
 
           <Card className="p-6 sm:p-8">
             <div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Gauge className="size-5" /></div><div><h3 className="text-lg font-semibold">Interview and hiring signals</h3><p className="mt-1 text-sm text-slate-500">Readiness guidance without unsupported outcome claims.</p></div></div>
             {session.analysis ? <div className="mt-6 rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">{session.analysis.interviewReadiness.title}</p><p className="mt-2 text-sm leading-6 text-slate-600">{session.analysis.interviewReadiness.description}</p></div> : null}
-            <EmptyState className="mt-4" title="Hiring probability is not available" description="RefAI has no historical hiring-outcome model or labeled company decision data. Match scores describe resume-to-job coverage and must not be presented as a probability of being hired." icon={BriefcaseBusiness} action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate('/dashboard/trust-card')}>Review Referral Readiness</PrimaryButton><SecondaryButton onClick={() => navigate('/dashboard#ai-recommendations')}>Prepare for Interviews</SecondaryButton></div>} />
+            <EmptyState className="mt-4" title="Outcome prediction is not available" description="RefAI evaluates observable resume and role evidence. It does not predict employment outcomes." icon={BriefcaseBusiness} action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate('/dashboard/trust-card')}>Review Referral Readiness</PrimaryButton><SecondaryButton onClick={() => navigate('/dashboard#ai-recommendations')}>Prepare for Interviews</SecondaryButton></div>} />
           </Card>
 
           <Card className="p-6 sm:p-8">

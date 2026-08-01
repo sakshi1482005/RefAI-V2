@@ -35,10 +35,31 @@ def store_resume(user_id: str, resume_id: str, file_bytes: bytes) -> tuple[str |
 
 
 def find_latest_student_resume(user_id: str) -> dict | None:
-    """Find a PDF only inside the authorized student's private folder."""
+    """Prefer the persisted analysis path; list Storage only for legacy records."""
     bucket = settings.resume_storage_bucket.strip()
     if not bucket or not settings.supabase_service_key.strip():
         return None
+    try:
+        rows = (
+            supabase.table("resume_analyses")
+            .select("storage_path,file_name,updated_at")
+            .eq("student_id", user_id)
+            .eq("storage_status", "stored")
+            .not_.is_("storage_path", "null")
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute().data or []
+        )
+        if rows and rows[0].get("storage_path"):
+            return {
+                "path": str(rows[0]["storage_path"]),
+                "file_name": str(rows[0].get("file_name") or "resume.pdf"),
+            }
+    except Exception:
+        logger.exception("Persisted resume lookup failed for student=%s", user_id)
+
+    # Explicit compatibility fallback for uploads created before resume_analyses
+    # stored the authoritative Storage path.
     try:
         files = supabase.storage.from_(bucket).list(
             user_id,

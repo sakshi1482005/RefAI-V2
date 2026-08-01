@@ -4,14 +4,13 @@ import { useParams, useNavigate } from 'react-router-dom'
 import PageShell from '../components/dashboard/PageShell'
 import { Avatar, Badge, Card, EmptyState, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton } from '../components/dashboard/primitives'
 import { useDemoMode } from '../context/DemoModeContext'
-import { DEMO_ATS_SCORE, demoAnalysisSession, demoEmployeeReview } from '../lib/demoData'
+import { demoAnalysisSession, demoEmployeeReview } from '../lib/demoData'
 import { useToast } from '../components/feedback/ToastProvider'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
 import TrustScoreExplanation from '../components/dashboard/TrustScoreExplanation'
 import AuthenticatedTrustCardDetails from '../components/dashboard/AuthenticatedTrustCardDetails'
 import RefAILogo from '../components/branding/RefAILogo'
 
-// TODO: Populate when a candidate Trust Card retrieval API is available.
 const signals: Array<{ label: string; value: string; score: number }> = []
 
 export default function TrustCardDetails() {
@@ -20,17 +19,15 @@ export default function TrustCardDetails() {
   const { toast } = useToast()
   const [copied, setCopied] = useState(false)
   const { isDemoMode } = useDemoMode()
-  if (!isDemoMode && requestId) return <AuthenticatedTrustCardDetails requestId={requestId} />
+  if (!isDemoMode) return requestId ? <AuthenticatedTrustCardDetails requestId={requestId} /> : null
   const candidateName = isDemoMode ? demoEmployeeReview.candidateName : requestId ? `Candidate ${requestId}` : 'Candidate'
   const summary = isDemoMode ? demoAnalysisSession.trustCard?.aiSummary ?? '' : ''
   const trustCard = isDemoMode ? demoAnalysisSession.trustCard : undefined
   const visibleSignals = trustCard ? [
     { label: 'Trust Score', value: String(trustCard.trustScore), score: trustCard.trustScore },
     { label: 'Overall Match', value: `${trustCard.overallMatch}%`, score: trustCard.overallMatch },
-    { label: 'ATS Score', value: String(DEMO_ATS_SCORE), score: DEMO_ATS_SCORE },
     { label: 'Role Fit', value: `${trustCard.roleFit}%`, score: trustCard.roleFit },
     { label: 'Proof', value: `${trustCard.proofScore}%`, score: trustCard.proofScore },
-    { label: 'Confidence', value: `${trustCard.confidence}%`, score: trustCard.confidence },
     { label: 'Gaps', value: `${trustCard.gapScore}%`, score: trustCard.gapScore },
   ] : signals
   const scoreReasons = trustCard?.scoreReasons ?? []
@@ -52,9 +49,9 @@ export default function TrustCardDetails() {
       description="This Trust Card explains how resume evidence supports the target role. Compare the strengths and gaps, then continue to the decision panel."
       action={
         <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
-          <SecondaryButton onClick={() => navigate(`/employee/resume/${requestId ?? 'sg-001'}`)}>Back to Resume</SecondaryButton>
+          <SecondaryButton onClick={() => navigate(`/employee/resume/${requestId || demoEmployeeReview.candidateId}`)}>Back to Resume</SecondaryButton>
           <SecondaryButton onClick={copySummary} disabled={!summary} disabledReason="No Trust Card summary is available to copy">{copied ? <><Check className="mr-2 size-4 text-emerald-600" />Copied</> : 'Copy summary'}</SecondaryButton>
-          <PrimaryButton onClick={() => navigate(`/employee/decision/${requestId ?? 'sg-001'}`)} disabled={!trustCard} disabledReason="Trust Card evidence is required before making a decision">
+          <PrimaryButton onClick={() => navigate(`/employee/decision/${requestId || demoEmployeeReview.candidateId}`)} disabled={!trustCard} disabledReason="Trust Card evidence is required before making a decision">
             Next: Make Decision
             <ArrowRight className="ml-2 size-4" />
           </PrimaryButton>
@@ -68,6 +65,7 @@ export default function TrustCardDetails() {
               <RefAILogo inverse markClassName="size-10" wordmarkClassName="text-lg font-semibold" subtitle="Candidate Trust Card" subtitleClassName="text-sm text-slate-400" />
               <Badge className="border-white/10 bg-white/10 text-white">{isDemoMode ? 'Demo · Employee view' : 'Employee view'}</Badge>
             </div>
+            {trustCard?.analysisReliability ? <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold">Analysis Reliability · {trustCard.analysisReliability.label}</p><p className="mt-2 text-sm leading-6 text-slate-700">{trustCard.analysisReliability.basis}</p><p className="mt-2 text-xs leading-5 text-slate-500"><span className="font-semibold">Limitations:</span> {trustCard.analysisReliability.limitations}</p></div> : <p className="mt-4 text-xs text-slate-500">Analysis Reliability was not recorded for this older saved Trust Card.</p>}
 
             <div className="mt-8 flex items-center gap-4">
               <Avatar initials={isDemoMode ? demoEmployeeReview.initials : '—'} size="lg" className="border-4 border-white/10 bg-white text-black" />
@@ -124,7 +122,7 @@ export default function TrustCardDetails() {
               ))}
             </div>
             {scoreReasons.length > 0 ? <ScoreExplanation className="mt-7" title="Why these referral signals?" points={scoreReasons} /> : null}
-            {visibleSignals.length === 0 ? <EmptyState className="mt-7" title="Trust signals are not available yet" description="Match, role fit, proof, and gap scores will appear after the candidate Trust Card service returns evidence." icon={ShieldCheck} action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate(`/employee/review/${requestId ?? 'sg-001'}`)}>Return to Candidate</PrimaryButton><SecondaryButton onClick={() => navigate(`/employee/resume/${requestId ?? 'sg-001'}`)}>Open Resume</SecondaryButton></div>} /> : null}
+          {visibleSignals.length === 0 ? <EmptyState className="mt-7" title="Demo Trust Card unavailable" description="Restart Demo Mode to restore the isolated sample Trust Card." icon={ShieldCheck} /> : null}
           </Card>
 
           {trustCard ? <Card className="p-6 sm:p-8"><div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-semibold">Risk signals and recommendation</h3><p className="mt-1 text-sm text-slate-500">Decision support returned separately from the candidate’s readiness result.</p></div><Badge tone={trustCard.recommendation === 'Ready for referral' ? 'success' : trustCard.recommendation === 'Review before referring' ? 'warning' : 'neutral'}>{trustCard.recommendation}</Badge></div><ul className="mt-6 space-y-3">{trustCard.riskSignals.map((risk) => <li key={risk} className="rounded-xl border border-slate-200 p-4 text-sm leading-6 text-slate-700">{risk}</li>)}</ul></Card> : null}
@@ -140,7 +138,7 @@ export default function TrustCardDetails() {
               </div>
             </div>
 
-            {trustCard ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5"><Badge tone="warning">Demo AI summary</Badge><p className="mt-3 text-sm leading-7 text-slate-700">{summary}</p></div> : <EmptyState className="mt-6" title="AI trust summary is pending" description="RefAI will summarize role alignment, verified evidence, and referral risk when candidate Trust Card data becomes available." icon={Sparkles} action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate(`/employee/review/${requestId ?? 'sg-001'}`)}>Review Candidate</PrimaryButton><SecondaryButton onClick={() => navigate('/employee/dashboard')}>Back to Queue</SecondaryButton></div>} />}
+          {trustCard ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5"><Badge tone="warning">Demo AI summary</Badge><p className="mt-3 text-sm leading-7 text-slate-700">{summary}</p></div> : <EmptyState className="mt-6" title="Demo Trust Card unavailable" description="Restart Demo Mode to restore the isolated sample summary." icon={Sparkles} />}
 
           </Card>
 
@@ -155,7 +153,7 @@ export default function TrustCardDetails() {
               </div>
             </div>
 
-            {isDemoMode ? <div className="mt-6 space-y-3">{demoEmployeeReview.evidence.map((point) => <div key={point} className="rounded-xl border border-slate-200 p-4 text-sm leading-6 text-slate-700">{point}</div>)}</div> : <EmptyState className="mt-6" title="Proof points are waiting for evidence" description="Verified projects, measurable outcomes, and role-aligned skills will appear when the backend returns candidate evidence." icon={UserCheck} action={<div className="flex flex-wrap justify-center gap-2"><PrimaryButton onClick={() => navigate(`/employee/resume/${requestId ?? 'sg-001'}`)}>Inspect Resume</PrimaryButton><SecondaryButton onClick={() => navigate(`/employee/decision/${requestId ?? 'sg-001'}`)}>Decision Panel</SecondaryButton></div>} />}
+          <div className="mt-6 space-y-3">{demoEmployeeReview.evidence.map((point) => <div key={point} className="rounded-xl border border-slate-200 p-4 text-sm leading-6 text-slate-700">{point}</div>)}</div>
           </Card>
         </div>
       </div>

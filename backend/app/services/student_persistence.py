@@ -4,6 +4,9 @@ from typing import Any, Protocol
 
 from app.db.supabase_client import supabase
 from app.services.trust_card_engine import build_match_analysis
+from app.services.improvement_simulator import build_improvement_simulator
+from app.services.analysis_reliability import assess_analysis_reliability
+from app.services.notifications import create_notification
 
 
 class StudentPersistenceError(Exception):
@@ -23,6 +26,7 @@ class StudentPersistenceRepository(Protocol):
     def latest_analysis(self, student_id: str) -> dict[str, Any] | None: ...
     def get_analysis(self, student_id: str, analysis_id: str) -> dict[str, Any] | None: ...
     def latest_trust_card(self, student_id: str, analysis_id: str) -> dict[str, Any] | None: ...
+    def analysis_history(self, student_id: str) -> list[dict[str, Any]]: ...
     def get_role(self, user_id: str) -> str | None: ...
     def get_auth_metadata(self, user_id: str) -> dict[str, Any]: ...
     def get_student_education(self, student_id: str) -> dict[str, Any] | None: ...
@@ -107,12 +111,28 @@ class SupabaseStudentPersistenceRepository:
             raise StudentPersistenceError("Trust Card database read failed") from exc
         return rows[0] if rows else None
 
+    def analysis_history(self, student_id: str) -> list[dict[str, Any]]:
+        try:
+            return (
+                supabase.table("resume_analyses")
+                .select("id,student_id,target_role,target_company,job_description,created_at,updated_at")
+                .eq("student_id", student_id).order("created_at", desc=True).limit(25)
+                .execute().data or []
+            )
+        except Exception as exc:
+            raise StudentPersistenceError("Resume analysis history read failed") from exc
+
 
 class StudentPersistenceService:
-    def __init__(self, repository: StudentPersistenceRepository | None = None):
+    def __init__(self, repository: StudentPersistenceRepository | None = None, notifier=None):
         self.repository = repository or SupabaseStudentPersistenceRepository()
+        self.notify = create_notification if repository is None else (notifier or (lambda **_: None))
 
-    def save_analysis(self, student_id: str, request: Any, result: dict[str, Any]) -> dict[str, Any]:
+    def save_analysis(
+        self, student_id: str, request: Any, result: dict[str, Any],
+        effective_job_description: str | None = None,
+    ) -> dict[str, Any]:
+        previous_analysis = self.repository.latest_analysis(student_id)
         context = (
             request.resumeId, request.fileName, request.chunkCount, request.storageStatus,
             request.indexed, request.uploadProcessingTimeMs, request.targetRole, request.targetCompany,
@@ -128,7 +148,9 @@ class StudentPersistenceService:
             "resume_text": request.resumeText,
             "target_role": request.targetRole.strip(),
             "target_company": request.targetCompany.strip(),
-            "job_description": request.jobDescription,
+            "job_description": effective_job_description or request.jobDescription,
+            "used_general_role_expectations": bool(result.get("usedGeneralRoleExpectations")),
+            "job_description_classification": result.get("jobDescriptionClassification", {}),
             "upload_payload": {
                 "resumeId": request.resumeId, "fileName": request.fileName,
                 "chunkCount": request.chunkCount, "preview": request.resumeText,
@@ -138,6 +160,14 @@ class StudentPersistenceService:
             },
             "analysis_payload": result,
         })
+        if previous_analysis:
+            self.notify(
+                recipient_id=student_id, event_type="resume_reanalysis_completed",
+                event_key=f"resume_reanalysis_completed:{row['id']}:{row.get('updated_at')}",
+                title="Resume reanalysis completed",
+                body=f"Your updated analysis for {request.targetRole.strip()} is ready to review.",
+                target_url="/dashboard/resume-analysis", analysis_id=str(row["id"]),
+            )
         return {**result, "analysisId": row["id"]}
 
     def get_analysis(self, student_id: str, analysis_id: str) -> dict[str, Any]:
@@ -148,12 +178,14 @@ class StudentPersistenceService:
 
     @staticmethod
     def _education(row: dict[str, Any] | None, metadata: dict[str, Any]) -> dict[str, Any]:
-        row = row or {}
+        # student_profiles is canonical. Metadata only supports legacy users who
+        # do not have a role-specific profile row yet.
+        source = row if row is not None else metadata
         return {
-            "college": row.get("college") or metadata.get("college") or None,
-            "degree": row.get("degree") or metadata.get("degree") or None,
-            "branch": row.get("branch") or metadata.get("branch") or None,
-            "graduationYear": row.get("graduation_year") or metadata.get("graduation_year") or None,
+            "college": source.get("college") or None,
+            "degree": source.get("degree") or None,
+            "branch": source.get("branch") or None,
+            "graduationYear": source.get("graduation_year") or None,
         }
 
     @classmethod
@@ -226,6 +258,15 @@ class StudentPersistenceService:
                 **analysis,
                 **{field: dynamic[field] for field in required_dynamic_fields},
             }
+        if not analysis.get("analysisReliability"):
+            analysis = {
+                **analysis,
+                "analysisReliability": assess_analysis_reliability(
+                    row["resume_text"],
+                    analysis,
+                    None if row.get("used_general_role_expectations") else row.get("job_description"),
+                ),
+            }
         card = self.repository.latest_trust_card(student_id, str(row["id"]))
         trust_card = None
         if card:
@@ -233,6 +274,7 @@ class StudentPersistenceService:
                 **card["payload"],
                 "weaknesses": card["payload"].get("weaknesses", analysis["weaknesses"]),
                 "scoreReasons": card["payload"].get("scoreReasons", analysis["scoreReasons"]),
+                "analysisReliability": card["payload"].get("analysisReliability") or analysis.get("analysisReliability"),
             }
             education = payload.get("education") or {
                 "college": None, "degree": None, "branch": None, "graduationYear": None,
@@ -251,5 +293,37 @@ class StudentPersistenceService:
             "trustCard": trust_card,
             "jobDescription": row["job_description"], "role": row["target_role"],
             "company": row["target_company"], "analyzedAt": row["updated_at"],
+            "jobDescriptionClassification": row.get("job_description_classification") or analysis.get("jobDescriptionClassification") or {},
+            "usedGeneralRoleExpectations": bool(row.get("used_general_role_expectations")),
             "processingTimeMs": row["upload_payload"]["processingTimeMs"] + analysis["processingTimeMs"],
         }
+
+    def improvement_simulator(self, student_id: str) -> dict[str, Any]:
+        if self.repository.get_role(student_id) != "student": raise StudentProfileForbidden("Student access is required")
+        history = self.repository.analysis_history(student_id)
+        if not history: raise StudentAnalysisNotFound("Persisted resume analysis was not found")
+        current_analysis = history[0]
+        current_card = self.repository.latest_trust_card(student_id, str(current_analysis["id"]))
+        if not current_card: raise StudentAnalysisNotFound("Generate a Trust Card before using the improvement simulator")
+        current_payload = current_card.get("payload") or {}
+        current_role = str(current_analysis.get("target_role") or "").strip().casefold()
+        current_company = str(current_analysis.get("target_company") or "").strip().casefold()
+        current_job_description = str(current_analysis.get("job_description") or "").strip()
+        previous_payload = None
+        same_opportunity = [
+            candidate for candidate in history[1:]
+            if str(candidate.get("target_role") or "").strip().casefold() == current_role
+            and str(candidate.get("target_company") or "").strip().casefold() == current_company
+        ]
+        same_opportunity.sort(
+            key=lambda candidate: str(candidate.get("job_description") or "").strip() == current_job_description,
+            reverse=True,
+        )
+        for candidate in same_opportunity:
+            card = self.repository.latest_trust_card(student_id, str(candidate["id"]))
+            if not card: continue
+            payload = card.get("payload") or {}
+            if payload.get("scoreVersion") == current_payload.get("scoreVersion"):
+                previous_payload = payload
+                break
+        return build_improvement_simulator(current_payload, previous_payload)

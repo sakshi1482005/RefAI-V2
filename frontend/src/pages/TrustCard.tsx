@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useDemoMode } from '../context/DemoModeContext'
 import ConfettiBurst from '../components/feedback/ConfettiBurst'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
-import { DEMO_ATS_SCORE } from '../lib/demoData'
+import { } from '../lib/demoData'
 import TrustScoreExplanation from '../components/dashboard/TrustScoreExplanation'
 import { getStudentWorkflowState } from '../lib/studentWorkflow'
 import ActionPlanPanel from '../components/dashboard/ActionPlanPanel'
@@ -17,6 +17,9 @@ import RefAILogo from '../components/branding/RefAILogo'
 import { educationLines } from '../lib/education'
 import type { AnalysisSession } from '../lib/analysisSession'
 import { friendlyErrorMessage } from '../lib/requestSafety'
+import ProofVaultPanel from '../components/dashboard/ProofVaultPanel'
+import ClaimVerificationPanel from '../components/dashboard/ClaimVerificationPanel'
+import ImprovementSimulatorPanel from '../components/dashboard/ImprovementSimulatorPanel'
 
 export default function TrustCard() {
   const { profile } = useCurrentUser()
@@ -44,20 +47,16 @@ export default function TrustCard() {
   const signals = useMemo(() => trustCard ? [
     { label: 'Trust Score', value: String(trustCard.trustScore), score: trustCard.trustScore },
     { label: isDemoMode ? 'Resume Match' : 'Overall Match', value: `${trustCard.overallMatch}%`, score: trustCard.overallMatch },
-    ...(isDemoMode ? [{ label: 'ATS Score', value: String(DEMO_ATS_SCORE), score: DEMO_ATS_SCORE }] : []),
     { label: 'Role Fit', value: `${trustCard.roleFit}%`, score: trustCard.roleFit },
     { label: 'Proof', value: `${trustCard.proofScore}%`, score: trustCard.proofScore },
-    { label: 'Confidence', value: `${trustCard.confidence}%`, score: trustCard.confidence },
     { label: 'Gaps', value: `${trustCard.gapScore}%`, score: trustCard.gapScore }
   ] : [], [isDemoMode, trustCard])
   const metricHelp: Record<string, string> = {
     'Overall Match': 'The average of Role Fit and repeated Proof returned by the current matching model.',
     'Resume Match': 'Ananya’s demo resume-to-job match for the Atlassian role.',
-    'Trust Score': 'A backend-calculated weighted score that combines match, role fit, proof, confidence, completeness, and gap resilience.',
-    'ATS Score': 'The standardized demo ATS readability score for Ananya’s resume.',
+    'Trust Score': 'The deterministic five-component Candidate Trust Score returned by the backend.',
     'Role Fit': 'How much meaningful job-description terminology appears in the resume.',
     Proof: 'How consistently matched job requirements are supported by repeated resume evidence.',
-    Confidence: 'How much usable resume and job-description input supported the analysis.',
     Gaps: 'The percentage of job-description terminology not currently covered by the resume.',
   }
 
@@ -198,6 +197,7 @@ export default function TrustCard() {
                 </div>
               ))}
             </div>
+            {trustCard?.analysisReliability ? <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold">Analysis Reliability · {trustCard.analysisReliability.label}</p><p className="mt-2 text-sm leading-6 text-slate-700">{trustCard.analysisReliability.basis}</p><p className="mt-2 text-xs leading-5 text-slate-500"><span className="font-semibold">Limitations:</span> {trustCard.analysisReliability.limitations}</p></div> : <p className="mt-4 text-xs text-slate-500">Analysis Reliability was not recorded for this older saved Trust Card.</p>}
             {scoreReasons.length > 0 ? <ScoreExplanation className="mt-7" title="Why these referral signals?" points={scoreReasons} /> : null}
             {signals.length === 0 ? <EmptyState className="mt-7" icon={ShieldCheck} title="Generate your first Trust Card" description="A Trust Card explains your resume match, proof strength, skill gaps, and referral readiness in an employee-friendly summary." action={<PrimaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</PrimaryButton>} /> : null}
             {trustCard ? <div className="mt-7 rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Referral readiness</p><p className="mt-2 text-lg font-semibold">{trustCard.referralReadiness}</p><p className="mt-2 text-sm leading-6 text-slate-600">Ready at 75 or above, improve before requesting from 55–74, and not ready below 55. Current Trust Score: {trustCard.trustScore}.</p></div> : null}
@@ -228,6 +228,9 @@ export default function TrustCard() {
         </div>
       </div>
       <ActionPlanPanel className="mt-6" plan={trustCard?.actionPlan ?? []} allGaps={trustCard?.missingRequirements ?? []} />
+      {!isDemoMode ? <div className="mt-6"><ProofVaultPanel editable trustCardId={trustCard?.id} /></div> : null}
+      {!isDemoMode && trustCard?.id ? <div className="mt-6"><ClaimVerificationPanel trustCardId={trustCard.id} /></div> : null}
+      {!isDemoMode && trustCard?.id ? <div className="mt-6"><ImprovementSimulatorPanel /></div> : null}
       <TrustScoreExplanation isDemoMode={isDemoMode} trustCard={trustCard} />
       <AITransparencyPanel session={analysisSession} isDemoMode={isDemoMode} includeEvidenceDetails />
     </PageShell></>

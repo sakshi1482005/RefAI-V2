@@ -1,8 +1,8 @@
--- Persist the complete editable Student profile in the existing student_profiles row.
--- Additive and safe to rerun; no existing data is changed or removed.
+-- Compatibility migration for projects that had the original education table.
+-- Branch is owned by 202607250001; the fields below are intentionally
+-- non-overlapping and are already present on fresh foundation deployments.
 
 alter table public.student_profiles
-  add column if not exists branch text,
   add column if not exists preferred_role text,
   add column if not exists preferred_company text,
   add column if not exists skills text[] not null default '{}'::text[],

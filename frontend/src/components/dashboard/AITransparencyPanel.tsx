@@ -1,6 +1,6 @@
-import { CheckCircle2, Circle, Clock3, Database, FileSearch, Gauge, ListChecks, Sparkles } from 'lucide-react'
+import { CheckCircle2, Circle, Clock3, Database, FileSearch, ListChecks, ShieldCheck, Sparkles } from 'lucide-react'
 import type { AnalysisSession } from '../../lib/analysisSession'
-import { DEMO_ATS_SCORE, demoEmployeeReview } from '../../lib/demoData'
+import { demoEmployeeReview } from '../../lib/demoData'
 import { Badge, Card } from './primitives'
 
 type AITransparencyPanelProps = {
@@ -22,7 +22,7 @@ function processingTime(value?: number) {
 
 export default function AITransparencyPanel({ session, isDemoMode, audience = 'student', includeEvidenceDetails = false, className = '' }: AITransparencyPanelProps) {
   const hasResume = Boolean(session.upload?.preview)
-  const hasJobDescription = Boolean(session.jobDescription?.trim())
+  const hasJobDescription = Boolean(session.jobDescription?.trim()) && !session.usedGeneralRoleExpectations
   const hasMatch = Boolean(session.matchScore)
   const analysis = session.analysis
   const hasAnalysis = analysis?.analysisStatus === 'complete'
@@ -30,7 +30,7 @@ export default function AITransparencyPanel({ session, isDemoMode, audience = 's
   const steps = [
     { label: 'Resume Parsed', complete: hasResume, detail: hasResume ? `${session.upload?.chunkCount ?? 0} extracted text chunks` : 'Upload and process a resume to complete this step' },
     { label: 'Skills Extracted', complete: isDemoMode || hasAnalysis, detail: isDemoMode ? `${demoEmployeeReview.skills.length} structured demo skills` : hasAnalysis ? `${analysis.matchedSkills.length} matched and ${analysis.missingSkills.length} missing requirements returned by API` : 'Run the updated resume analysis to extract structured requirements' },
-    { label: 'ATS Checked', complete: hasMatch, detail: isDemoMode ? `${DEMO_ATS_SCORE} ATS Score · Demo` : hasMatch ? 'Terminology coverage checked by the match model; no separate ATS API' : 'Waiting for resume-to-job matching' },
+    { label: 'Resume Evidence Checked', complete: hasMatch, detail: isDemoMode ? 'Strong resume evidence · Demo' : hasMatch ? 'Terminology and evidence coverage checked by the match model' : 'Waiting for resume-to-role matching' },
     { label: 'Job Matched', complete: hasMatch, detail: hasMatch ? `${session.matchScore?.overall}% Overall Match calculated` : 'Run resume analysis to calculate the job match' },
     { label: 'Trust Score Generated', complete: hasTrustCard, detail: hasTrustCard ? `${session.trustCard?.trustScore} Trust Score · deterministic weighted calculation${isDemoMode ? ' · Demo' : ''}` : 'Generate the Trust Card after completing resume analysis' },
     audience === 'employee'
@@ -43,7 +43,7 @@ export default function AITransparencyPanel({ session, isDemoMode, audience = 's
     { label: 'Skills extracted', value: isDemoMode ? `${demoEmployeeReview.skills.length} demo skills` : hasAnalysis ? `${analysis.matchedSkills.length} matched requirements` : 'Analysis required', icon: ListChecks },
     { label: 'Evidence found', value: hasMatch ? `Proof signal: ${session.matchScore?.proof}%` : 'No evidence score returned', icon: CheckCircle2 },
     { label: 'AI reasoning', value: hasMatch ? 'Role Fit, repeated Proof, and unmatched terminology' : 'No reasoning inputs available', icon: Sparkles },
-    { label: 'Confidence', value: isDemoMode ? 'Demo output' : hasAnalysis ? `${analysis.confidence}%` : 'Analysis required', icon: Gauge },
+    { label: 'Analysis reliability', value: analysis?.analysisReliability?.label ?? (isDemoMode ? 'High reliability' : 'Not recorded for this saved analysis'), icon: ShieldCheck },
     { label: 'Processing time', value: processingTime(session.processingTimeMs), icon: Clock3 },
   ]
 
@@ -71,6 +71,7 @@ export default function AITransparencyPanel({ session, isDemoMode, audience = 's
           return <div key={fact.label} className="rounded-xl bg-slate-50 p-4"><Icon className="size-4 text-slate-500" /><p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{fact.label}</p><p className="mt-1 text-sm font-medium leading-5 text-slate-800">{fact.value}</p></div>
         })}
       </div>
+      {analysis?.analysisReliability ? <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold">{analysis.analysisReliability.label}</p><p className="mt-2 text-sm leading-6 text-slate-700">{analysis.analysisReliability.basis}</p><p className="mt-2 text-xs leading-5 text-slate-500"><span className="font-semibold">Limitations:</span> {analysis.analysisReliability.limitations}</p></div> : null}
 
       {includeEvidenceDetails ? <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 p-5"><p className="text-sm font-semibold">Evidence Sources</p><ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600"><li>Resume: {session.upload?.fileName ?? 'Not available'}</li><li>Job Description: {hasJobDescription ? `${wordCount(session.jobDescription)} submitted words` : 'Not available'}</li></ul></div>

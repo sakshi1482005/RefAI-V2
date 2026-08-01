@@ -62,7 +62,7 @@ export default function ProductShowcase() {
                                 <span className="msg-ai-badge">AI</span>
                             </div>
                             <div className="msg-box">
-                                Hi Meera, I’m applying for the Associate Software Engineer role at Atlassian. RefAI shows an 88% Resume Match, 93 ATS Score, and 91 Trust Score with React, FastAPI, and SQL evidence. Would you review my Trust Card for a referral?
+                                Hi Meera, I’m applying for the Associate Software Engineer role at Atlassian. RefAI shows strong resume evidence and a 91 Candidate Trust Score with React, FastAPI, and SQL evidence. Would you review my Trust Card for a referral?
                             </div>
                             <div className="msg-actions">
                                 <span className="msg-btn msg-btn-primary">Copy</span>
@@ -94,7 +94,7 @@ export default function ProductShowcase() {
                                     <span className="queue-score queue-score-high">91</span>
                                 </div>
                             </div>
-                            <p className="demo-score-why"><strong>Meera Shah’s review:</strong> Ananya’s 91 Trust Score is supported by an 88% Resume Match, 93 ATS Score, and measurable project evidence.</p>
+                            <p className="demo-score-why"><strong>Meera Shah’s review:</strong> Ananya’s 91 Candidate Trust Score is supported by strong resume evidence and measurable project evidence.</p>
                         </div>
                     </Reveal>
                 </div>

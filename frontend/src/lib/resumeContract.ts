@@ -59,6 +59,20 @@ function isExplainedInsight(value: unknown) {
   return isRecord(value) && typeof value.title === 'string' && typeof value.description === 'string'
 }
 
+function isJobDescriptionClassification(value: unknown) {
+  return isRecord(value) && [
+    'requiredSkills', 'preferredSkills', 'responsibilities',
+    'experienceExpectations', 'educationOrCertificationExpectations',
+  ].every((field) => Array.isArray(value[field]) && (value[field] as unknown[]).every((item) => typeof item === 'string'))
+}
+
+function isAnalysisReliability(value: unknown) {
+  return isRecord(value)
+    && ['High reliability', 'Medium reliability', 'Low reliability'].includes(String(value.label))
+    && typeof value.basis === 'string'
+    && typeof value.limitations === 'string'
+}
+
 function isNullableEducationValue(value: unknown) {
   return value === null || typeof value === 'string' || typeof value === 'number'
 }
@@ -87,11 +101,15 @@ export function parseTrustCardResponse(value: unknown, status: number, endpoint 
     isRecord(factor)
     && ['key', 'label', 'reason'].every((field) => typeof factor[field] === 'string')
     && ['weight', 'score', 'contribution'].every((field) => typeof factor[field] === 'number')
+    && (factor.details === undefined || isRecord(factor.details))
+    && (factor.evidenceFound === undefined || (Array.isArray(factor.evidenceFound) && factor.evidenceFound.every((item) => typeof item === 'string')))
+    && (factor.evidenceMissing === undefined || (Array.isArray(factor.evidenceMissing) && factor.evidenceMissing.every((item) => typeof item === 'string')))
   ))
   const education = value.education
   const educationValid = isRecord(education)
     && ['college', 'degree', 'branch', 'graduationYear'].every((field) => isNullableEducationValue(education[field]))
-  if (!scoresValid || !stringsValid || !stringArraysValid || !plansValid || !breakdownValid || !educationValid) {
+  const reliabilityValid = value.analysisReliability === undefined || value.analysisReliability === null || isAnalysisReliability(value.analysisReliability)
+  if (!scoresValid || !stringsValid || !stringArraysValid || !plansValid || !breakdownValid || !educationValid || !reliabilityValid) {
     contractFailure(endpoint, status, value, [
       ...(!scoresValid ? ['numeric Trust Card scores'] : []),
       ...(!stringsValid ? ['typed Trust Card text fields'] : []),
@@ -99,15 +117,25 @@ export function parseTrustCardResponse(value: unknown, status: number, endpoint 
       ...(!plansValid ? ['structured Trust Card action plan'] : []),
       ...(!breakdownValid ? ['scoreBreakdown'] : []),
       ...(!educationValid ? ['education'] : []),
+      ...(!reliabilityValid ? ['analysisReliability'] : []),
     ])
   }
-  return value as unknown as TrustCardResult
+  return {
+    ...value,
+    scoreVersion: typeof value.scoreVersion === 'string' ? value.scoreVersion : 'legacy-unversioned',
+    scoreBreakdown: (value.scoreBreakdown as Record<string, unknown>[]).map((factor) => ({
+      ...factor,
+      details: isRecord(factor.details) ? factor.details : {},
+      evidenceFound: Array.isArray(factor.evidenceFound) ? factor.evidenceFound : [],
+      evidenceMissing: Array.isArray(factor.evidenceMissing) ? factor.evidenceMissing : [],
+    })),
+  } as unknown as TrustCardResult
 }
 
 export function parseResumeAnalysisResponse(value: unknown, status: number): ResumeAnalysisResult {
   const endpoint = '/resume/analyze'
   if (!isRecord(value)) contractFailure(endpoint, status, value, ['valid JSON object'])
-  const required = ['analysisId', 'overall', 'roleFit', 'proof', 'gaps', 'analysisStatus', 'matchedSkills', 'missingSkills', 'missingRequirements', 'actionPlan', 'strengths', 'weaknesses', 'evidence', 'resumeSectionsUsed', 'readinessSummary', 'learningRecommendations', 'confidence', 'scoreReasons', 'atsGuidance', 'interviewReadiness', 'processingTimeMs']
+  const required = ['analysisId', 'overall', 'roleFit', 'proof', 'gaps', 'analysisStatus', 'matchedSkills', 'missingSkills', 'missingRequirements', 'actionPlan', 'strengths', 'weaknesses', 'evidence', 'resumeSectionsUsed', 'readinessSummary', 'learningRecommendations', 'confidence', 'scoreReasons', 'atsGuidance', 'interviewReadiness', 'processingTimeMs', 'jobDescriptionClassification', 'usedGeneralRoleExpectations']
   const missing = missingFields(value, required)
   if (missing.length > 0) contractFailure(endpoint, status, value, missing)
   const numbersValid = ['overall', 'roleFit', 'proof', 'gaps', 'confidence', 'processingTimeMs'].every((field) => typeof value[field] === 'number')
@@ -118,12 +146,17 @@ export function parseResumeAnalysisResponse(value: unknown, status: number): Res
     (field) => Array.isArray(value[field]) && (value[field] as unknown[]).every(isActionPlanItem),
   )
   const insightsValid = Array.isArray(value.atsGuidance) && value.atsGuidance.every(isExplainedInsight) && isExplainedInsight(value.interviewReadiness)
-  if (!numbersValid || !stringArraysValid || !actionPlanArraysValid || !insightsValid || value.analysisStatus !== 'complete' || typeof value.readinessSummary !== 'string' || typeof value.analysisId !== 'string') {
+  const classificationValid = isJobDescriptionClassification(value.jobDescriptionClassification)
+  const reliabilityValid = value.analysisReliability === undefined || value.analysisReliability === null || isAnalysisReliability(value.analysisReliability)
+  if (!numbersValid || !stringArraysValid || !actionPlanArraysValid || !insightsValid || !classificationValid || !reliabilityValid || typeof value.usedGeneralRoleExpectations !== 'boolean' || value.analysisStatus !== 'complete' || typeof value.readinessSummary !== 'string' || typeof value.analysisId !== 'string') {
     const invalid = [
       ...(!numbersValid ? ['numeric score/timing fields'] : []),
       ...(!stringArraysValid ? ['string-array analysis fields'] : []),
       ...(!actionPlanArraysValid ? ['structured missingRequirements/actionPlan fields'] : []),
       ...(!insightsValid ? ['backend-generated guidance fields'] : []),
+      ...(!classificationValid ? ['jobDescriptionClassification'] : []),
+      ...(!reliabilityValid ? ['analysisReliability'] : []),
+      ...(typeof value.usedGeneralRoleExpectations !== 'boolean' ? ['usedGeneralRoleExpectations'] : []),
       ...(value.analysisStatus !== 'complete' ? ['analysisStatus'] : []),
       ...(typeof value.readinessSummary !== 'string' ? ['readinessSummary'] : []),
       ...(typeof value.analysisId !== 'string' ? ['analysisId'] : []),
@@ -136,7 +169,7 @@ export function parseResumeAnalysisResponse(value: unknown, status: number): Res
 export function parsePersistedAnalysisSessionResponse(value: unknown, status: number) {
   const endpoint = '/resume/analysis/latest'
   if (!isRecord(value)) contractFailure(endpoint, status, value, ['valid JSON object'])
-  const required = ['analysisId', 'upload', 'matchScore', 'analysis', 'trustCard', 'jobDescription', 'role', 'company', 'analyzedAt', 'processingTimeMs']
+  const required = ['analysisId', 'upload', 'matchScore', 'analysis', 'trustCard', 'jobDescription', 'role', 'company', 'jobDescriptionClassification', 'usedGeneralRoleExpectations', 'analyzedAt', 'processingTimeMs']
   const missing = missingFields(value, required)
   if (missing.length > 0) contractFailure(endpoint, status, value, missing)
   if (!isRecord(value.matchScore)) contractFailure(endpoint, status, value, ['matchScore'])
@@ -146,7 +179,9 @@ export function parsePersistedAnalysisSessionResponse(value: unknown, status: nu
     typeof value.analysisId !== 'string' || !scoresValid ||
     typeof value.jobDescription !== 'string' || typeof value.role !== 'string' ||
     typeof value.company !== 'string' || typeof value.analyzedAt !== 'string' ||
-    typeof value.processingTimeMs !== 'number'
+    typeof value.processingTimeMs !== 'number' ||
+    typeof value.usedGeneralRoleExpectations !== 'boolean' ||
+    !isJobDescriptionClassification(value.jobDescriptionClassification)
   ) contractFailure(endpoint, status, value, ['valid typed persisted analysis fields'])
   parseResumeUploadResponse(value.upload, status)
   parseResumeAnalysisResponse(value.analysis, status)

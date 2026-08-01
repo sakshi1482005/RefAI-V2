@@ -12,6 +12,8 @@ from app.services.student_persistence import (
     StudentPersistenceService,
     StudentProfileForbidden,
 )
+from app.services.analysis_reliability import assess_analysis_reliability
+from app.services.vector_store import ChromaProjectRelevanceProvider
 from fastapi import HTTPException, status
 
 router = APIRouter(prefix="/trust-card", tags=["trust-card"])
@@ -40,10 +42,19 @@ def generate_trust_card(payload: TrustCardRequest, user: dict = Depends(get_curr
         resume_text = analysis["resume_text"]
         job_description = analysis["job_description"]
         analysis_id = str(payload.analysisId)
+        relevance_source = "role_context" if analysis.get("used_general_role_expectations") else "job_description"
+        analysis_payload = analysis.get("analysis_payload") or {}
+        reliability = analysis_payload.get("analysisReliability") or assess_analysis_reliability(
+            resume_text,
+            analysis_payload,
+            None if analysis.get("used_general_role_expectations") else job_description,
+        )
     elif all((payload.candidateName, payload.role, payload.resumeText, payload.jobDescription)):
         candidate_name, role = payload.candidateName, payload.role
         resume_text, job_description = payload.resumeText, payload.jobDescription
         analysis_id = None
+        reliability = None
+        relevance_source = "job_description"
     else:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A persisted analysis ID is required.")
     try:
@@ -52,12 +63,19 @@ def generate_trust_card(payload: TrustCardRequest, user: dict = Depends(get_curr
             role=role,
             resume_text=resume_text,
             job_description=job_description,
+            similarity_provider=ChromaProjectRelevanceProvider(
+                f"{student_id}-{analysis_id or 'direct'}"
+            ),
+            relevance_source=relevance_source,
         )
     except InsufficientJobRequirements as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="The saved job description has no specific requirements. Rerun resume analysis with a fuller job description.",
         ) from exc
+    if reliability is None:
+        reliability = assess_analysis_reliability(resume_text, result, job_description)
+    result = {**result, "analysisReliability": reliability}
 
     try:
         education = persistence_service.get_education(student_id)

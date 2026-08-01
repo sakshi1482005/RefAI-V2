@@ -46,7 +46,7 @@ RefAI bridges this gap by analyzing a student's resume against a target job desc
 
 - ✅ Resume Analysis
 - ✅ AI Candidate Trust Card
-- ✅ ATS Compatibility Evaluation
+- ✅ Resume evidence and requirement coverage review
 - ✅ Personalized Action Plan
 - ✅ Student Profile Management
 - ✅ Employee Search
@@ -84,53 +84,137 @@ RefAI/
 
 ---
 
-# Configure Supabase
+# Configure Supabase from a clean project
 
-Run the migrations in chronological order:
+Use a new Supabase project with no manually created RefAI tables, functions,
+triggers, policies, or Storage buckets. Install the Supabase CLI, authenticate,
+and link the repository to the new project:
 
-```text
-supabase/migrations/202607190001_referral_foundation.sql
-supabase/migrations/202607200001_student_workflow_persistence.sql
-supabase/migrations/202607210001_oauth_profile_role_fix.sql
-supabase/migrations/202607250001_student_profile_branch.sql
-supabase/migrations/202607250002_student_profile_fields.sql
+```powershell
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+supabase migration list
+supabase db push
 ```
 
-The last two migrations are additive and safe to rerun.
+`supabase db push` applies every file in `supabase/migrations` by its timestamp.
+Do not paste only the latest migration into the SQL Editor, and do not mark a
+migration as applied unless its SQL completed successfully.
 
-They ensure `student_profiles` contains:
-
-```text
-branch
-preferred_role
-preferred_company
-skills
-bio
-linkedin
-github
-portfolio
-```
-
-The `student_profiles.profile_id` must match the authenticated Supabase User ID and remain unique.
-
-Create a private Storage bucket named:
+The required order is:
 
 ```text
-resumes
+202607190001_referral_foundation.sql
+202607200001_student_workflow_persistence.sql
+202607210001_oauth_profile_role_fix.sql
+202607240001_profile_foundation.sql
+202607240002_private_resume_storage.sql
+202607250001_student_profile_branch.sql
+202607250002_student_profile_fields.sql
+202607300001_job_description_context.sql
+202607300002_employee_referral_preferences.sql
+202607300003_employee_reliability_profile.sql
+202607300004_referral_compatibility.sql
+202607300005_remove_compatibility_request_metadata.sql
+202607310001_proof_vault.sql
+202607310002_structured_referral_decisions.sql
+202607310003_referral_status_model.sql
+202607310004_referral_submission_workflow.sql
+202608010001_in_app_notifications.sql
 ```
 
-or configure a custom bucket using:
+This sequence creates the base profile and referral schema, persisted resume
+analyses and Trust Cards, student and employee profiles, the private `resumes`
+bucket, employee preference/reliability fields, compatibility snapshots, Proof
+Vault, structured decision history, the complete referral status model, referral
+submission metadata, and in-app notifications. RLS is enabled by migrations.
+
+After `db push`, verify the remote migration ledger:
+
+```powershell
+supabase migration list
+```
+
+Both Local and Remote columns should contain every timestamp above. Then run
+these read-only checks in the Supabase SQL Editor:
+
+```sql
+select schemaname, tablename, rowsecurity
+from pg_tables
+where schemaname = 'public'
+  and tablename in (
+    'profiles','student_profiles','employee_profiles','resume_analyses',
+    'trust_cards','referral_requests','referral_status_history',
+    'referral_decision_private_notes','proof_entries','notifications'
+  )
+order by tablename;
+
+select id, name, public
+from storage.buckets
+where id = 'resumes';
+
+select trigger_name, event_object_schema, event_object_table
+from information_schema.triggers
+where trigger_name in (
+  'refai_on_auth_user_created',
+  'refai_on_auth_user_metadata_updated'
+)
+order by trigger_name;
+
+select schemaname, tablename, policyname, roles, cmd
+from pg_policies
+where schemaname in ('public', 'storage')
+order by schemaname, tablename, policyname;
+```
+
+Expected results:
+
+- Every listed public table reports `rowsecurity = true`.
+- `storage.buckets.public` is `false` for `resumes`.
+- Both RefAI Auth triggers exist on `auth.users`.
+- Resume object policies are scoped to the first path folder matching
+  `auth.uid()`, for paths such as `{user_id}/{resume_id}.pdf`.
+
+Create one disposable student and one disposable employee through the normal
+signup UI. Confirm `public.profiles.role` is respectively `student` and
+`employee`. Role-specific profile rows are created when each user saves their
+profile; the Auth trigger intentionally creates the base `profiles` row only.
+
+Keep the backend configured with:
 
 ```text
-RESUME_STORAGE_BUCKET
+RESUME_STORAGE_BUCKET=resumes
 ```
 
-For Google OAuth, add these redirect URLs:
+## Safe recovery and rollback
 
-```text
-http://localhost:5173/auth/callback
-https://your-frontend.example/auth/callback
-```
+Migrations are forward-only deployment history. Several files are additive and
+idempotent, but the sequence also replaces constraints, functions, triggers, and
+policies. Do not use repeated SQL Editor execution as a rollback strategy.
+
+- If `db push` fails, retain the error, correct the failing migration in a
+  disposable project, and retry from a newly created clean project.
+- If a migration has already succeeded in a shared environment, add a new
+  timestamped corrective migration instead of editing or deleting applied SQL.
+- Before deploying to an existing environment, take a Supabase database backup
+  and record the migration ledger.
+- For a hackathon clean deployment, deleting and recreating the unused test
+  project is safer than attempting destructive down migrations.
+- Never run rollback or reset commands against the production project.
+
+## Manual Supabase dashboard configuration
+
+Database objects and the private resume bucket require no manual dashboard
+creation after migrations succeed. The following project-level settings remain
+manual:
+
+- Enable the desired Auth providers, including Google when used.
+- Add `http://localhost:5173/auth/callback` and the deployed frontend callback
+  URL to Authentication → URL Configuration.
+- Enter Google OAuth client credentials when Google login is enabled.
+- Copy the project URL, anon key, service-role key, and JWT secret into the
+  appropriate deployment environment. The service-role key belongs only in the
+  backend.
 
 ---
 
@@ -459,3 +543,21 @@ Also add the deployed frontend callback URL to the Supabase OAuth Redirect Allow
 # License
 
 This project is intended for educational and hackathon purposes.
+
+
+## Clean Supabase deployment verification
+
+A production database is not proof that the migration chain is complete. Use a disposable, empty Supabase project:
+
+1. Install the Supabase CLI and PostgreSQL client tools.
+2. From the repository root run: `powershell -ExecutionPolicy Bypass -File supabase/verify_fresh_deployment.ps1 -ProjectRef <disposable-project-ref> -DatabaseUrl <direct-postgres-url>`.
+3. In Supabase Auth, create one disposable student and one disposable employee with email/password. Confirm each can sign in and that `profiles` plus the matching role profile are created by the Auth trigger.
+4. With each user JWT, verify self-profile reads succeed and cross-user/private-role reads fail.
+5. As the student, upload a PDF to `resumes/<student-auth-id>/<resume-id>.pdf`, replace it, and confirm uploads outside that folder and anonymous reads fail.
+6. Create an assigned referral. Call the authenticated employee resume endpoint as the assigned employee and confirm the signed URL works, contains an expiry, and stops working after the configured TTL. Repeat as another employee and require 403.
+7. Inspect the Vercel build output and deployed frontend environment: only `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are allowed; never expose the service-role key.
+8. Delete the disposable users/project after verification.
+
+The script proves migration execution plus structural RLS, trigger, policy, and private-bucket prerequisites. Auth, OAuth redirects, JWT role guards, object upload, and signed-URL expiry are deliberate live smoke tests because they require a real disposable project and credentials. Google OAuth should be tested with the disposable project redirect URL if a disposable Google OAuth client is available.
+
+The current More Information scope persists the employee's structured reason, student-visible clarification question, timestamp, notification, and `more_info_requested` history event. RefAI does not currently claim that the student has responded; the employee queue therefore labels this state “More information requested.”

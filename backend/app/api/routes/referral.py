@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.security import get_current_user
-from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeDirectoryItem, EmployeeProfessionalProfile, EmployeeProfessionalProfileUpdate, EmployeeReferralQueueItem, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView, ReferralMessageRequest, ReferralMessageResponse, ReferralRequestDetail, ReferralRequestSummary, ReferralStatusHistoryEntry, TrustCardResponse
-from app.services.groq_client import AIServiceUnavailable, generate_referral_message
-from app.services.referral_requests import InvalidReferralTransition, ReferralForbidden, ReferralNotFound, ReferralRequestService, ReferralUnavailable
+from app.models.schemas import ClaimVerificationResponse, ClarificationDraftResponse, CreateReferralRequest, EmployeeDecisionUpdate, EmployeeDirectoryItem, EmployeeProfessionalProfile, EmployeeProfessionalProfileUpdate, EmployeeReferralQueueItem, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeReviewCopilotResponse, EmployeeTrustCardView, ProofEntryInput, ProofEntryResponse, ReferralCompatibilityRequest, ReferralCompatibilityResponse, ReferralMessageRequest, ReferralMessageResponse, ReferralQualityRequest, ReferralQualityResponse, ReferralRequestDetail, ReferralRequestSummary, ReferralStatusHistoryEntry, ReferralSubmissionUpdate, TrustCardResponse
+from app.services.referral_requests import InvalidReferralTransition, ReferralForbidden, ReferralNotFound, ReferralQualityBlocked, ReferralRequestService, ReferralUnavailable
 
 router = APIRouter(prefix="/referral", tags=["referral"])
 service = ReferralRequestService()
@@ -13,6 +12,7 @@ def _raise_referral_error(exc: Exception):
     if isinstance(exc, ReferralForbidden): raise HTTPException(status_code=403, detail=str(exc)) from exc
     if isinstance(exc, ReferralNotFound): raise HTTPException(status_code=404, detail=str(exc)) from exc
     if isinstance(exc, ReferralUnavailable): raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if isinstance(exc, ReferralQualityBlocked): raise HTTPException(status_code=422, detail={"message": str(exc), "quality": exc.quality}) from exc
     if isinstance(exc, InvalidReferralTransition): raise HTTPException(status_code=409, detail=str(exc)) from exc
     raise exc
 
@@ -20,6 +20,18 @@ def _raise_referral_error(exc: Exception):
 @router.post("/requests", response_model=ReferralRequestDetail, status_code=201)
 def create_request(payload: CreateReferralRequest, user: dict = Depends(get_current_user)):
     try: return service.create(user["sub"], payload)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.post("/compatibility", response_model=ReferralCompatibilityResponse)
+def referral_compatibility(payload: ReferralCompatibilityRequest, user: dict = Depends(get_current_user)):
+    try: return service.compatibility(user["sub"], payload)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.post("/quality", response_model=ReferralQualityResponse)
+def referral_quality(payload: ReferralQualityRequest, user: dict = Depends(get_current_user)):
+    try: return service.quality(user["sub"], payload)
     except Exception as exc: _raise_referral_error(exc)
 
 
@@ -59,6 +71,18 @@ def employee_request_detail(request_id: str, user: dict = Depends(get_current_us
     except Exception as exc: _raise_referral_error(exc)
 
 
+@router.post("/employee/requests/{request_id}/copilot", response_model=EmployeeReviewCopilotResponse)
+def employee_review_copilot(request_id: str, user: dict = Depends(get_current_user)):
+    try: return service.employee_review_copilot(user["sub"], request_id)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.post("/employee/requests/{request_id}/clarification-draft", response_model=ClarificationDraftResponse)
+def employee_clarification_draft(request_id: str, user: dict = Depends(get_current_user)):
+    try: return service.draft_clarification(user["sub"], request_id)
+    except Exception as exc: _raise_referral_error(exc)
+
+
 @router.get("/employee/requests/{request_id}/resume", response_model=EmployeeResumeAccess)
 def employee_request_resume(request_id: str, user: dict = Depends(get_current_user)):
     try: return service.employee_resume(user["sub"], request_id)
@@ -68,6 +92,48 @@ def employee_request_resume(request_id: str, user: dict = Depends(get_current_us
 @router.get("/employee/requests/{request_id}/trust-card", response_model=EmployeeTrustCardView)
 def employee_request_trust_card(request_id: str, user: dict = Depends(get_current_user)):
     try: return service.employee_trust_card(user["sub"], request_id)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.get("/employee/requests/{request_id}/proofs", response_model=list[ProofEntryResponse])
+def employee_request_proofs(request_id: str, user: dict = Depends(get_current_user)):
+    try: return service.employee_request_proofs(user["sub"], request_id)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.get("/employee/requests/{request_id}/claim-verifications", response_model=ClaimVerificationResponse)
+def employee_claim_verifications(request_id: str, user: dict = Depends(get_current_user)):
+    try: return service.employee_claim_verifications(user["sub"], request_id)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.get("/proofs", response_model=list[ProofEntryResponse])
+def list_proofs(trust_card_id: str, user: dict = Depends(get_current_user)):
+    try: return service.list_student_proofs(user["sub"], trust_card_id)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.get("/proofs/claim-verifications", response_model=ClaimVerificationResponse)
+def student_claim_verifications(trust_card_id: str, user: dict = Depends(get_current_user)):
+    try: return service.student_claim_verifications(user["sub"], trust_card_id)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.post("/proofs", response_model=ProofEntryResponse, status_code=201)
+def create_proof(payload: ProofEntryInput, user: dict = Depends(get_current_user)):
+    try: return service.create_proof(user["sub"], payload)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.put("/proofs/{proof_id}", response_model=ProofEntryResponse)
+def update_proof(proof_id: str, payload: ProofEntryInput, user: dict = Depends(get_current_user)):
+    try: return service.update_proof(user["sub"], proof_id, payload)
+    except Exception as exc: _raise_referral_error(exc)
+
+
+@router.delete("/proofs/{proof_id}", status_code=204)
+def delete_proof(proof_id: str, user: dict = Depends(get_current_user)):
+    try: service.delete_proof(user["sub"], proof_id)
     except Exception as exc: _raise_referral_error(exc)
 
 
@@ -95,12 +161,15 @@ def update_decision(request_id: str, payload: EmployeeDecisionUpdate, user: dict
     except Exception as exc: _raise_referral_error(exc)
 
 
+@router.patch("/employee/requests/{request_id}/referral-submission", response_model=EmployeeReferralRequestView)
+def mark_referral_submitted(request_id: str, payload: ReferralSubmissionUpdate, user: dict = Depends(get_current_user)):
+    try: return service.mark_referral_submitted(user["sub"], request_id, payload)
+    except Exception as exc: _raise_referral_error(exc)
+
+
 @router.post("/message", response_model=ReferralMessageResponse)
 def create_referral_message(payload: ReferralMessageRequest, user: dict = Depends(get_current_user)):
-    if service.repository.get_role(user["sub"]) != "employee":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employee access is required for referral-message generation.")
     try:
-        message = generate_referral_message(payload.candidateName, payload.role, payload.trustSummary)
-    except AIServiceUnavailable as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The AI message service is not configured.") from exc
-    return {"message": message}
+        return service.generate_message(user["sub"], payload)
+    except Exception as exc:
+        _raise_referral_error(exc)
