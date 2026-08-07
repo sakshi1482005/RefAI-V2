@@ -2,6 +2,7 @@ import axios, {
   AxiosError,
   type InternalAxiosRequestConfig,
 } from 'axios'
+import type { Session } from '@supabase/supabase-js'
 
 import { supabase } from './supabase'
 import {
@@ -32,6 +33,22 @@ export const api = axios.create({
     'http://localhost:8000',
   timeout: 30_000,
 })
+
+let refreshSessionInFlight: Promise<Session | null> | null = null
+
+async function refreshSessionOnce(): Promise<Session | null> {
+  if (!refreshSessionInFlight) {
+    refreshSessionInFlight = supabase.auth.refreshSession()
+      .then(({ data: { session }, error }) => {
+        if (error || !session?.access_token) return null
+        return session
+      })
+      .catch(() => null)
+      .finally(() => { refreshSessionInFlight = null })
+  }
+
+  return refreshSessionInFlight
+}
 
 /**
  * Attach the latest Supabase access token to every backend request.
@@ -93,13 +110,10 @@ api.interceptors.response.use(
       config._refaiAuthRetry = true
 
       try {
-        const {
-          data: { session },
-          error: refreshError,
-        } = await supabase.auth.refreshSession()
+        const session = await refreshSessionOnce()
 
-        if (refreshError || !session?.access_token) {
-          console.error('[RefAI session refresh failed]', refreshError)
+        if (!session?.access_token) {
+          console.error('[RefAI session refresh failed]')
 
           await supabase.auth.signOut()
 

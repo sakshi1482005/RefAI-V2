@@ -9,7 +9,7 @@ import { EmptyState, InlineFeedback, SecondaryButton, Skeleton } from './primiti
 
 export default function NotificationCentre() {
   const navigate = useNavigate()
-  const { isDemoMode } = useDemoMode()
+  const { isDemoMode, authenticatedUserId, authLoading } = useDemoMode()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<InAppNotification[]>([])
   const [loading, setLoading] = useState(false)
@@ -17,19 +17,21 @@ export default function NotificationCentre() {
   const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
-    if (isDemoMode) return
+    if (isDemoMode || authLoading || !authenticatedUserId) return
     setLoading(true); setError(null)
     try {
       const { data } = await api.get<InAppNotification[]>('/notifications')
       setItems(data); setLoaded(true)
     } catch (loadError) { setError(loadError) }
     finally { setLoading(false) }
-  }, [isDemoMode])
+  }, [authLoading, authenticatedUserId, isDemoMode])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (!isDemoMode && !authLoading && authenticatedUserId) void load()
+  }, [authLoading, authenticatedUserId, isDemoMode, load])
   useEffect(() => { if (open && loaded) void load() }, [open])
 
-  if (isDemoMode) return null
+  if (isDemoMode || authLoading || !authenticatedUserId) return null
 
   const unread = items.filter((item) => !item.readAt).length
   const markRead = async (item: InAppNotification) => {
