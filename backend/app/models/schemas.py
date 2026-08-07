@@ -149,6 +149,7 @@ class TrustCardRequest(BaseModel):
     role: str | None = None
     jobDescription: str | None = None
     resumeText: str | None = None
+    forceRegenerate: bool = False
 
 
 class PersistedAnalysisSessionResponse(BaseModel):
@@ -225,6 +226,23 @@ class EmployeeReliabilityCard(BaseModel):
     limitations: list[str] = Field(default_factory=list)
 
 
+class EmployeeReliabilityCounts(BaseModel):
+    meaningfulResponses: int = Field(ge=0)
+    completedReferrals: int = Field(ge=0)
+    recentMeaningfulResponses: int = Field(ge=0)
+    overdueUnansweredRequests: int = Field(ge=0)
+
+
+class EmployeeReliabilityBadge(BaseModel):
+    badgeType: Literal["new_referrer", "verified_referrer", "reliable_referrer", "developing_referrer"]
+    label: Literal["New Referrer", "Verified Referrer", "Reliable Referrer", "Developing Referrer"]
+    reliabilityLevel: Literal["Excellent", "Strong", "Verified", "Building history"]
+    basis: str
+    relevantCounts: EmployeeReliabilityCounts
+    lastCalculatedAt: datetime
+    limitations: list[str] = Field(default_factory=list)
+
+
 class EmployeeDirectoryItem(BaseModel):
     id: UUID
     name: str
@@ -246,10 +264,11 @@ class EmployeeDirectoryItem(BaseModel):
     preferredMessageLength: Literal["concise", "standard", "detailed"] = "concise"
     referralGuidelines: str | None = None
     referralCategories: list[str] = Field(default_factory=list)
+    aiApplyOptIn: bool = True
     acceptingRequests: bool = False
     activeRequestCount: int = Field(default=0, ge=0)
     maxActiveRequests: int = Field(default=5, ge=0, le=50)
-    reliability: EmployeeReliabilityCard
+    reliabilityBadge: EmployeeReliabilityBadge
 
 
 class EmployeeProfessionalProfile(BaseModel):
@@ -274,10 +293,12 @@ class EmployeeProfessionalProfile(BaseModel):
     referralGuidelines: str | None = None
     declineReasonCodes: list[str] = Field(default_factory=list)
     referralCategories: list[str] = Field(default_factory=list)
+    aiApplyOptIn: bool = True
     averageResponseTimeValue: float | None = Field(default=None, ge=0)
     averageResponseTimeUnit: Literal["hours"] = "hours"
     respondedRequestCount: int = Field(default=0, ge=0)
     responseTimeAvailable: bool = False
+    reliabilityBadge: EmployeeReliabilityBadge
 
 
 class EmployeeProfessionalProfileUpdate(BaseModel):
@@ -309,6 +330,14 @@ class EmployeeProfessionalProfileUpdate(BaseModel):
         "internship", "full_time", "apprenticeship", "graduate_program",
         "campus_hiring", "contract"
     ]] = Field(default_factory=list)
+    aiApplyOptIn: bool = True
+
+    @field_validator("company", mode="before")
+    @classmethod
+    def normalize_company(cls, value: object) -> object:
+        if isinstance(value, str):
+            return " ".join(value.split())
+        return value
 
     @field_validator("supportedCompanies", "supportedRoles", "supportedDepartments")
     @classmethod
@@ -335,6 +364,19 @@ class EmployeeProfessionalProfileUpdate(BaseModel):
         return normalized
 
 
+class TrustScoreEvidenceItem(BaseModel):
+    id: str = Field(min_length=4, max_length=64)
+    status: Literal[
+        "Verified evidence", "Resume supported", "Self-declared",
+        "Needs clarification", "Missing evidence",
+    ]
+    factLabel: str = Field(min_length=1, max_length=180)
+    snippet: str | None = Field(default=None, max_length=240)
+    resumeSection: str | None = Field(default=None, max_length=80)
+    whyItAffectsScore: str = Field(min_length=1, max_length=500)
+    sourceType: Literal["resume", "derived", "missing"]
+
+
 class TrustScoreFactor(BaseModel):
     key: str
     label: str
@@ -345,6 +387,7 @@ class TrustScoreFactor(BaseModel):
     contribution: float
     reason: str
     details: dict[str, object] = Field(default_factory=dict)
+    evidenceItems: list[TrustScoreEvidenceItem] = Field(default_factory=list, max_length=12)
     formulaOrBasis: str | None = None
     evidenceFound: list[str] = Field(default_factory=list)
     evidenceMissing: list[str] = Field(default_factory=list)
@@ -379,6 +422,14 @@ class TrustCardResponse(BaseModel):
     scoreReasons: list[str]
     aiSummary: str
     education: StudentEducation = Field(default_factory=StudentEducation)
+    inputKey: str | None = None
+    jobDescriptionHash: str | None = None
+    resumeContentHash: str | None = None
+    schemaVersion: str | None = None
+    generationVersion: str | None = None
+    generatedAt: datetime | None = None
+    narrativeSource: Literal["groq", "deterministic_fallback"] = "groq"
+    generationLimitations: list[str] = Field(default_factory=list)
 
 
 ReferralMessageTone = Literal[
@@ -490,6 +541,131 @@ class ReferralCompatibilityRequest(BaseModel):
     studentMessage: str = Field(default="", max_length=1_000)
 
 
+AIApplyTimeline = Literal["immediate", "within_30_days", "within_3_months", "exploring"]
+AIApplyWorkMode = Literal["onsite", "hybrid", "remote", "flexible"]
+
+
+class AIApplyGoalRequest(BaseModel):
+    targetRole: str = Field(min_length=1, max_length=200)
+    targetCompany: str = Field(min_length=1, max_length=200)
+    preferredDepartment: str | None = Field(default=None, max_length=120)
+    timeline: AIApplyTimeline | None = None
+    location: str | None = Field(default=None, max_length=160)
+    workMode: AIApplyWorkMode | None = None
+    minimumCompatibility: int | None = Field(default=None, ge=0, le=100)
+    numberOfMatches: int = Field(default=5, ge=1, le=10)
+    idempotencyKey: str = Field(min_length=8, max_length=100)
+
+    @field_validator("targetRole", "targetCompany", mode="before")
+    @classmethod
+    def normalize_required_goal_text(cls, value: object) -> object:
+        return " ".join(value.split()) if isinstance(value, str) else value
+
+    @field_validator("preferredDepartment", "location", mode="before")
+    @classmethod
+    def normalize_optional_goal_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = " ".join(value.split())
+        return normalized or None
+
+
+class AIApplyMatchReason(BaseModel):
+    positiveFactors: list[str] = Field(default_factory=list)
+    cautions: list[str] = Field(default_factory=list)
+    semanticBasis: str
+    limitations: list[str] = Field(default_factory=list)
+
+
+class AIApplyExclusionReason(BaseModel):
+    reason: str
+    count: int = Field(ge=1)
+
+
+class AIApplyEmployeeSnapshot(BaseModel):
+    id: UUID
+    name: str
+    company: str | None = None
+    designation: str | None = None
+    department: str | None = None
+    supportedRoles: list[str] = Field(default_factory=list)
+    supportedDepartments: list[str] = Field(default_factory=list)
+    availability: Literal["accepting"] = "accepting"
+
+
+class AIApplyMatch(BaseModel):
+    id: UUID
+    rank: int = Field(ge=1, le=10)
+    employee: AIApplyEmployeeSnapshot
+    compatibility: ReferralCompatibilityResponse
+    semanticSimilarity: float | None = Field(default=None, ge=0, le=100)
+    rankingScore: float = Field(ge=0, le=100)
+    relevanceSource: Literal["goal_context", "deterministic_fallback"]
+    reason: AIApplyMatchReason
+    referralRequestId: UUID | None = None
+
+
+class AIApplyGoal(BaseModel):
+    id: UUID
+    analysisId: UUID
+    trustCardId: UUID
+    targetRole: str
+    targetCompany: str
+    preferredDepartment: str | None = None
+    timeline: AIApplyTimeline | None = None
+    location: str | None = None
+    workMode: AIApplyWorkMode | None = None
+    minimumCompatibility: int = Field(ge=0, le=100)
+    numberOfMatches: int = Field(ge=1, le=10)
+    createdAt: datetime
+
+
+class AIApplyMatchRunResponse(BaseModel):
+    id: UUID
+    goal: AIApplyGoal
+    matchVersion: str
+    inputKey: str
+    vectorStatus: Literal["available", "partial", "unavailable", "not_used"]
+    eligibleEmployeeCount: int = Field(ge=0)
+    excludedEmployeeCount: int = Field(ge=0)
+    exclusionReasons: list[AIApplyExclusionReason] = Field(default_factory=list)
+    matches: list[AIApplyMatch] = Field(default_factory=list, max_length=10)
+    limitations: list[str] = Field(default_factory=list)
+    createdAt: datetime
+
+
+class AIApplyAllowanceResponse(BaseModel):
+    minimumCompatibilityThreshold: int = Field(ge=0, le=100)
+    weeklyCap: int = Field(ge=0)
+    weeklyUsed: int = Field(ge=0)
+    weeklyRemaining: int = Field(ge=0)
+    creditBalance: int = Field(ge=0)
+    available: bool
+
+
+class AIApplySubmissionRequest(BaseModel):
+    matchId: UUID
+    studentMessage: str = Field(min_length=1, max_length=1_000)
+    idempotencyKey: str = Field(min_length=8, max_length=100)
+
+    @field_validator("studentMessage", mode="before")
+    @classmethod
+    def normalize_submission_message(cls, value: object) -> object:
+        return " ".join(value.split()) if isinstance(value, str) else value
+
+
+class AIApplySubmissionResponse(BaseModel):
+    requestId: UUID
+    matchId: UUID
+    status: Literal["submitted"]
+    chargedCredits: int = Field(ge=0)
+    creditBalance: int = Field(ge=0)
+    weeklyRemaining: int = Field(ge=0)
+    compatibilityScore: int = Field(ge=0, le=100)
+    compatibilityThreshold: int = Field(ge=0, le=100)
+    idempotentReplay: bool = False
+
+
 class CreateReferralRequest(BaseModel):
     studentId: UUID | None = None
     employeeId: UUID
@@ -507,6 +683,7 @@ class ReferralRequestSummary(BaseModel):
     trustCardId: UUID
     targetRole: str
     targetCompany: str
+    employeeCompanySnapshot: str | None = None
     compatibilityScore: int | None = Field(default=None, ge=0, le=100)
     compatibilityLabel: Literal["Strong fit", "Good fit", "Review fit", "Low fit"] | None = None
     status: ReferralStatus
@@ -552,6 +729,7 @@ class EmployeeCandidateProfile(BaseModel):
 
 
 class EmployeeAnalysisSummary(BaseModel):
+    trustScore: int | None = Field(default=None, ge=0, le=100)
     overallMatch: int | None = Field(default=None, ge=0, le=100)
     roleFit: int | None = Field(default=None, ge=0, le=100)
     proofScore: int | None = Field(default=None, ge=0, le=100)
@@ -570,6 +748,7 @@ class EmployeeReferralRequestView(BaseModel):
     status: ReferralStatus
     targetRole: str
     targetCompany: str
+    employeeCompanySnapshot: str | None = None
     studentMessage: str
     employeeNote: str | None = None
     decisionReason: str | None = None
@@ -682,16 +861,28 @@ class ClaimProofEvidence(BaseModel):
 
 
 class ClaimVerificationItem(BaseModel):
+    id: str = Field(min_length=4, max_length=64)
     claim: str
-    status: Literal["Verified evidence", "Resume supported", "Self-declared", "Needs clarification"]
+    category: Literal["experience", "project", "achievement", "leadership", "quantified_impact", "skill"]
+    status: Literal[
+        "Evidence supported", "Partially supported", "Self-declared", "Needs clarification",
+        # Accepted while older persisted/API fixtures are migrated by clients.
+        "Verified evidence", "Resume supported",
+    ]
     reason: str
     resumeEvidence: list[str] = Field(default_factory=list)
+    supportingEvidenceSnippets: list[str] = Field(default_factory=list, max_length=4)
+    resumeSection: str | None = Field(default=None, max_length=80)
+    resumeContext: str | None = Field(default=None, max_length=700)
+    missingSupport: str | None = Field(default=None, max_length=500)
+    suggestedClarificationQuestion: str | None = Field(default=None, max_length=300)
     proofEvidence: list[ClaimProofEvidence] = Field(default_factory=list)
 
 
 class ClaimVerificationResponse(BaseModel):
     statusVersion: str
     claims: list[ClaimVerificationItem] = Field(default_factory=list)
+    interpretationSource: Literal["deterministic", "groq_assisted", "deterministic_fallback"] = "deterministic"
     limitation: str
 
 

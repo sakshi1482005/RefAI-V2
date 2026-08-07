@@ -37,6 +37,19 @@ is safe for a fresh project and additive for an existing RefAI project:
 12. `202607300005_remove_compatibility_request_metadata.sql`
 13. `202607310001_proof_vault.sql`
 14. `202607310002_structured_referral_decisions.sql`
+15. `202607310003_referral_status_model.sql`
+16. `202607310004_referral_submission_workflow.sql`
+17. `202608010001_in_app_notifications.sql`
+18. `202608010002_demo_risk_repairs.sql`
+19. `202608030001_employee_company_consistency.sql`
+20. `202608030002_ai_apply_goals.sql`
+21. `202608030003_ai_apply_safeguards.sql`
+
+`employee_profiles.company` is the canonical employee employer field. The final
+company-consistency migration normalizes and safely backfills missing values
+from legacy Auth metadata without replacing an existing canonical value. New
+referral requests also store `employee_company_snapshot` so later profile edits
+do not rewrite the employer context shown for a historical request.
 
 The Storage migration creates a non-public `resumes` bucket with authenticated
 owner-folder policies. Server-authorized Employee access is provided through
@@ -47,16 +60,34 @@ to persisted Trust Cards. Students can manage only their own entries; only the
 employee assigned to a linked referral can read them. Proof URLs remain external
 links or safe references—RefAI does not upload or verify proof documents.
 
-### Employee Reliability Card
+### Employee Reliability badge
 
-`GET /referral/employees` includes one deterministic Employee Reliability Card
-per directory entry. Its fixed weights are Response Consistency 30, Referral
-Completion 25, Profile Verification 20, Decision Transparency 15, and Platform
-Activity 10. Scores use discrete tiers and recorded profile/referral events.
-Declines with a recorded reason count as a response and transparent decision,
-and are excluded from the accepted-referral completion denominator. Unanswered
-requests are treated as silence only after seven days. Cards with fewer than
-three requests are explicitly provisional.
+The existing deterministic Employee Reliability model keeps its fixed weights:
+Response Consistency 30, Referral Completion 25, Profile Verification 20,
+Decision Transparency 15, and Platform Activity 10. Scores use discrete tiers
+and persisted profile/referral events. A responsible decline with a recorded
+reason counts as a meaningful response and transparent decision and is excluded
+from the accepted-referral completion denominator. Employee Viewed is not a
+response, and silence is counted only after seven days.
+
+`GET /referral/employees` and `GET /referral/employee/profile` expose a compact
+`reliabilityBadge` summary rather than the private five-metric breakdown:
+
+- `New Referrer`: fewer than three meaningful responses; no reliability
+  conclusion is presented.
+- `Reliable Referrer`: at least three meaningful responses, total reliability
+  at least 70, Response Consistency at least 25/30, Decision Transparency at
+  least 10/15, at least one meaningful response in the trailing 30 days, and no
+  overdue unanswered request.
+- `Verified Referrer`: an administrator-verified employee with sufficient
+  history who does not currently meet every Reliable Referrer rule.
+- `Developing Referrer`: sufficient history exists, but neither the verified
+  nor reliable rules apply.
+
+The API includes the qualitative level, rule basis, safe aggregate counts, the
+calculation timestamp, and limitations. It does not expose request-level
+analytics or use acceptance rate. RefAI intentionally does not publish a “Top”
+badge or employee ranking.
 
 ### Referral Compatibility
 
@@ -69,6 +100,52 @@ weights are Role Alignment 35, Department Relevance 25, Employee Preferences
 `POST /referral/requests` recalculates and persists the versioned compatibility
 snapshot; client-supplied scores are never trusted. Compatibility describes
 request appropriateness only and does not predict acceptance or hiring.
+
+### AI Apply goals and matching
+
+Apply `202608030002_ai_apply_goals.sql`, then
+`202608030003_ai_apply_safeguards.sql`, after every earlier migration. They add
+student-owned `ai_apply_goals`, `ai_apply_match_runs`, and `ai_apply_matches`
+tables with RLS, plus the employee-owned `ai_apply_opt_in` preference. Match
+runs remain review-only snapshots. A request is created only through the
+separate safeguarded submission endpoint after explicit student review.
+
+`POST /ai-apply/goals` validates the authenticated student's latest completed
+analysis and current Trust Card, filters the authorized employee directory,
+reuses `referral-compatibility-v1`, adds ChromaDB similarity as a 5% ranking
+signal, persists the versioned result, and returns the review screen payload.
+The `idempotencyKey` makes the same submission return the original run.
+
+`GET /ai-apply/goals/latest` returns the student's latest persisted goal and
+match snapshot for refresh-safe review. Other users cannot read it through RLS
+or the authenticated service.
+
+`GET /ai-apply/allowance` returns the configured server threshold, weekly usage
+and remaining allowance, and the student's credit balance. `POST
+/ai-apply/requests` accepts one reviewed match, message, and idempotency key.
+It reruns the existing deterministic quality and compatibility checks before a
+service-only PostgreSQL function serializes the student, rechecks employee
+opt-in/preferences/capacity, checks the weekly cap and credit, deducts exactly
+one credit, creates the normal submitted referral request, and records the
+ledger/batch atomically. Only successfully created AI Apply requests count
+toward the weekly cap; goals, match previews, rejected attempts, retries, and
+normal referral requests do not.
+
+Optional backend configuration:
+
+- `AI_APPLY_DEFAULT_MIN_COMPATIBILITY` (default `55`)
+- `AI_APPLY_MAX_MATCHES` (default `10`, with a hard API maximum of `10`)
+- `AI_APPLY_WEEKLY_REQUEST_CAP` (default `3`)
+- `AI_APPLY_INITIAL_CREDIT_BALANCE` (default `5`; used only when the student's
+  credit account is first created)
+- `AI_APPLY_SUBMISSION_RATE_LIMIT` (default `6` distinct idempotency keys)
+- `AI_APPLY_SUBMISSION_RATE_WINDOW_SECONDS` (default `600`)
+
+To roll Phase 4B back, first stop AI Apply submissions. Preserve referral
+requests, then drop the Phase 4B service-only functions and remove the
+`ai_apply_match_id`, `ai_apply_batch_id`, and `referral_request_id` links before
+dropping the AI Apply ledger, attempt, batch, and credit-account tables. This is
+a manual data-preserving rollback; do not delete already-created referrals.
 
 ## Structure
 - `app/api/routes/*` — one router per resource (auth, resume, match, trust-card, referral)

@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     resume_storage_bucket: str = ""
     chroma_persist_dir: str = "./chroma_data"
+    ai_apply_default_min_compatibility: int = 55
+    ai_apply_max_matches: int = 10
+    ai_apply_weekly_request_cap: int = 3
+    ai_apply_initial_credit_balance: int = 5
+    ai_apply_submission_rate_limit: int = 6
+    ai_apply_submission_rate_window_seconds: int = 600
     cors_origins: str = ",".join(REQUIRED_CORS_ORIGINS)
 
     class Config:

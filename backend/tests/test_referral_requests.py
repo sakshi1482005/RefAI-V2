@@ -2,8 +2,9 @@ from datetime import date, datetime, timezone
 from uuid import uuid4
 
 import unittest
+from pydantic import ValidationError
 
-from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeProfessionalProfileUpdate, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView, ReferralCompatibilityRequest, ReferralMessageRequest, ReferralSubmissionUpdate
+from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeProfessionalProfileUpdate, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView, ReferralCompatibilityRequest, ReferralMessageRequest, ReferralRequestDetail, ReferralSubmissionUpdate
 from app.services.referral_requests import InvalidReferralTransition, ReferralForbidden, ReferralRequestService
 
 
@@ -121,7 +122,12 @@ class ReferralRequestTests(unittest.TestCase):
 
     def create(self): return self.service.create(self.repository.student, self.payload())
 
-    def test_student_can_create_assigned_request(self): self.assertEqual(self.create()["status"], "submitted")
+    def test_student_can_create_assigned_request(self):
+        created = self.create()
+        self.assertEqual(created["status"], "submitted")
+        self.assertEqual(created["employeeCompanySnapshot"], "Acme")
+        self.assertEqual(self.repository.requests[str(created["id"])]["employee_company_snapshot"], "Acme")
+        ReferralRequestDetail.model_validate(created)
     def test_compatibility_is_calculated_before_create_and_persisted(self):
         self.repository.employee_profiles[self.repository.employee].update(
             department="Engineering",
@@ -249,22 +255,49 @@ class ReferralRequestTests(unittest.TestCase):
         self.assertEqual(directory[0]["designation"], "Engineer")
         self.assertTrue(directory[0]["acceptingRequests"])
         self.assertEqual(directory[0]["supportedRoles"], ["Software Engineer"])
-        self.assertEqual(directory[0]["reliability"]["maximumScore"], 100)
-        self.assertEqual(len(directory[0]["reliability"]["metrics"]), 5)
+        self.assertEqual(directory[0]["reliabilityBadge"]["badgeType"], "new_referrer")
+        self.assertEqual(directory[0]["reliabilityBadge"]["relevantCounts"]["meaningfulResponses"], 0)
+        self.assertNotIn("metrics", directory[0]["reliabilityBadge"])
+    def test_canonical_company_wins_over_conflicting_auth_metadata(self):
+        self.repository.employee_profiles[self.repository.employee]["company"] = "  Canonical   Company  "
+        self.repository.auth_metadata[self.repository.employee] = {"company_name": "Stale Metadata Company"}
+        directory = self.service.employee_directory(self.repository.student)
+        profile = self.service.employee_profile(self.repository.employee)
+        self.assertEqual(directory[0]["company"], "Canonical Company")
+        self.assertEqual(profile["company"], "Canonical Company")
     def test_employee_directory_supports_legacy_company_metadata(self):
         self.repository.list_employees = lambda: [{"id": self.repository.employee, "full_name": "Employee One"}]
-        self.repository.auth_metadata[self.repository.employee] = {"company_name": "Legacy Co", "headline": "Senior Engineer"}
+        self.repository.employee_profiles.clear()
+        self.repository.auth_metadata[self.repository.employee] = {"company_name": "  Legacy   Co  ", "headline": "Senior Engineer"}
         directory = self.service.employee_directory(self.repository.student)
         self.assertEqual(directory[0]["company"], "Legacy Co")
         self.assertEqual(directory[0]["designation"], "Senior Engineer")
+        self.assertEqual(self.service.employee_profile(self.repository.employee)["company"], "Legacy Co")
+    def test_student_preferred_company_is_not_used_as_employee_employer(self):
+        self.repository.employee_profiles.clear()
+        self.repository.auth_metadata[self.repository.employee] = {"preferred_company": "Not An Employer"}
+        self.assertIsNone(self.service.employee_directory(self.repository.student)[0]["company"])
+        self.assertIsNone(self.service.employee_profile(self.repository.employee)["company"])
     def test_employee_can_upsert_professional_profile_and_directory_uses_it(self):
-        saved = self.service.save_employee_profile(self.repository.employee, EmployeeProfessionalProfileUpdate(company="  RefAI Labs  ", designation="  Staff Engineer  "))
+        saved = self.service.save_employee_profile(self.repository.employee, EmployeeProfessionalProfileUpdate(company="  RefAI   Labs  ", designation="  Staff Engineer  "))
         self.assertEqual((saved["company"], saved["designation"]), ("RefAI Labs", "Staff Engineer"))
         loaded = self.service.employee_profile(self.repository.employee)
-        self.assertEqual(loaded, saved)
+        self.assertEqual((loaded["company"], loaded["designation"]), (saved["company"], saved["designation"]))
+        self.assertEqual(loaded["reliabilityBadge"]["badgeType"], "new_referrer")
         directory = self.service.employee_directory(self.repository.student)
         self.assertEqual((directory[0]["company"], directory[0]["designation"]), ("RefAI Labs", "Staff Engineer"))
         self.assertEqual(len(self.repository.employee_profiles), 1)
+    def test_employee_company_rejects_whitespace_only_input(self):
+        with self.assertRaises(ValidationError):
+            EmployeeProfessionalProfileUpdate(company="   \t  ")
+    def test_referral_company_snapshot_does_not_change_after_profile_update(self):
+        created = self.create()
+        self.service.save_employee_profile(
+            self.repository.employee,
+            EmployeeProfessionalProfileUpdate(company="New Employer"),
+        )
+        refreshed = self.service.get(self.repository.student, str(created["id"]))
+        self.assertEqual(refreshed["employeeCompanySnapshot"], "Acme")
     def test_employee_preferences_are_structured_and_persisted(self):
         saved = self.service.save_employee_profile(self.repository.employee, EmployeeProfessionalProfileUpdate(
             company="Acme",
@@ -315,6 +348,7 @@ class ReferralRequestTests(unittest.TestCase):
         resume = self.service.employee_resume(self.repository.employee, request_id)
         card = self.service.employee_trust_card(self.repository.employee, request_id)
         self.assertEqual(detail["candidate"]["studentName"], "Student One")
+        self.assertEqual(detail["analysis"]["trustScore"], 82)
         self.assertEqual(detail["candidate"]["college"], "RefAI College")
         self.assertEqual(detail["candidate"]["degree"], "B.Tech")
         self.assertEqual(detail["candidate"]["graduationYear"], "2026")
@@ -328,6 +362,12 @@ class ReferralRequestTests(unittest.TestCase):
         EmployeeReferralRequestView.model_validate(detail)
         EmployeeResumeAccess.model_validate(resume)
         EmployeeTrustCardView.model_validate(card)
+    def test_legacy_employee_review_without_trust_score_remains_valid(self):
+        request = self.create(); request_id = str(request["id"])
+        self.repository.cards[self.repository.card_id]["payload"].pop("trustScore", None)
+        detail = self.service.employee_request_detail(self.repository.employee, request_id)
+        self.assertIsNone(detail["analysis"]["trustScore"])
+        EmployeeReferralRequestView.model_validate(detail)
     def test_unassigned_employee_cannot_retrieve_employee_resources(self):
         request_id = str(self.create()["id"])
         for operation in (self.service.employee_request_detail, self.service.employee_resume, self.service.employee_trust_card):

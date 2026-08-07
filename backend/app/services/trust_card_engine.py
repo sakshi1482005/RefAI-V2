@@ -2,6 +2,7 @@ from app.services.groq_client import AIServiceUnavailable, generate_trust_summar
 from app.services.requirement_extractor import PRIORITY_WEIGHT, build_gap, extract_requirements, requirement_occurrences
 from app.services.trust_score import compute_candidate_trust_score
 import re
+from time import perf_counter
 
 
 class InsufficientJobRequirements(ValueError):
@@ -144,10 +145,15 @@ def build_trust_card(
     job_description: str,
     similarity_provider=None,
     relevance_source: str = "job_description",
+    timing_callback=None,
 ) -> dict:
+    match_started = perf_counter()
     analysis = build_match_analysis(resume_text, job_description, role)
+    if timing_callback:
+        timing_callback("match_analysis", perf_counter() - match_started)
     match_score = {key: analysis[key] for key in ("overall", "roleFit", "proof", "gaps")}
     confidence = analysis["confidence"]
+    score_started = perf_counter()
     trust_result = compute_candidate_trust_score(
         resume_text,
         job_description,
@@ -155,6 +161,8 @@ def build_trust_card(
         similarity_provider=similarity_provider,
         relevance_source=relevance_source,
     )
+    if timing_callback:
+        timing_callback("deterministic_score", perf_counter() - score_started)
     trust_score = trust_result["trustScore"]
     if trust_score >= 75:
         referral_readiness = "Ready to request referral"
@@ -166,14 +174,21 @@ def build_trust_card(
         referral_readiness = "Not ready yet"
         recommendation = "Not ready yet"
 
+    narrative_started = perf_counter()
+    narrative_source = "groq"
+    generation_limitations = []
     try:
         summary = generate_trust_summary(resume_text, job_description, match_score)
     except AIServiceUnavailable:
+        narrative_source = "deterministic_fallback"
+        generation_limitations = ["The optional Groq narrative was unavailable; deterministic evidence and score data were preserved."]
         summary = (
             f"The structured analysis calculated {match_score['roleFit']}% Role Fit and "
             f"{match_score['proof']}% Proof. The optional AI narrative summary is temporarily "
             "unavailable; review the returned strengths, evidence, missing skills, and action plan."
         )
+    if timing_callback:
+        timing_callback("groq_narrative", perf_counter() - narrative_started)
     risk_signals = [f"Missing requirement: {skill}" for skill in analysis["missingSkills"][:5]]
     if not risk_signals:
         risk_signals = ["No major requirement gaps were identified by the lexical analysis."]
@@ -200,4 +215,6 @@ def build_trust_card(
         "scoreBreakdown": trust_result["scoreBreakdown"],
         "scoreReasons": analysis["scoreReasons"],
         "aiSummary": summary,
+        "narrativeSource": narrative_source,
+        "generationLimitations": generation_limitations,
     }

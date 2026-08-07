@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
+from hashlib import sha256
 import re
 from typing import Protocol
 
@@ -73,6 +74,88 @@ def _segments(text: str) -> list[str]:
         for segment in re.split(r"[\n\r]+|(?<=[.!?;])\s+|[•●▪]", text)
         if segment.strip()
     ]
+
+
+_SECTION_NAMES = {
+    "summary": "Summary",
+    "profile": "Summary",
+    "skills": "Skills",
+    "technical skills": "Skills",
+    "experience": "Experience",
+    "work experience": "Experience",
+    "employment": "Experience",
+    "internship": "Experience",
+    "internships": "Experience",
+    "projects": "Projects",
+    "project": "Projects",
+    "education": "Education",
+    "certifications": "Certifications",
+    "certification": "Certifications",
+    "achievements": "Achievements",
+    "awards": "Achievements",
+}
+
+
+def _sectioned_resume_records(resume_text: str) -> list[dict[str, str]]:
+    """Return bounded resume snippets with their nearest observable section heading."""
+    records: list[dict[str, str]] = []
+    current_section = "Extracted resume text"
+    for raw_line in resume_text.splitlines():
+        line = re.sub(r"\s+", " ", raw_line).strip(" \t-:|\u2022\u25cf\u25aa")
+        if not line:
+            continue
+        heading = re.sub(r"[^a-z ]", "", line.casefold()).strip()
+        if heading in _SECTION_NAMES and len(line.split()) <= 4:
+            current_section = _SECTION_NAMES[heading]
+            continue
+        for segment in re.split(r"(?<=[.!?;])\s+", line):
+            snippet = _compact_snippet(segment, 220)
+            if snippet:
+                records.append({"snippet": snippet, "section": current_section})
+    if not records and resume_text.strip():
+        records = [
+            {"snippet": _compact_snippet(segment, 220), "section": "Extracted resume text"}
+            for segment in _segments(resume_text)[:20]
+        ]
+    return records[:80]
+
+
+def _evidence_reference(component_key: str, status: str, label: str, snippet: str | None) -> str:
+    material = "|".join((component_key, status, label, snippet or "no-direct-snippet"))
+    return f"EV-{sha256(material.encode('utf-8')).hexdigest()[:10].upper()}"
+
+
+def _record_for_snippet(records: list[dict[str, str]], snippet: str) -> dict[str, str] | None:
+    normalized = re.sub(r"\s+", " ", snippet).strip().casefold()
+    return next(
+        (
+            record for record in records
+            if normalized == record["snippet"].casefold()
+            or normalized in record["snippet"].casefold()
+        ),
+        None,
+    )
+
+
+def _structured_evidence_item(
+    component_key: str,
+    status: str,
+    label: str,
+    why: str,
+    *,
+    snippet: str | None = None,
+    section: str | None = None,
+    source_type: str = "resume",
+) -> dict[str, str | None]:
+    return {
+        "id": _evidence_reference(component_key, status, label, snippet),
+        "status": status,
+        "factLabel": _compact_snippet(label, 180),
+        "snippet": _compact_snippet(snippet, 220) if snippet else None,
+        "resumeSection": _compact_snippet(section, 80) if section else None,
+        "whyItAffectsScore": _compact_snippet(why, 500),
+        "sourceType": source_type,
+    }
 
 
 def _contains_alias(text: str, alias: str) -> bool:
@@ -391,6 +474,170 @@ def _resume_evidence_completeness(resume_text: str) -> tuple[int, dict]:
     return sum(signals.values()), {"observableSignals": signals}
 
 
+def _matching_record(
+    records: list[dict[str, str]],
+    snippet: str | None = None,
+    pattern: re.Pattern[str] | None = None,
+) -> dict[str, str] | None:
+    if snippet:
+        matched = _record_for_snippet(records, snippet)
+        if matched:
+            return matched
+    if pattern:
+        return next((record for record in records if pattern.search(record["snippet"])), None)
+    return None
+
+
+def _component_evidence_items(
+    key: str,
+    details: dict,
+    resume_text: str,
+    records: list[dict[str, str]],
+) -> list[dict[str, str | None]]:
+    items: list[dict[str, str | None]] = []
+    snippets = details.get("evidenceSnippets") or {}
+
+    def strongest_snippet(values: list[str]) -> str | None:
+        return next(
+            (
+                value for value in values
+                if _IMPLEMENTATION.search(value) or _PROJECT.search(value)
+                or _EXPERIENCE.search(value) or _MEASURABLE.search(value)
+            ),
+            values[0] if values else None,
+        )
+
+    def add_resume(label: str, snippet: str, why: str, status: str | None = None) -> None:
+        record = _matching_record(records, snippet)
+        evidence_status = status or (
+            "Resume supported"
+            if _IMPLEMENTATION.search(snippet) or _PROJECT.search(snippet) or _EXPERIENCE.search(snippet)
+            else "Self-declared"
+        )
+        items.append(_structured_evidence_item(
+            key,
+            evidence_status,
+            label,
+            why,
+            snippet=record["snippet"] if record else _compact_snippet(snippet, 220),
+            section=record["section"] if record else "Extracted resume text",
+        ))
+
+    def add_missing(label: str, why: str) -> None:
+        items.append(_structured_evidence_item(
+            key,
+            "Missing evidence",
+            label,
+            why,
+            source_type="missing",
+        ))
+
+    if key == "roleRequirementMatch":
+        required = list(details.get("requiredMatched") or [])
+        preferred = list(details.get("preferredMatched") or [])
+        required_names = set(required)
+        for requirement in [*required, *preferred]:
+            available = snippets.get(requirement) or []
+            if available:
+                priority = "required" if requirement in required_names else "preferred"
+                add_resume(
+                    requirement,
+                    available[0],
+                    f"This line supports a matched {priority} requirement in the deterministic 70/30 coverage calculation.",
+                )
+        for requirement in [
+            *(details.get("requiredMissing") or []),
+            *(details.get("preferredMissing") or []),
+        ][:3]:
+            add_missing(
+                requirement,
+                "No resume line matched this extracted requirement, so it received no requirement-coverage credit.",
+            )
+    elif key == "evidenceStrength":
+        for requirement, tier in (details.get("requirementTiers") or {}).items():
+            available = snippets.get(requirement) or []
+            selected = strongest_snippet(available)
+            if tier and selected:
+                status = "Self-declared" if tier <= 20 else "Resume supported"
+                add_resume(
+                    requirement,
+                    selected,
+                    f"This observable context placed the claim in the {tier}% evidence tier before weighting.",
+                    status,
+                )
+            elif not tier:
+                add_missing(
+                    requirement,
+                    "No supporting resume context was observed, so this requirement received a 0% evidence tier.",
+                )
+    elif key == "projectExperienceRelevance":
+        for snippet in (details.get("evidenceSections") or [])[:4]:
+            add_resume(
+                "Project or experience evidence",
+                snippet,
+                "This project or experience description was used for semantic relevance and deterministic implementation checks.",
+                "Resume supported" if _IMPLEMENTATION.search(snippet) else "Self-declared",
+            )
+        for responsibility in (details.get("missingResponsibilities") or [])[:2]:
+            add_missing(
+                responsibility,
+                "No comparable project or experience description was observed for this responsibility or role expectation.",
+            )
+    elif key == "skillDepth":
+        for requirement, level in (details.get("requirementDepth") or {}).items():
+            available = snippets.get(requirement) or []
+            selected = strongest_snippet(available)
+            if level and selected:
+                add_resume(
+                    requirement,
+                    selected,
+                    f"This context contributed to the deterministic {level}% skill-depth tier.",
+                    "Self-declared" if level <= 25 else "Resume supported",
+                )
+            elif not level:
+                add_missing(
+                    requirement,
+                    "No observable resume context demonstrated depth for this target requirement.",
+                )
+    else:
+        signal_patterns: dict[str, tuple[str, re.Pattern[str] | None]] = {
+            "dates": ("Dates", _DATE),
+            "educationDetails": ("Education details", _EDUCATION),
+            "projectDescriptions": ("Project descriptions", _PROJECT),
+            "validLinks": ("Structurally valid links", _LINK),
+            "chronology": ("Chronology", _DATE),
+            "quantifiedEvidence": ("Quantified evidence", _MEASURABLE),
+            "consistency": ("Date consistency", _DATE),
+        }
+        for signal, points in (details.get("observableSignals") or {}).items():
+            label, pattern = signal_patterns[signal]
+            record = _matching_record(records, pattern=pattern)
+            if points:
+                items.append(_structured_evidence_item(
+                    key,
+                    "Resume supported",
+                    label,
+                    f"This observable resume signal contributed {points}% to the completeness basis before the 10-point weighting.",
+                    snippet=record["snippet"] if record else None,
+                    section=record["section"] if record else None,
+                    source_type="resume" if record else "derived",
+                ))
+            else:
+                status = "Needs clarification" if signal == "consistency" and _has_date_contradiction(resume_text) else "Missing evidence"
+                items.append(_structured_evidence_item(
+                    key,
+                    status,
+                    label,
+                    "A contradictory date range needs manual clarification."
+                    if status == "Needs clarification"
+                    else "This observable completeness signal was not found and contributed no points.",
+                    snippet=record["snippet"] if status == "Needs clarification" and record else None,
+                    section=record["section"] if status == "Needs clarification" and record else None,
+                    source_type="resume" if status == "Needs clarification" and record else "missing",
+                ))
+    return items[:8]
+
+
 def compute_candidate_trust_score(
     resume_text: str,
     job_description: str,
@@ -399,6 +646,7 @@ def compute_candidate_trust_score(
     relevance_source: str = "job_description",
 ) -> dict:
     """Single source of truth for the versioned Candidate Trust Score."""
+    evidence_records = _sectioned_resume_records(resume_text)
     requirements = extract_requirements(job_description)
     skill_requirements = [
         requirement for requirement in requirements
@@ -449,6 +697,9 @@ def compute_candidate_trust_score(
                 "maximumContributionPoints": weight,
             }
         explanation = _component_explanation(key, basis_percentage, contribution, weight, details)
+        evidence_items = _component_evidence_items(
+            key, details, resume_text, evidence_records,
+        )
         breakdown.append({
             "key": key,
             "label": labels[key],
@@ -459,6 +710,7 @@ def compute_candidate_trust_score(
             "contribution": contribution,
             "reason": _component_reason(key, basis_percentage, details),
             "details": details,
+            "evidenceItems": evidence_items,
             **explanation,
         })
     overall = sum(item["contribution"] for item in breakdown)

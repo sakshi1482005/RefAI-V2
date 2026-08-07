@@ -7,6 +7,7 @@ from app.services.trust_card_engine import build_match_analysis
 from app.services.improvement_simulator import build_improvement_simulator
 from app.services.analysis_reliability import assess_analysis_reliability
 from app.services.notifications import create_notification
+from app.services.trust_card_cache import is_current_trust_card
 
 
 class StudentPersistenceError(Exception):
@@ -176,6 +177,9 @@ class StudentPersistenceService:
             raise StudentAnalysisNotFound("Persisted resume analysis was not found")
         return row
 
+    def latest_trust_card(self, student_id: str, analysis_id: str) -> dict[str, Any] | None:
+        return self.repository.latest_trust_card(student_id, analysis_id)
+
     @staticmethod
     def _education(row: dict[str, Any] | None, metadata: dict[str, Any]) -> dict[str, Any]:
         # student_profiles is canonical. Metadata only supports legacy users who
@@ -269,7 +273,7 @@ class StudentPersistenceService:
             }
         card = self.repository.latest_trust_card(student_id, str(row["id"]))
         trust_card = None
-        if card:
+        if card and is_current_trust_card(card, row):
             payload = {
                 **card["payload"],
                 "weaknesses": card["payload"].get("weaknesses", analysis["weaknesses"]),
@@ -279,12 +283,6 @@ class StudentPersistenceService:
             education = payload.get("education") or {
                 "college": None, "degree": None, "branch": None, "graduationYear": None,
             }
-            try:
-                education = self.get_education(student_id)
-            except Exception:
-                # The generated card remains readable if optional profile enrichment
-                # is temporarily unavailable.
-                pass
             trust_card = {"id": card["id"], **payload, "education": education}
         return {
             "analysisId": row["id"], "upload": row["upload_payload"],

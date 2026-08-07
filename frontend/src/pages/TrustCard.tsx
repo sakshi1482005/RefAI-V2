@@ -5,11 +5,12 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../components/feedback/ToastProvider'
 import { useEffect, useMemo, useState } from 'react'
 import { useAnalysisSessionResource } from '../hooks/useAnalysisSession'
+import { setAuthenticatedTrustCardResource, useTrustCardResource } from '../hooks/useTrustCardResource'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useDemoMode } from '../context/DemoModeContext'
 import ConfettiBurst from '../components/feedback/ConfettiBurst'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
-import { } from '../lib/demoData'
+import { demoClaimVerification } from '../lib/demoData'
 import TrustScoreExplanation from '../components/dashboard/TrustScoreExplanation'
 import { getStudentWorkflowState } from '../lib/studentWorkflow'
 import ActionPlanPanel from '../components/dashboard/ActionPlanPanel'
@@ -20,20 +21,24 @@ import { friendlyErrorMessage } from '../lib/requestSafety'
 import ProofVaultPanel from '../components/dashboard/ProofVaultPanel'
 import ClaimVerificationPanel from '../components/dashboard/ClaimVerificationPanel'
 import ImprovementSimulatorPanel from '../components/dashboard/ImprovementSimulatorPanel'
+import { api } from '../lib/apiClient'
+import { parseTrustCardResponse } from '../lib/resumeContract'
 
 export default function TrustCard() {
   const { profile } = useCurrentUser()
-  const { isDemoMode } = useDemoMode()
+  const { isDemoMode, authenticatedUserId } = useDemoMode()
   const navigate = useNavigate()
   const location = useLocation()
   const { toast } = useToast()
   const routedSession = (location.state as { analysisSession?: AnalysisSession } | null)?.analysisSession
   const analysisResource = useAnalysisSessionResource(routedSession)
   const analysisSession = analysisResource.session
+  const trustCardResource = useTrustCardResource({ analysisId: analysisSession.analysisId, initialCard: analysisSession.trustCard })
   const workflow = getStudentWorkflowState({ profile, session: analysisSession })
-  const { trustCard } = analysisSession
+  const trustCard = trustCardResource.card ?? analysisSession.trustCard
   const [copied, setCopied] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
   const candidateName = trustCard?.candidateName || profile?.fullName || 'Candidate'
   const summary = trustCard?.aiSummary ?? ''
   const scoreReasons = trustCard?.scoreReasons ?? []
@@ -94,16 +99,35 @@ export default function TrustCard() {
     }
   }
 
-  if (analysisResource.loading && !trustCard) {
+  const regenerateTrustCard = async () => {
+    if (!authenticatedUserId || !analysisSession.analysisId || regenerating) return
+    setRegenerating(true)
+    try {
+      const { data, status } = await api.post<unknown>('/trust-card/generate', {
+        analysisId: analysisSession.analysisId,
+        candidateName: profile?.fullName || profile?.email || 'Candidate',
+        forceRegenerate: true,
+      }, { timeout: 45_000 })
+      const regenerated = parseTrustCardResponse(data, status)
+      setAuthenticatedTrustCardResource(authenticatedUserId, analysisSession.analysisId, regenerated)
+      toast({ title: 'Trust Card regenerated', description: 'The current analysis inputs were recalculated and saved.', tone: 'success' })
+    } catch (error) {
+      toast({ title: 'Trust Card could not be regenerated', description: friendlyErrorMessage(error, 'Please retry.'), tone: 'error' })
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  if ((analysisResource.loading || trustCardResource.loadingPersisted) && !trustCard) {
     return <PageShell eyebrow="Trust card" title="Loading Trust Card..." description="RefAI is loading your latest persisted Trust Card.">
       <Card className="p-6 sm:p-8"><div className="space-y-4"><Skeleton className="h-8 w-64" /><Skeleton className="h-48 w-full" /><Skeleton className="h-24 w-full" /></div></Card>
     </PageShell>
   }
 
-  if (analysisResource.error && !trustCard) {
+  if ((analysisResource.error || trustCardResource.error) && !trustCard) {
     return <PageShell eyebrow="Trust card" title="Could not load Trust Card" description="Your saved Trust Card could not be retrieved from the backend.">
-      <InlineFeedback tone="error">{friendlyErrorMessage(analysisResource.error, 'Could not load the saved Trust Card. Please retry.')}</InlineFeedback>
-      <div className="mt-6 flex flex-wrap gap-3"><PrimaryButton onClick={analysisResource.retry}><RefreshCw className="mr-2 size-4" />Retry</PrimaryButton><SecondaryButton onClick={() => navigate('/dashboard/resume-analysis')}>Back to Analysis</SecondaryButton></div>
+      <InlineFeedback tone="error">{friendlyErrorMessage(analysisResource.error || trustCardResource.error, 'Could not load the saved Trust Card. Please retry.')}</InlineFeedback>
+      <div className="mt-6 flex flex-wrap gap-3"><PrimaryButton onClick={() => { analysisResource.retry(); void trustCardResource.prefetch() }}><RefreshCw className="mr-2 size-4" />Retry</PrimaryButton><SecondaryButton onClick={() => navigate('/dashboard/resume-analysis')}>Back to Analysis</SecondaryButton></div>
     </PageShell>
   }
 
@@ -117,6 +141,7 @@ export default function TrustCard() {
           <SecondaryButton onClick={() => navigate('/dashboard/resume-analysis')}>Back to Analysis</SecondaryButton>
           <SecondaryButton onClick={() => navigate('/dashboard#ai-recommendations')}>Next: AI Recommendations</SecondaryButton>
           <SecondaryButton onClick={copySummary} disabled={!summary} disabledReason="Generate a Trust Card first">{copied ? <><Check className="mr-2 size-4 text-emerald-600" />Copied</> : 'Copy summary'}</SecondaryButton>
+          {!isDemoMode && trustCard ? <SecondaryButton onClick={regenerateTrustCard} loading={regenerating}><RefreshCw className="mr-2 size-4" />Regenerate</SecondaryButton> : null}
           <PrimaryButton onClick={shareTrustCard} disabled={!trustCard} disabledReason="Generate a Trust Card first">
             Share with employee
             <ArrowRight className="ml-2 size-4" />
@@ -124,7 +149,11 @@ export default function TrustCard() {
         </div>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+      {!trustCard && trustCardResource.notFound ? <div className="mb-6"><InlineFeedback tone="info">No valid persisted Trust Card is available for this analysis. Return to the completed analysis to generate one.</InlineFeedback></div> : null}
+      {trustCard?.narrativeSource === 'deterministic_fallback' ? <div className="mb-6"><InlineFeedback tone="info">The deterministic Candidate Trust Score is complete. The optional Groq narrative was unavailable, so RefAI saved a grounded fallback summary.</InlineFeedback></div> : null}
+      <TrustScoreExplanation isDemoMode={isDemoMode} trustCard={trustCard} />
+      {isDemoMode ? <div className="mt-6"><ClaimVerificationPanel initialResult={demoClaimVerification} /></div> : trustCard?.id ? <div className="mt-6"><ClaimVerificationPanel trustCardId={trustCard.id} /></div> : null}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <Card className="overflow-hidden bg-slate-950 text-white">
           <div className="border-b border-white/10 p-6 sm:p-8">
             <div className="flex items-center justify-between">
@@ -229,9 +258,7 @@ export default function TrustCard() {
       </div>
       <ActionPlanPanel className="mt-6" plan={trustCard?.actionPlan ?? []} allGaps={trustCard?.missingRequirements ?? []} />
       {!isDemoMode ? <div className="mt-6"><ProofVaultPanel editable trustCardId={trustCard?.id} /></div> : null}
-      {!isDemoMode && trustCard?.id ? <div className="mt-6"><ClaimVerificationPanel trustCardId={trustCard.id} /></div> : null}
       {!isDemoMode && trustCard?.id ? <div className="mt-6"><ImprovementSimulatorPanel /></div> : null}
-      <TrustScoreExplanation isDemoMode={isDemoMode} trustCard={trustCard} />
       <AITransparencyPanel session={analysisSession} isDemoMode={isDemoMode} includeEvidenceDetails />
     </PageShell></>
   )

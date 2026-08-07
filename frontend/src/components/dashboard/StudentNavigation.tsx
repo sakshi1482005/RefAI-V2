@@ -3,6 +3,7 @@ import {
   FileText,
   LayoutDashboard,
   ShieldCheck,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
@@ -17,8 +18,6 @@ export const studentNavItems: StudentNavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Resume', href: '/dashboard/resume', icon: FileText },
   { label: 'Trust Card', href: '/dashboard/trust-card', icon: ShieldCheck },
-  { label: 'Employees', href: '/dashboard#find-referrers', icon: Building2 },
-  { label: 'Referral Requests', href: '/dashboard#referral-requests', icon: ShieldCheck },
 ]
 
 const destination = (href: string) => {

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import auth, resume, match, trust_card, referral, notifications
+from app.api.routes import ai_apply, auth, resume, match, trust_card, referral, notifications
 from app.core.config import settings
 
 
@@ -46,6 +46,7 @@ app.include_router(match.router)
 app.include_router(trust_card.router)
 app.include_router(referral.router)
 app.include_router(notifications.router)
+app.include_router(ai_apply.router)
 
 
 @app.get("/health")

@@ -24,7 +24,8 @@ import {
   X,
 } from "lucide-react";
 import { Avatar, Badge, Card, EmptyState, IconButton, InlineFeedback, Logo, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton, SectionHeading, Skeleton } from "../components/dashboard/primitives";
-import { useAnalysisSession } from "../hooks/useAnalysisSession";
+import { useAnalysisSessionResource } from "../hooks/useAnalysisSession";
+import { useTrustCardResource } from "../hooks/useTrustCardResource";
 import StudentNavigation from "../components/dashboard/StudentNavigation";
 import { hasReachedDemoStage, useDemoMode } from "../context/DemoModeContext";
 import DemoModeBanner from "../components/dashboard/DemoModeBanner";
@@ -36,11 +37,12 @@ import ConfettiBurst from "../components/feedback/ConfettiBurst";
 import { getStudentWorkflowState } from "../lib/studentWorkflow";
 import { api } from "../lib/apiClient";
 import { friendlyErrorMessage } from "../lib/requestSafety";
-import type { EmployeeDirectoryItem, EmployeeReliabilityCard, ReferralCompatibility, ReferralMessageAction, ReferralMessageResult, ReferralMessageTone, ReferralQuality, ReferralRequestSummary, ReferralStatus } from "../types";
+import type { EmployeeDirectoryItem, EmployeeReliabilityBadge as EmployeeReliabilityBadgeData, ReferralCompatibility, ReferralMessageAction, ReferralMessageResult, ReferralMessageTone, ReferralQuality, ReferralRequestSummary, ReferralStatus } from "../types";
 import ReferralJourneyTimeline from "../components/dashboard/ReferralJourneyTimeline";
 import ReferralReadinessGate from "../components/dashboard/ReferralReadinessGate";
 import { calculateReferralReadiness } from "../lib/referralReadiness";
 import NotificationCentre from "../components/dashboard/NotificationCentre";
+import EmployeeReliabilityBadge from "../components/dashboard/EmployeeReliabilityBadge";
 import { educationLines } from "../lib/education";
 
 /*
@@ -87,13 +89,14 @@ interface Employee {
   activeRequestCount: number;
   maxActiveRequests: number;
   preferredCandidateLevels: string[];
-  reliability: EmployeeReliabilityCard;
+  reliabilityBadge: EmployeeReliabilityBadgeData;
 }
 
 interface ReferralRequest {
   id: string;
   employee: string;
   initials: string;
+  employeeCompany: string | null;
   company: string;
   role: string;
   date: string;
@@ -117,17 +120,12 @@ const statusTones: Record<Status, BadgeTone> = {
   Expired: "danger",
 };
 
-const demoReliability: EmployeeReliabilityCard = {
-  label: 'Strong', score: 82, maximumScore: 100, isProvisional: false,
-  averageResponseHours: 18, requestsReviewed: 12, completedReferrals: 5,
-  metrics: [
-    { key: 'response_consistency', label: 'Response Consistency', score: 26, maximumScore: 30, basis: 'Demo response history.', evidence: ['Most requests received a timely response.'], limitations: ['Demo data only.'] },
-    { key: 'referral_completion', label: 'Referral Completion', score: 21, maximumScore: 25, basis: 'Demo completed referrals among accepted requests.', evidence: ['Accepted referrals were usually completed.'], limitations: ['Demo data only.'] },
-    { key: 'profile_verification', label: 'Profile Verification', score: 18, maximumScore: 20, basis: 'Demo verified professional profile.', evidence: ['Employee profile is verified.'], limitations: ['Demo data only.'] },
-    { key: 'decision_transparency', label: 'Decision Transparency', score: 10, maximumScore: 15, basis: 'Demo decisions with recorded feedback.', evidence: ['Decisions include concise feedback.'], limitations: ['Demo data only.'] },
-    { key: 'platform_activity', label: 'Platform Activity', score: 7, maximumScore: 10, basis: 'Demo recent activity and availability.', evidence: ['Availability is current.'], limitations: ['Demo data only.'] },
-  ],
-  limitations: ['Demo data only.'],
+const demoReliabilityBadge: EmployeeReliabilityBadgeData = {
+  badgeType: 'reliable_referrer', label: 'Reliable Referrer', reliabilityLevel: 'Strong',
+  basis: 'Demo history illustrates consistent, transparent referral responses.',
+  relevantCounts: { meaningfulResponses: 12, completedReferrals: 5, recentMeaningfulResponses: 3, overdueUnansweredRequests: 0 },
+  lastCalculatedAt: '2026-07-30T12:00:00Z',
+  limitations: ['Demo data is isolated and does not represent a real employee record.'],
 };
 
 // -----------------------------------------------------------------------------
@@ -139,8 +137,11 @@ export default function StudentDashboard() {
   const location = useLocation();
   const { toast } = useToast();
   const { profile, loading: profileLoading } = useCurrentUser();
-  const { isDemoMode, demoDecision, demoJourneyStage, setDemoJourneyStage } = useDemoMode();
-  const analysisSession = useAnalysisSession();
+  const { isDemoMode, authLoading, authenticatedUserId, demoDecision, demoJourneyStage, setDemoJourneyStage } = useDemoMode();
+  const analysisResource = useAnalysisSessionResource();
+  const analysisSession = analysisResource.session;
+  const { prefetch: prefetchTrustCard } = useTrustCardResource({ analysisId: analysisSession.analysisId, initialCard: analysisSession.trustCard, autoLoad: false });
+  const initialStudentDataLoading = !isDemoMode && (authLoading || profileLoading || analysisResource.loading);
   const [persistedEmployees, setPersistedEmployees] = useState<EmployeeDirectoryItem[]>([]);
   const [persistedRequests, setPersistedRequests] = useState<ReferralRequestSummary[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
@@ -154,12 +155,12 @@ export default function StudentDashboard() {
   const referralSent = isDemoMode ? demoReferralSent : persistedRequests.length > 0;
   const workflow = useMemo(() => getStudentWorkflowState({ profile, session: analysisSession, hasReferralRequest: referralSent }), [analysisSession, profile, referralSent]);
   const employees: Employee[] = isDemoMode
-    ? (employeeDiscoveryReady ? [{ id: 'demo-employee', name: demoEmployee.name, initials: demoEmployee.initials, photoUrl: null, company: demoEmployee.company, designation: demoEmployee.designation, department: 'Engineering', yearsExperience: 5, verifiedEmployee: true, linkedinUrl: null, companyProfileUrl: null, portfolioUrl: null, avatarClass: "bg-slate-950 text-white", supportedRoles: [], supportedDepartments: [], referralCategories: [], referralGuidelines: null, acceptingRequests: true, activeRequestCount: 0, maxActiveRequests: 5, preferredCandidateLevels: ['student', 'fresher'], reliability: demoReliability }] : [])
-    : persistedEmployees.map((employee) => ({ id: employee.id, name: employee.name, initials: employee.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(), photoUrl: employee.photoUrl, company: employee.company || 'Company not listed', designation: employee.designation || 'Employee', department: employee.department, yearsExperience: employee.yearsExperience, verifiedEmployee: employee.verifiedEmployee, linkedinUrl: employee.linkedinUrl, companyProfileUrl: employee.companyProfileUrl, portfolioUrl: employee.portfolioUrl, avatarClass: "bg-slate-950 text-white", supportedRoles: employee.supportedRoles, supportedDepartments: employee.supportedDepartments, referralCategories: employee.referralCategories, referralGuidelines: employee.referralGuidelines, acceptingRequests: employee.acceptingRequests, activeRequestCount: employee.activeRequestCount, maxActiveRequests: employee.maxActiveRequests, preferredCandidateLevels: employee.preferredCandidateLevels, reliability: employee.reliability }));
+    ? (employeeDiscoveryReady ? [{ id: 'demo-employee', name: demoEmployee.name, initials: demoEmployee.initials, photoUrl: null, company: demoEmployee.company, designation: demoEmployee.designation, department: 'Engineering', yearsExperience: 5, verifiedEmployee: true, linkedinUrl: null, companyProfileUrl: null, portfolioUrl: null, avatarClass: "bg-slate-950 text-white", supportedRoles: [], supportedDepartments: [], referralCategories: [], referralGuidelines: null, acceptingRequests: true, activeRequestCount: 0, maxActiveRequests: 5, preferredCandidateLevels: ['student', 'fresher'], reliabilityBadge: demoReliabilityBadge }] : [])
+    : persistedEmployees.map((employee) => ({ id: employee.id, name: employee.name, initials: employee.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(), photoUrl: employee.photoUrl, company: employee.company || 'Company not listed', designation: employee.designation || 'Employee', department: employee.department, yearsExperience: employee.yearsExperience, verifiedEmployee: employee.verifiedEmployee, linkedinUrl: employee.linkedinUrl, companyProfileUrl: employee.companyProfileUrl, portfolioUrl: employee.portfolioUrl, avatarClass: "bg-slate-950 text-white", supportedRoles: employee.supportedRoles, supportedDepartments: employee.supportedDepartments, referralCategories: employee.referralCategories, referralGuidelines: employee.referralGuidelines, acceptingRequests: employee.acceptingRequests, activeRequestCount: employee.activeRequestCount, maxActiveRequests: employee.maxActiveRequests, preferredCandidateLevels: employee.preferredCandidateLevels, reliabilityBadge: employee.reliabilityBadge }));
   const statusLabel = (status: ReferralStatus): Status => ({ draft: 'Draft', submitted: 'Submitted', pending: 'Submitted', under_review: 'Under Review', more_info_requested: 'More Info Requested', approved: 'Approved for Referral', declined: 'Declined', referred: 'Referral Submitted', withdrawn: 'Withdrawn', expired: 'Expired' })[status] as Status;
   const referralRequests: ReferralRequest[] = isDemoMode
-    ? (demoReferralSent ? [{ id: 'demo-referral', employee: demoReferral.employee, initials: demoReferral.employeeInitials, company: demoReferral.company, role: demoReferral.role, date: demoReferral.requestedAt, status: demoDecision === 'pending' ? 'Submitted' : demoDecision === 'approved' ? 'Approved for Referral' : demoDecision === 'more_info_requested' ? 'More Info Requested' : 'Declined' }] : [])
-    : persistedRequests.map((request) => { const employee = employees.find((item) => item.id === request.employeeId); return { id: request.id, employee: employee?.name || 'Assigned employee', initials: employee?.initials || 'AE', company: request.targetCompany, role: request.targetRole, date: new Date(request.createdAt).toLocaleDateString(), status: statusLabel(request.status), journeyStatus: request.status, decisionMessage: request.decisionMessage, referralDate: request.referralDate, referralConfirmationNumber: request.referralConfirmationNumber, referralNoteToStudent: request.referralNoteToStudent }; });
+    ? (demoReferralSent ? [{ id: 'demo-referral', employee: demoReferral.employee, initials: demoReferral.employeeInitials, employeeCompany: demoEmployee.company, company: demoReferral.company, role: demoReferral.role, date: demoReferral.requestedAt, status: demoDecision === 'pending' ? 'Submitted' : demoDecision === 'approved' ? 'Approved for Referral' : demoDecision === 'more_info_requested' ? 'More Info Requested' : 'Declined' }] : [])
+    : persistedRequests.map((request) => { const employee = employees.find((item) => item.id === request.employeeId); return { id: request.id, employee: employee?.name || 'Assigned employee', initials: employee?.initials || 'AE', employeeCompany: request.employeeCompanySnapshot || employee?.company || null, company: request.targetCompany, role: request.targetRole, date: new Date(request.createdAt).toLocaleDateString(), status: statusLabel(request.status), journeyStatus: request.status, decisionMessage: request.decisionMessage, referralDate: request.referralDate, referralConfirmationNumber: request.referralConfirmationNumber, referralNoteToStudent: request.referralNoteToStudent }; });
   const readinessScore = analysisSession.trustCard?.trustScore ?? null;
   const referralReadiness = useMemo(() => analysisSession.trustCard ? calculateReferralReadiness(analysisSession.trustCard) : null, [analysisSession.trustCard]);
   const educationDetails = educationLines({
@@ -208,6 +209,11 @@ export default function StudentDashboard() {
     setReferralRole(analysisSession.role || "");
     setReferralJobDescription(analysisSession.jobDescription || "");
   }, [analysisSession.company, analysisSession.jobDescription, analysisSession.role]);
+  useEffect(() => {
+    if (!isDemoMode && authenticatedUserId && !analysisResource.loading && analysisSession.analysisId && analysisSession.matchScore) {
+      void prefetchTrustCard();
+    }
+  }, [analysisResource.loading, analysisSession.analysisId, analysisSession.matchScore, authenticatedUserId, isDemoMode, prefetchTrustCard]);
   useEffect(() => {
     if (isDemoMode || !profile?.id) return;
     let active = true;
@@ -470,20 +476,19 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          <div className="hidden items-center gap-1 sm:flex">
+          <div className="flex shrink-0 items-center gap-1">
             <NotificationCentre />
             <ProfileMenu portal="student" />
-          </div>
-
-          <div className="xl:hidden">
-            <IconButton
-              label="Toggle navigation"
-              onClick={() => setMobileMenuOpen((current) => !current)}
-              expanded={mobileMenuOpen}
-              controls="student-mobile-navigation"
-            >
-              {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-            </IconButton>
+            <div className="xl:hidden">
+              <IconButton
+                label="Toggle navigation"
+                onClick={() => setMobileMenuOpen((current) => !current)}
+                expanded={mobileMenuOpen}
+                controls="student-mobile-navigation"
+              >
+                {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+              </IconButton>
+            </div>
           </div>
         </div>
 
@@ -492,17 +497,13 @@ export default function StudentDashboard() {
             <div className="mx-auto max-w-[1440px]">
               <StudentNavigation mobile onNavigate={() => setMobileMenuOpen(false)} />
             </div>
-            <div className="mx-auto mt-3 flex max-w-[1440px] items-center justify-between rounded-xl bg-slate-50 p-3 sm:hidden">
-              <ProfileMenu portal="student" showDetails onNavigate={() => setMobileMenuOpen(false)} />
-              <NotificationCentre />
-            </div>
           </div>
         )}
       </header>
       <NetworkStatusBanner />
       <DemoModeBanner />
 
-      <main id="main-content" tabIndex={-1} className="mx-auto flex max-w-[1440px] flex-col gap-8 px-4 py-6 outline-none sm:px-6 sm:py-8 lg:px-8">
+      <main id="main-content" tabIndex={-1} className="mx-auto flex max-w-[1440px] flex-col gap-6 px-4 py-6 outline-none sm:px-6 sm:py-8 lg:px-8">
         {/* Compact dashboard strip */}
         <section className="order-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
@@ -510,12 +511,12 @@ export default function StudentDashboard() {
               {profileLoading ? <Skeleton className="h-8 w-64" /> : <h1 className="truncate text-2xl font-semibold tracking-tight">{greeting}, {firstName}</h1>}
               <p className="mt-1 text-sm text-slate-500">Your referral workspace at a glance.</p>
             </div>
-            <PrimaryButton className="w-full shrink-0 sm:w-auto" onClick={() => navigate('/dashboard/resume-analysis')}>
+            <PrimaryButton className="w-full shrink-0 sm:w-auto" onClick={() => navigate('/dashboard/resume')}>
               Analyse New Opportunity<ArrowRight className="ml-2 size-4" />
             </PrimaryButton>
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {[
+            {initialStudentDataLoading ? Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-20 rounded-xl" />) : [
               { label: 'Candidate Trust Score', value: analysisSession.trustCard ? `${analysisSession.trustCard.trustScore}/100` : 'Not ready' },
               { label: 'Referral Readiness', value: referralReadiness?.label || analysisSession.trustCard?.referralReadiness || 'Not assessed' },
               { label: 'Active Requests', value: String(activeRequestCount) },
@@ -534,8 +535,8 @@ export default function StudentDashboard() {
 
           <div>
             <Card className="p-6 sm:p-7">
-              <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Current opportunity</p><h3 className="mt-2 text-xl font-semibold">Latest analysis</h3></div><FileText className="size-5 text-slate-400" /></div>
-              {analysisSession.upload && analysisSession.matchScore ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-4"><h3 className="text-xl font-semibold">Latest resume analysis</h3><FileText className="size-5 text-slate-400" /></div>
+              {initialStudentDataLoading ? <div className="mt-6 space-y-3"><Skeleton className="h-20 w-full" /><Skeleton className="h-4 w-2/3" /></div> : analysisResource.error ? <div className="mt-6"><InlineFeedback tone="error">{friendlyErrorMessage(analysisResource.error, 'Your latest analysis could not be loaded.')} <button type="button" className="font-semibold underline" onClick={analysisResource.retry}>Retry</button></InlineFeedback></div> : analysisSession.upload && analysisSession.matchScore ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{analysisSession.upload.fileName}</p><p className="mt-1 text-xs text-slate-500">{analysisSession.role || "Target role not saved"}</p></div><Badge tone="success">{analysisSession.matchScore.overall}% match</Badge></div>
                 <div className="mt-4 flex items-center justify-between text-xs text-slate-500"><span>{analysisSession.analyzedAt ? new Date(analysisSession.analyzedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Current session"}</span><button type="button" onClick={() => navigate("/dashboard/resume-analysis")} className="cursor-pointer font-semibold text-slate-900 hover:underline">View analysis</button></div>
               </div> : <EmptyState className="mt-6" icon={FileSearch} title="No analyzed resumes yet" description="Upload a PDF resume, choose a target role and company, and RefAI will calculate role fit, proof strength, and skill gaps." />}
@@ -628,7 +629,6 @@ export default function StudentDashboard() {
 
               <div className="mt-7 grid gap-3 sm:grid-cols-2">
                 {(analysisSession.trustCard ? [
-                  { label: "Trust Score", value: String(analysisSession.trustCard.trustScore), score: analysisSession.trustCard.trustScore },
                   { label: "Overall Match", value: `${analysisSession.trustCard.overallMatch}%`, score: analysisSession.trustCard.overallMatch },
                   { label: "Role Fit", value: `${analysisSession.trustCard.roleFit}%`, score: analysisSession.trustCard.roleFit },
                   { label: "Proof", value: `${analysisSession.trustCard.proofScore}%`, score: analysisSession.trustCard.proofScore },
@@ -674,7 +674,7 @@ export default function StudentDashboard() {
               </div>
 
               {!isPrimaryWorkflowAction(workflow.trustCardAction.href) ? <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <SecondaryButton onClick={() => navigate(workflow.trustCardAction.href)}>
+                <SecondaryButton onClick={() => navigate(workflow.trustCardAction.href)} onMouseEnter={() => { void prefetchTrustCard() }} onFocus={() => { void prefetchTrustCard() }}>
                   {workflow.trustCardAction.label}
                   <ArrowRight className="ml-2 size-4" />
                 </SecondaryButton>
@@ -687,7 +687,7 @@ export default function StudentDashboard() {
           </div>
         </section> : null}
 
-        <section className="order-3">
+        {workflow.hasAnalysis ? <section className="order-3">
           <SectionHeading
             eyebrow="3 · Highest-Priority Improvements"
             title="What would improve your evidence most"
@@ -697,7 +697,7 @@ export default function StudentDashboard() {
             {priorityActionPlan.length ? <div className="grid gap-3 lg:grid-cols-3">{priorityActionPlan.slice(0, 3).map((item) => <div key={item.requirement} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-start justify-between gap-3"><p className="text-sm font-semibold">{item.requirement}</p><Badge tone={item.priority === 'critical' ? 'danger' : item.priority === 'important' ? 'warning' : 'neutral'}>{item.priority}</Badge></div><p className="mt-2 text-sm leading-6 text-slate-600">{item.practicalAction}</p><p className="mt-2 text-xs text-slate-500">Estimated effort: {item.estimatedEffort}</p></div>)}</div> : <EmptyState icon={Sparkles} title="No priority improvements yet" description="Analyse an opportunity to receive evidence-backed improvement actions." />}
             {priorityActionPlan.length ? <div className="mt-4"><SecondaryButton onClick={() => navigate('/dashboard/action-plan')}>View full Action Plan</SecondaryButton></div> : null}
           </Card>
-        </section>
+        </section> : null}
 
         {/* Employee discovery */}
         {workflow.hasTrustCard ? <section id="find-referrers" className="order-5 scroll-mt-24">
@@ -733,7 +733,7 @@ export default function StudentDashboard() {
                     photoUrl={employee.photoUrl}
                     className={employee.avatarClass}
                   />
-                  {isDemoMode ? <Badge tone="success"><CheckCircle2 className="mr-1 size-3" />Verified</Badge> : <div className="flex flex-col items-end gap-2"><Badge tone={employee.reliability.label === 'Excellent' || employee.reliability.label === 'Strong' ? 'success' : 'neutral'}>{employee.reliability.label}</Badge>{employee.verifiedEmployee ? <Badge tone="success"><ShieldCheck className="mr-1 size-3" />Verified</Badge> : null}</div>}
+                  <EmployeeReliabilityBadge badge={employee.reliabilityBadge} />
                 </div>
 
                 <h3 className="mt-5 font-semibold">{employee.name}</h3>
@@ -752,13 +752,12 @@ export default function StudentDashboard() {
                 {employee.supportedRoles.length ? <p className="mt-3 text-xs text-slate-500">Roles: {employee.supportedRoles.slice(0, 3).join(' · ')}</p> : null}
                 {employee.referralCategories.length ? <p className="mt-2 text-xs text-slate-500">Supports: {employee.referralCategories.slice(0, 3).map((item) => item.replace(/_/g, ' ')).join(' · ')}</p> : null}
                 {employee.referralGuidelines ? <p className="mt-2 line-clamp-2 text-xs text-slate-500">{employee.referralGuidelines}</p> : null}
-                {!isDemoMode ? <details className="mt-4 rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer text-xs font-semibold text-slate-700">View details</summary><div className="mt-3 space-y-3">
-                  <div className="grid grid-cols-3 gap-2 text-center"><div className="rounded-md bg-slate-50 p-2"><p className="text-sm font-semibold">{employee.reliability.averageResponseHours === null ? '—' : `${employee.reliability.averageResponseHours}h`}</p><p className="text-[10px] text-slate-500">Avg response</p></div><div className="rounded-md bg-slate-50 p-2"><p className="text-sm font-semibold">{employee.reliability.requestsReviewed}</p><p className="text-[10px] text-slate-500">Reviewed</p></div><div className="rounded-md bg-slate-50 p-2"><p className="text-sm font-semibold">{employee.reliability.completedReferrals}</p><p className="text-[10px] text-slate-500">Completed</p></div></div>
-                  {employee.reliability.isProvisional ? <p className="text-xs text-amber-700">Provisional card — limited referral history.</p> : null}
-                  {employee.reliability.metrics.map((metric) => <div key={metric.key} className="border-t border-slate-100 pt-2"><div className="flex justify-between gap-3 text-xs font-semibold"><span>{metric.label}</span><span>{metric.score}/{metric.maximumScore}</span></div><p className="mt-1 text-xs leading-5 text-slate-500">{metric.basis}</p>{metric.evidence[0] ? <p className="mt-1 text-xs leading-5 text-slate-600">{metric.evidence[0]}</p> : null}{metric.limitations[0] ? <p className="mt-1 text-[11px] leading-4 text-slate-400">Limit: {metric.limitations[0]}</p> : null}</div>)}
+                {!isDemoMode ? <details className="mt-4 rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer text-xs font-semibold text-slate-700">View profile preview</summary><div className="mt-3 space-y-3">
+                  <p className="text-xs leading-5 text-slate-600">{employee.reliabilityBadge.basis}</p>
+                  <div className="grid grid-cols-2 gap-2 text-center"><div className="rounded-md bg-slate-50 p-2"><p className="text-sm font-semibold">{employee.reliabilityBadge.relevantCounts.meaningfulResponses}</p><p className="text-[10px] text-slate-500">Meaningful responses</p></div><div className="rounded-md bg-slate-50 p-2"><p className="text-sm font-semibold">{employee.reliabilityBadge.relevantCounts.completedReferrals}</p><p className="text-[10px] text-slate-500">Completed referrals</p></div></div>
                   {employee.preferredCandidateLevels.length ? <p className="text-xs text-slate-500">Preferred levels: {employee.preferredCandidateLevels.map((item) => item.replace(/_/g, ' ')).join(' · ')}</p> : null}
                   <div className="flex flex-wrap gap-2">{employee.linkedinUrl ? <a href={employee.linkedinUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">LinkedIn</a> : null}{employee.companyProfileUrl ? <a href={employee.companyProfileUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Company profile</a> : null}{employee.portfolioUrl ? <a href={employee.portfolioUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Portfolio</a> : null}</div>
-                  {employee.reliability.limitations.map((limitation) => <p key={limitation} className="text-[11px] leading-4 text-slate-400">{limitation}</p>)}
+                  {employee.reliabilityBadge.limitations.map((limitation) => <p key={limitation} className="text-[11px] leading-4 text-slate-400">{limitation}</p>)}
                 </div></details> : null}
 
                 <PrimaryButton className="mt-4 w-full" disabled={!employee.acceptingRequests} disabledReason="This employee is not currently accepting requests" onClick={() => { setSelectedEmployeeId(employee.id); if (isDemoMode && !hasReachedDemoStage(demoJourneyStage, 'employee-selected')) setDemoJourneyStage('employee-selected'); scrollToSection("referral-message"); }}>
@@ -809,7 +808,7 @@ export default function StudentDashboard() {
               {priorityActionPlan.length === 0 ? <p className="text-sm leading-6 text-emerald-900">{analysisSession.analysis ? 'No priority requirement gaps were identified.' : 'Complete resume analysis to generate a ranked Action Plan.'}</p> : null}
             </div>
             {priorityActionPlan.length > 0 ? <SecondaryButton className="mt-4" onClick={() => navigate('/dashboard/action-plan')}>View full Action Plan</SecondaryButton> : null}
-            {!isDemoMode && selectedEmployee ? <div className="mt-6 space-y-3 border-t border-emerald-200 pt-5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-emerald-950">Employee Reliability</p><Badge tone={selectedEmployee.reliability.label === 'Excellent' || selectedEmployee.reliability.label === 'Strong' ? 'success' : 'neutral'}>{selectedEmployee.reliability.label}</Badge></div><p className="text-xs leading-5 text-emerald-800">{selectedEmployee.reliability.isProvisional ? 'This employee has limited recorded history, so the reliability card is provisional.' : 'Based on recorded response, completion, verification, transparency and activity signals.'}</p></div> : null}
+            {!isDemoMode && selectedEmployee ? <div className="mt-6 space-y-3 border-t border-emerald-200 pt-5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-emerald-950">Employee Reliability</p><EmployeeReliabilityBadge badge={selectedEmployee.reliabilityBadge} /></div><p className="text-xs leading-5 text-emerald-800">{selectedEmployee.reliabilityBadge.basis}</p></div> : null}
             {!isDemoMode ? <div className="mt-5 rounded-xl border border-emerald-200 bg-white/75 p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-emerald-950">Referral Compatibility</p><p className="mt-1 text-xs text-emerald-700">Is this request appropriate for this employee?</p></div>{compatibility ? <div className="text-right"><p className="text-lg font-semibold text-emerald-950">{compatibility.score}/100</p><Badge tone={compatibility.label === 'Strong fit' || compatibility.label === 'Good fit' ? 'success' : 'warning'}>{compatibility.label}</Badge></div> : null}</div>
               {compatibilityLoading ? <div className="mt-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /></div> : null}
               {compatibilityError ? <div className="mt-4"><InlineFeedback tone="error">{compatibilityError}<SecondaryButton className="ml-3" onClick={() => setCompatibilityReloadKey((value) => value + 1)}>Retry</SecondaryButton></InlineFeedback></div> : null}
@@ -842,7 +841,7 @@ export default function StudentDashboard() {
             </div> : null}
 
             {referralWizardStep === 2 ? <div className="mt-6">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold">{selectedEmployee?.name}</p><p className="mt-1 text-xs text-slate-500">{selectedEmployee?.designation} · {selectedEmployee?.company}</p></div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-semibold">{selectedEmployee?.name}</p><p className="mt-1 text-xs text-slate-500">{selectedEmployee?.designation} · {selectedEmployee?.company}</p></div>{selectedEmployee ? <EmployeeReliabilityBadge badge={selectedEmployee.reliabilityBadge} /> : null}</div></div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {([
                   ['professional_concise', 'Professional and concise'],
@@ -935,8 +934,9 @@ export default function StudentDashboard() {
                 >
                   <div className="flex items-center gap-3">
                     <Avatar initials={request.initials} size="sm" />
-                    <span className="text-sm font-semibold">
-                      {request.employee}
+                    <span className="min-w-0 text-sm font-semibold">
+                      <span className="block truncate">{request.employee}</span>
+                      <span className="block truncate text-xs font-normal text-slate-500">{request.employeeCompany || 'Company not listed'}</span>
                     </span>
                   </div>
 
@@ -959,21 +959,20 @@ export default function StudentDashboard() {
                   {request.status === "Referral Submitted" ? <div className="md:col-span-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900"><p><span className="font-semibold">Submitted by {request.employee}</span>{request.referralDate ? ` on ${new Date(`${request.referralDate}T00:00:00`).toLocaleDateString()}` : ''}.</p>{request.referralConfirmationNumber ? <p className="mt-1">Confirmation: {request.referralConfirmationNumber}</p> : null}{request.referralNoteToStudent ? <p className="mt-1">{request.referralNoteToStudent}</p> : <p className="mt-1">Next step: monitor your email or application portal for updates from {request.company}.</p>}</div> : null}
                 </div>
               ))}
-              {referralRequests.length === 0 ? <EmptyState className="m-5 md:m-6" icon={Activity} title="Send your first referral request" description="The workflow starts with a Trust Card, continues with employee discovery, and tracks pending, accepted, or declined decisions here." action={!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : undefined} /> : null}
+              {referralRequests.length === 0 ? <EmptyState className="m-4 py-6 md:m-5" icon={Activity} title="No referral requests yet" description="Requests will appear here after you choose an employee and submit your evidence-backed message." action={!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : undefined} /> : null}
             </div>
           </Card>
         </section>
 
-        <section className="order-6">
+        {analysisSession.analyzedAt || referralRequests.length > 0 ? <section className="order-6">
           <SectionHeading eyebrow="6 · Recent Activity" title="Latest workspace activity" description="Recent persisted analysis and referral events." />
           <Card className="p-5 sm:p-6">
             <div className="space-y-3">
               {analysisSession.analyzedAt ? <div className="flex items-start gap-3 rounded-xl border border-slate-200 p-4"><div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100"><FileSearch className="size-4" /></div><div><p className="text-sm font-semibold">Resume analysis completed</p><p className="mt-1 text-xs text-slate-500">{new Date(analysisSession.analyzedAt).toLocaleString()} · {analysisSession.role || 'Target role'}</p></div></div> : null}
               {referralRequests.slice(0, 3).map((request) => <div key={request.id} className="flex items-start gap-3 rounded-xl border border-slate-200 p-4"><div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100"><Activity className="size-4" /></div><div><p className="text-sm font-semibold">Referral request · {request.status}</p><p className="mt-1 text-xs text-slate-500">{request.employee} · {request.company} · {request.date}</p></div></div>)}
-              {!analysisSession.analyzedAt && referralRequests.length === 0 ? <EmptyState icon={Activity} title="No recent activity" description="Analysis and referral updates will appear here." /> : null}
             </div>
           </Card>
-        </section>
+        </section> : null}
 
       </main>
 

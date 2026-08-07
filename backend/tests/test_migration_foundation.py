@@ -15,6 +15,9 @@ class MigrationFoundationTests(unittest.TestCase):
         cls.employee_reliability_sql = (MIGRATIONS / "202607300003_employee_reliability_profile.sql").read_text(encoding="utf-8").lower()
         cls.referral_compatibility_sql = (MIGRATIONS / "202607300004_referral_compatibility.sql").read_text(encoding="utf-8").lower()
         cls.compatibility_cleanup_sql = (MIGRATIONS / "202607300005_remove_compatibility_request_metadata.sql").read_text(encoding="utf-8").lower()
+        cls.employee_company_sql = (MIGRATIONS / "202608030001_employee_company_consistency.sql").read_text(encoding="utf-8").lower()
+        cls.ai_apply_sql = (MIGRATIONS / "202608030002_ai_apply_goals.sql").read_text(encoding="utf-8").lower()
+        cls.ai_apply_safeguards_sql = (MIGRATIONS / "202608030003_ai_apply_safeguards.sql").read_text(encoding="utf-8").lower()
         cls.migration_names = sorted(path.name for path in MIGRATIONS.glob("*.sql"))
         cls.all_sql = "\n".join((MIGRATIONS / name).read_text(encoding="utf-8").lower() for name in cls.migration_names)
 
@@ -38,6 +41,9 @@ class MigrationFoundationTests(unittest.TestCase):
             "202607310004_referral_submission_workflow.sql",
             "202608010001_in_app_notifications.sql",
             "202608010002_demo_risk_repairs.sql",
+            "202608030001_employee_company_consistency.sql",
+            "202608030002_ai_apply_goals.sql",
+            "202608030003_ai_apply_safeguards.sql",
         ])
 
     def test_every_required_persisted_object_has_an_earlier_creator_and_rls(self):
@@ -45,6 +51,9 @@ class MigrationFoundationTests(unittest.TestCase):
             "profiles", "student_profiles", "employee_profiles", "trust_cards",
             "resume_analyses", "referral_requests", "referral_status_history",
             "proof_entries", "referral_decision_private_notes", "notifications",
+            "ai_apply_goals", "ai_apply_match_runs", "ai_apply_matches",
+            "ai_apply_credit_accounts", "ai_apply_submission_batches",
+            "ai_apply_credit_ledger", "ai_apply_submission_attempts",
         }
         for table in required_tables:
             with self.subTest(table=table):
@@ -110,6 +119,18 @@ class MigrationFoundationTests(unittest.TestCase):
             self.assertIn(f"add column if not exists {column}", self.employee_reliability_sql)
         for column in ("compatibility_score", "compatibility_label", "compatibility_version", "compatibility_payload"):
             self.assertIn(f"add column if not exists {column}", self.referral_compatibility_sql)
+
+    def test_employee_company_is_canonical_and_referrals_keep_a_snapshot(self):
+        sql = self.employee_company_sql
+        self.assertIn("keep employee_profiles.company as refai's canonical employer field", sql)
+        self.assertIn("add column if not exists employee_company_snapshot text", sql)
+        self.assertIn("new.raw_user_meta_data ->> 'company_name'", sql)
+        self.assertIn("insert into public.employee_profiles(profile_id, company)", sql)
+        self.assertIn("where public.employee_profiles.company is null", sql)
+        self.assertNotIn("raw_user_meta_data ->> 'preferred_company'", sql)
+        self.assertIn("referral_requests_employee_company_snapshot_valid", sql)
+        self.assertIn("old.employee_company_snapshot", sql)
+        self.assertIn("existing rls policies remain in force", sql)
 
     def test_profile_foundation_precedes_compatibility_migrations(self):
         names = sorted(path.name for path in MIGRATIONS.glob("*.sql"))
@@ -187,6 +208,36 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIn("job_description is not null and length(job_description) <= 100000", sql)
         self.assertIn("drop column if exists job_id", self.compatibility_cleanup_sql)
         self.assertIn("drop column if exists referral_category", self.compatibility_cleanup_sql)
+
+    def test_ai_apply_is_student_owned_review_only_persistence(self):
+        sql = self.ai_apply_sql
+        self.assertIn("add column if not exists ai_apply_opt_in boolean", sql)
+        for table in ("ai_apply_goals", "ai_apply_match_runs", "ai_apply_matches"):
+            self.assertIn(f"create table if not exists public.{table}", sql)
+            self.assertIn(f"alter table public.{table} enable row level security", sql)
+        self.assertGreaterEqual(sql.count("student_id = auth.uid()"), 6)
+        self.assertIn("unique (student_id, idempotency_key)", sql)
+        self.assertIn("unique (goal_id, match_version, input_key)", sql)
+        self.assertIn("create or replace function public.persist_ai_apply_match_run", sql)
+        self.assertIn("for update", sql)
+        self.assertIn("to service_role", sql)
+        self.assertNotIn("insert into public.referral_requests", sql)
+
+    def test_ai_apply_submission_safeguards_are_atomic_and_server_only(self):
+        sql = self.ai_apply_safeguards_sql
+        self.assertIn("create or replace function public.submit_ai_apply_match_as", sql)
+        self.assertIn("pg_advisory_xact_lock", sql)
+        self.assertIn("date_trunc('week', now())", sql)
+        self.assertIn("balance = balance - 1", sql)
+        self.assertIn("insert into public.referral_requests", sql)
+        self.assertIn("match_run_id uuid not null references public.ai_apply_match_runs", sql)
+        self.assertIn("ai_apply_opt_in", sql)
+        self.assertIn("max_active_requests", sql)
+        self.assertIn("unique (student_id, idempotency_key)", sql)
+        self.assertIn("unique (batch_id)", sql)
+        self.assertIn("to service_role", sql)
+        self.assertIn("from public, anon, authenticated", sql)
+        self.assertIn("where ai_apply_match_id is not null", sql)
 
 
 if __name__ == "__main__":

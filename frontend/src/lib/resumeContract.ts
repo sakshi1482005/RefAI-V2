@@ -73,6 +73,17 @@ function isAnalysisReliability(value: unknown) {
     && typeof value.limitations === 'string'
 }
 
+function isTrustScoreEvidenceItem(value: unknown) {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && ['Verified evidence', 'Resume supported', 'Self-declared', 'Needs clarification', 'Missing evidence'].includes(String(value.status))
+    && typeof value.factLabel === 'string'
+    && (value.snippet === null || typeof value.snippet === 'string')
+    && (value.resumeSection === null || typeof value.resumeSection === 'string')
+    && typeof value.whyItAffectsScore === 'string'
+    && ['resume', 'derived', 'missing'].includes(String(value.sourceType))
+}
+
 function isNullableEducationValue(value: unknown) {
   return value === null || typeof value === 'string' || typeof value === 'number'
 }
@@ -102,6 +113,7 @@ export function parseTrustCardResponse(value: unknown, status: number, endpoint 
     && ['key', 'label', 'reason'].every((field) => typeof factor[field] === 'string')
     && ['weight', 'score', 'contribution'].every((field) => typeof factor[field] === 'number')
     && (factor.details === undefined || isRecord(factor.details))
+    && (factor.evidenceItems === undefined || (Array.isArray(factor.evidenceItems) && factor.evidenceItems.every(isTrustScoreEvidenceItem)))
     && (factor.evidenceFound === undefined || (Array.isArray(factor.evidenceFound) && factor.evidenceFound.every((item) => typeof item === 'string')))
     && (factor.evidenceMissing === undefined || (Array.isArray(factor.evidenceMissing) && factor.evidenceMissing.every((item) => typeof item === 'string')))
   ))
@@ -109,7 +121,11 @@ export function parseTrustCardResponse(value: unknown, status: number, endpoint 
   const educationValid = isRecord(education)
     && ['college', 'degree', 'branch', 'graduationYear'].every((field) => isNullableEducationValue(education[field]))
   const reliabilityValid = value.analysisReliability === undefined || value.analysisReliability === null || isAnalysisReliability(value.analysisReliability)
-  if (!scoresValid || !stringsValid || !stringArraysValid || !plansValid || !breakdownValid || !educationValid || !reliabilityValid) {
+  const cacheMetadataValid = ['inputKey', 'jobDescriptionHash', 'resumeContentHash', 'schemaVersion', 'generationVersion', 'generatedAt'].every(
+    (field) => value[field] === undefined || value[field] === null || typeof value[field] === 'string',
+  ) && (value.narrativeSource === undefined || value.narrativeSource === 'groq' || value.narrativeSource === 'deterministic_fallback')
+    && (value.generationLimitations === undefined || (Array.isArray(value.generationLimitations) && value.generationLimitations.every((item) => typeof item === 'string')))
+  if (!scoresValid || !stringsValid || !stringArraysValid || !plansValid || !breakdownValid || !educationValid || !reliabilityValid || !cacheMetadataValid) {
     contractFailure(endpoint, status, value, [
       ...(!scoresValid ? ['numeric Trust Card scores'] : []),
       ...(!stringsValid ? ['typed Trust Card text fields'] : []),
@@ -118,6 +134,7 @@ export function parseTrustCardResponse(value: unknown, status: number, endpoint 
       ...(!breakdownValid ? ['scoreBreakdown'] : []),
       ...(!educationValid ? ['education'] : []),
       ...(!reliabilityValid ? ['analysisReliability'] : []),
+      ...(!cacheMetadataValid ? ['Trust Card cache/version metadata'] : []),
     ])
   }
   return {
@@ -126,6 +143,7 @@ export function parseTrustCardResponse(value: unknown, status: number, endpoint 
     scoreBreakdown: (value.scoreBreakdown as Record<string, unknown>[]).map((factor) => ({
       ...factor,
       details: isRecord(factor.details) ? factor.details : {},
+      evidenceItems: Array.isArray(factor.evidenceItems) ? factor.evidenceItems : [],
       evidenceFound: Array.isArray(factor.evidenceFound) ? factor.evidenceFound : [],
       evidenceMissing: Array.isArray(factor.evidenceMissing) ? factor.evidenceMissing : [],
     })),

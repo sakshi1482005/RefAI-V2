@@ -3,12 +3,11 @@ import { Bell, Camera, KeyRound, Mail, Pencil, ShieldCheck, Sparkles, UserCircle
 import PageShell from '../components/dashboard/PageShell'
 import { Badge, Card, InlineFeedback, PrimaryButton, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
 import { useToast } from '../components/feedback/ToastProvider'
-import { useCurrentUser } from '../hooks/useCurrentUser'
+import { setCurrentUserProfile, useCurrentUser } from '../hooks/useCurrentUser'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { useDemoMode } from '../context/DemoModeContext'
-import { demoStudent } from '../lib/demoData'
-import { friendlyErrorMessage, requireOnline, retryRead, withRequestTimeout } from '../lib/requestSafety'
+import { friendlyErrorMessage, requireOnline, withRequestTimeout } from '../lib/requestSafety'
 import { api } from '../lib/apiClient'
 import type { StudentProfileData } from '../types'
 
@@ -65,33 +64,6 @@ const EMPTY_PROFILE: ProfileForm = {
 
 const inputClass = 'h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-700'
 const textareaClass = `${inputClass} h-auto min-h-28 resize-y py-3`
-
-function readString(value: unknown) {
-  return typeof value === 'string' ? value : ''
-}
-
-function profileFromMetadata(metadata: Record<string, unknown>, email: string): ProfileForm {
-  const metadataSkills = Array.isArray(metadata.skills) ? metadata.skills.filter((skill): skill is string => typeof skill === 'string').join(', ') : readString(metadata.skills)
-  const visibility = metadata.resume_visibility
-
-  return {
-    fullName: readString(metadata.full_name) || readString(metadata.name) || email.split('@')[0] || '',
-    headline: readString(metadata.headline),
-    college: readString(metadata.college),
-    degree: readString(metadata.degree),
-    branch: readString(metadata.branch),
-    graduationYear: readString(metadata.graduation_year),
-    skills: metadataSkills,
-    bio: readString(metadata.bio),
-    linkedinUrl: readString(metadata.linkedin_url),
-    githubUrl: readString(metadata.github_url),
-    portfolioUrl: readString(metadata.portfolio_url),
-    preferredRole: readString(metadata.preferred_role),
-    preferredCompany: readString(metadata.preferred_company),
-    resumeVisibility: visibility === 'public' || visibility === 'referrers' ? visibility : 'private',
-    profilePhoto: readString(metadata.avatar_url),
-  }
-}
 
 function validateUrl(value: string) {
   if (!value.trim()) return ''
@@ -203,65 +175,30 @@ export default function ProfileSettings() {
   }, [notificationStorageKey, profile])
 
   useEffect(() => {
-    let active = true
-    const load = async () => {
-      try {
-        if (isDemoMode) {
-          const next: ProfileForm = { fullName: demoStudent.fullName, headline: demoStudent.headline, college: demoStudent.college, degree: demoStudent.degree, branch: demoStudent.branch, graduationYear: demoStudent.graduationYear, skills: demoStudent.skills.join(', '), bio: demoStudent.bio, linkedinUrl: demoStudent.linkedinUrl, githubUrl: demoStudent.githubUrl, portfolioUrl: demoStudent.portfolioUrl, preferredRole: demoStudent.preferredRole, preferredCompany: demoStudent.preferredCompany, resumeVisibility: 'referrers', profilePhoto: demoStudent.avatarUrl }
-          setForm(next)
-          setSavedForm(next)
-          setInitializing(false)
-          return
-        }
-        const { data } = await retryRead(async () => {
-          const result = await supabase.auth.getUser()
-          if (result.error) throw result.error
-          return result
-        })
-        if (!active) return
-
-        const user = data.user
-        const fromSupabase = user ? profileFromMetadata(user.user_metadata ?? {}, user.email ?? '') : EMPTY_PROFILE
-        let next = fromSupabase
-
-        if (user) {
-          try {
-            const { data: savedProfile } = await api.get<StudentProfileData>('/auth/student-profile')
-            next = {
-              ...next,
-              college: String(savedProfile.college ?? next.college),
-              degree: String(savedProfile.degree ?? next.degree),
-              branch: String(savedProfile.branch ?? next.branch),
-              graduationYear: String(savedProfile.graduationYear ?? next.graduationYear),
-              skills: savedProfile.skills.length ? savedProfile.skills.join(', ') : next.skills,
-              bio: String(savedProfile.bio ?? next.bio),
-              linkedinUrl: String(savedProfile.linkedinUrl ?? next.linkedinUrl),
-              githubUrl: String(savedProfile.githubUrl ?? next.githubUrl),
-              portfolioUrl: String(savedProfile.portfolioUrl ?? next.portfolioUrl),
-              preferredRole: String(savedProfile.preferredRole ?? next.preferredRole),
-              preferredCompany: String(savedProfile.preferredCompany ?? next.preferredCompany),
-            }
-            setProfileLoadError(null)
-          } catch (error) {
-            setProfileLoadError(friendlyErrorMessage(error, 'Your saved profile could not be loaded from the database.'))
-          }
-        }
-
-        setForm(next)
-        setSavedForm(next)
-      } catch (error) {
-        if (!active) return
-        setForm(EMPTY_PROFILE)
-        setSavedForm(EMPTY_PROFILE)
-        setProfileLoadError(friendlyErrorMessage(error, 'Your profile could not be loaded.'))
-      } finally {
-        if (active) setInitializing(false)
-      }
+    if (loading) {
+      setInitializing(true)
+      return
     }
-
-    void load()
-    return () => { active = false }
-  }, [isDemoMode])
+    if (!profile) {
+      setForm(EMPTY_PROFILE)
+      setSavedForm(EMPTY_PROFILE)
+      setProfileLoadError(profileError)
+      setInitializing(false)
+      return
+    }
+    const next: ProfileForm = {
+      fullName: profile.fullName, headline: profile.headline, college: profile.college, degree: profile.degree,
+      branch: profile.branch, graduationYear: profile.graduationYear, skills: profile.skills.join(', '), bio: profile.bio,
+      linkedinUrl: profile.linkedinUrl, githubUrl: profile.githubUrl, portfolioUrl: profile.portfolioUrl,
+      preferredRole: profile.preferredRole, preferredCompany: profile.preferredCompany,
+      resumeVisibility: profile.resumeVisibility === 'public' || profile.resumeVisibility === 'referrers' ? profile.resumeVisibility : 'private',
+      profilePhoto: profile.avatarUrl,
+    }
+    setForm(next)
+    setSavedForm(next)
+    setProfileLoadError(profileError)
+    setInitializing(false)
+  }, [loading, profile, profileError])
 
   const setValue = (name: keyof ProfileForm, value: string) => {
     setForm((current) => ({ ...current, [name]: value }))
@@ -349,6 +286,21 @@ export default function ProfileSettings() {
         },
       }))
       if (error) throw error
+
+      if (!isDemoMode && profile) {
+        const fullName = normalized.fullName
+        setCurrentUserProfile(profile.id, {
+          ...profile,
+          fullName,
+          initials: fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || '—',
+          headline: normalized.headline.trim(), college: normalized.college.trim(), degree: normalized.degree.trim(),
+          branch: normalized.branch.trim(), graduationYear: normalized.graduationYear,
+          skills: normalized.skills.split(',').map((skill) => skill.trim()).filter(Boolean), bio: normalized.bio.trim(),
+          linkedinUrl: normalized.linkedinUrl.trim(), githubUrl: normalized.githubUrl.trim(), portfolioUrl: normalized.portfolioUrl.trim(),
+          preferredRole: normalized.preferredRole.trim(), preferredCompany: normalized.preferredCompany.trim(),
+          resumeVisibility: normalized.resumeVisibility,
+        })
+      }
 
       // TODO: Move profilePhoto to Supabase Storage when a profile-photo bucket is configured.
       setForm(normalized)

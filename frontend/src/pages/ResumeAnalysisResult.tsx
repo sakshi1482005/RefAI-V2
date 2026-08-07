@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import PageShell from '../components/dashboard/PageShell'
 import { AnimatedNumber, Card, EmptyState, InlineFeedback, MetricTooltip, PrimaryButton, ScoreExplanation, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
 import { useAnalysisSessionResource } from '../hooks/useAnalysisSession'
+import { setAuthenticatedTrustCardResource, useTrustCardResource } from '../hooks/useTrustCardResource'
 import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
 import { demoEmployeeReview } from '../lib/demoData'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
@@ -25,8 +26,9 @@ export default function ResumeAnalysisResult() {
   const routedSession = (location.state as { analysisSession?: AnalysisSession } | null)?.analysisSession
   const analysisResource = useAnalysisSessionResource(routedSession)
   const { session } = analysisResource
-  const { isDemoMode, demoJourneyStage, setDemoJourneyStage } = useDemoMode()
+  const { isDemoMode, authenticatedUserId, demoJourneyStage, setDemoJourneyStage } = useDemoMode()
   const [generatingTrustCard, setGeneratingTrustCard] = useState(false)
+  const trustCardResource = useTrustCardResource({ analysisId: session.analysisId, initialCard: session.trustCard, autoLoad: false })
 
   const trustCardErrorMessage = (error: unknown) => {
     if (!(error instanceof FriendlyRequestError)) {
@@ -89,6 +91,7 @@ export default function ResumeAnalysisResult() {
       }, { timeout: 45_000 })
       const trustCard = parseTrustCardResponse(data, status)
       const nextSession = { ...session, trustCard }
+      if (authenticatedUserId && session.analysisId) setAuthenticatedTrustCardResource(authenticatedUserId, session.analysisId, trustCard)
       sessionStorage.setItem('refai_trust_card_celebration', 'pending')
       toast({ title: 'Trust Card generated', description: 'Review the AI summary and supporting match signals before continuing.', tone: 'success' })
       navigate('/dashboard/trust-card', { state: { analysisSession: nextSession } })
@@ -127,7 +130,7 @@ export default function ResumeAnalysisResult() {
         <div className="flex flex-wrap gap-3">
           <SecondaryButton onClick={() => navigate('/dashboard/resume')}>Back to Resume</SecondaryButton>
           <SecondaryButton onClick={() => window.print()}>Print / save report</SecondaryButton>
-          <PrimaryButton onClick={continueToTrustCard} loading={generatingTrustCard}>
+          <PrimaryButton onClick={continueToTrustCard} onMouseEnter={() => { void trustCardResource.prefetch() }} onFocus={() => { void trustCardResource.prefetch() }} loading={generatingTrustCard}>
             {workflow.trustCardAction.label}
             <ArrowRight className="ml-2 size-4" />
           </PrimaryButton>

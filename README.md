@@ -121,6 +121,8 @@ The required order is:
 202607310003_referral_status_model.sql
 202607310004_referral_submission_workflow.sql
 202608010001_in_app_notifications.sql
+202608010002_demo_risk_repairs.sql
+202608030001_employee_company_consistency.sql
 ```
 
 This sequence creates the base profile and referral schema, persisted resume
@@ -128,6 +130,9 @@ analyses and Trust Cards, student and employee profiles, the private `resumes`
 bucket, employee preference/reliability fields, compatibility snapshots, Proof
 Vault, structured decision history, the complete referral status model, referral
 submission metadata, and in-app notifications. RLS is enabled by migrations.
+`employee_profiles.company` remains the canonical employee employer field; the
+last migration normalizes/backfills missing legacy values and adds an immutable
+`employee_company_snapshot` to referral requests.
 
 After `db push`, verify the remote migration ledger:
 

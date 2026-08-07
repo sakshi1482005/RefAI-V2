@@ -6,6 +6,7 @@ import unittest
 from app.models.schemas import CreateReferralRequest
 from app.services.referral_requests import ReferralRequestService
 from app.services.student_persistence import StudentPersistenceError, StudentPersistenceService
+from app.services.trust_card_cache import build_trust_card_input_metadata
 from test_referral_requests import FakeRepository
 
 
@@ -215,7 +216,12 @@ class PersistedJourneyTests(unittest.TestCase):
         saved = persistence.save_analysis(database.student, upload, analysis)
         analysis_id = str(saved["analysisId"])
         referrals = ReferralRequestService(database)
-        card = referrals.persist_trust_card(database.student, {"trustScore": 80, "overallMatch": 78}, analysis_id)
+        persisted_analysis = analyses.get_analysis(database.student, analysis_id)
+        card = referrals.persist_trust_card(database.student, {
+            "trustScore": 80,
+            "overallMatch": 78,
+            **build_trust_card_input_metadata(persisted_analysis),
+        }, analysis_id)
         request = referrals.create(database.student, CreateReferralRequest(
             employeeId=database.employee, trustCardId=card["id"], targetRole="Engineer",
             targetCompany="Acme", jobDescription="Build Python APIs",

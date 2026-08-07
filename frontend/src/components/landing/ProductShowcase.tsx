@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { HOW_IT_WORKS_PATH, HOW_IT_WORKS_SECTION_ID, scrollToLandingSection } from '../../lib/landingNavigation'
 import Reveal from './Reveal'
 
 export default function ProductShowcase() {
@@ -181,7 +183,7 @@ export default function ProductShowcase() {
                                     <path d="m12 5 7 7-7 7"></path>
                                 </svg>
                             </a>
-                            <a href="#how-it-works" className="btn showcase-btn-secondary">See How It Works</a>
+                            <Link to={HOW_IT_WORKS_PATH} className="btn showcase-btn-secondary" aria-controls={HOW_IT_WORKS_SECTION_ID} onClick={() => scrollToLandingSection(HOW_IT_WORKS_SECTION_ID)}>See How It Works</Link>
                         </div>
                     </Reveal>
                 </div>

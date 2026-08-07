@@ -76,8 +76,8 @@ class ProofVaultTests(unittest.TestCase):
 
     def test_claim_status_endpoints_reuse_student_ownership_and_employee_assignment(self):
         self.service.create_proof(self.repository.student, self.payload())
-        self.assertEqual(self.service.student_claim_verifications(self.repository.student, self.repository.card_id)["claims"][0]["status"], "Verified evidence")
-        self.assertEqual(self.service.employee_claim_verifications(self.repository.employee, self.repository.request_id)["claims"][0]["status"], "Verified evidence")
+        self.assertEqual(self.service.student_claim_verifications(self.repository.student, self.repository.card_id)["claims"][0]["status"], "Evidence supported")
+        self.assertEqual(self.service.employee_claim_verifications(self.repository.employee, self.repository.request_id)["claims"][0]["status"], "Evidence supported")
         with self.assertRaises(ReferralForbidden):
             self.service.employee_claim_verifications(self.repository.other_employee, self.repository.request_id)
 

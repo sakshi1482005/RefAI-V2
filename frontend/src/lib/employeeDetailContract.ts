@@ -25,7 +25,8 @@ const compatibility = (value: unknown) => value === null || (object(value)
 function analysis(value: unknown): value is EmployeeAnalysisSummary | null {
   if (value === null) return true
   if (!object(value)) return false
-  return ['overallMatch', 'roleFit', 'proofScore', 'gapScore', 'confidence'].every((key) => nullableScore(value[key]))
+  return (value.trustScore === undefined || nullableScore(value.trustScore))
+    && ['overallMatch', 'roleFit', 'proofScore', 'gapScore', 'confidence'].every((key) => nullableScore(value[key]))
     && (value.analysisReliability === undefined || nullableReliability(value.analysisReliability))
     && nullableStrings(value.matchedSkills) && nullableObjects(value.missingRequirements)
     && nullableStrings(value.strengths) && nullableStrings(value.evidence) && nullableString(value.readinessSummary)

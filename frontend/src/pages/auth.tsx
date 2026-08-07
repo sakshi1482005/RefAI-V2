@@ -40,6 +40,7 @@ export default function AuthPage(): JSX.Element {
 
   // Sign up fields
   const suNameRef = useRef<HTMLInputElement>(null);
+  const suCompanyRef = useRef<HTMLInputElement>(null);
   const suEmailRef = useRef<HTMLInputElement>(null);
   const suPasswordRef = useRef<HTMLInputElement>(null);
   const suConfirmRef = useRef<HTMLInputElement>(null);
@@ -208,6 +209,7 @@ export default function AuthPage(): JSX.Element {
     setNotice(null);
 
     const name = suNameRef.current;
+    const company = suCompanyRef.current;
     const email = suEmailRef.current;
     const pw = suPasswordRef.current;
     const cf = suConfirmRef.current;
@@ -215,6 +217,11 @@ export default function AuthPage(): JSX.Element {
     if (!name || !name.value.trim()) {
       name?.focus();
       setSuError("Enter your full name.");
+      return;
+    }
+    if (role === "employee" && (!company || !company.value.trim())) {
+      company?.focus();
+      setSuError("Enter your current company.");
       return;
     }
     if (!email || !email.value || !email.checkValidity()) {
@@ -247,6 +254,9 @@ export default function AuthPage(): JSX.Element {
           data: {
             full_name: name.value.trim(),
             role: role,
+            ...(role === "employee"
+              ? { company_name: company?.value.trim().replace(/\s+/g, " ") }
+              : {}),
           },
         },
       }));
@@ -934,6 +944,23 @@ export default function AuthPage(): JSX.Element {
                   />
                 </div>
               </div>
+
+              {role === "employee" && (
+                <div className="ra-field">
+                  <label htmlFor="su-company">Current company</label>
+                  <div className="ra-input-wrap">
+                    <input
+                      ref={suCompanyRef}
+                      type="text"
+                      id="su-company"
+                      placeholder="Company name"
+                      autoComplete="organization"
+                      maxLength={200}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="ra-field">
                 <label htmlFor="su-email">Email</label>

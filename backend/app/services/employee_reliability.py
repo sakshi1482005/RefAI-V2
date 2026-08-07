@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 
@@ -13,6 +13,9 @@ WEIGHTS = {
 }
 SILENCE_AFTER_HOURS = 168
 TIMELY_RESPONSE_HOURS = 72
+MEANINGFUL_RESPONSE_STATUSES = {"more_info_requested", "approved", "declined"}
+ACTIVE_REQUEST_STATUSES = {"pending", "submitted", "under_review", "more_info_requested"}
+RECENT_ACTIVITY_DAYS = 30
 
 
 def _time(value: Any) -> datetime | None:
@@ -69,13 +72,19 @@ def calculate_employee_reliability(
     for request in requests:
         request_id = str(request.get("id"))
         created = _time(request.get("created_at"))
-        events = sorted(events_by_request.get(request_id, []), key=lambda row: _time(row.get("created_at")) or current_time)
+        events = sorted(
+            (
+                row for row in events_by_request.get(request_id, [])
+                if row.get("new_status") in MEANINGFUL_RESPONSE_STATUSES
+            ),
+            key=lambda row: _time(row.get("created_at")) or current_time,
+        )
         if events:
             reviewed += 1
             first_response = _time(events[0].get("created_at"))
             if created and first_response:
                 response_hours.append(max(0.0, (first_response - created).total_seconds() / 3600))
-        elif request.get("status") != "pending":
+        elif request.get("status") in {"more_info_requested", "approved", "declined", "referred"}:
             reviewed += 1
         elif created and (current_time - created).total_seconds() / 3600 >= SILENCE_AFTER_HOURS:
             silent += 1
@@ -146,7 +155,7 @@ def calculate_employee_reliability(
     last_activity = max((value for value in (last_event, profile_updated) if value), default=None)
     availability_status = profile.get("availability_status")
     availability_configured = availability_status in {"accepting", "paused", "unavailable"}
-    active_count = sum(row.get("status") in {"pending", "under_review", "more_info_requested"} for row in requests)
+    active_count = sum(row.get("status") in ACTIVE_REQUEST_STATUSES for row in requests)
     maximum_active = int(profile.get("max_active_requests", 5))
     availability_accurate = availability_configured and (
         availability_status != "accepting" or (maximum_active > 0 and active_count < maximum_active)
@@ -179,10 +188,91 @@ def calculate_employee_reliability(
         "label": label,
         "score": total,
         "maximumScore": 100,
-        "isProvisional": len(requests) < 3,
+        "isProvisional": reviewed < 3,
         "averageResponseHours": average_hours,
         "requestsReviewed": reviewed,
         "completedReferrals": len(completed),
         "metrics": metrics,
-        "limitations": ["Reliability reflects activity recorded in RefAI only."] + (["Limited history: this card is provisional."] if len(requests) < 3 else []),
+        "limitations": ["Reliability reflects activity recorded in RefAI only."] + (["Limited history: this card is provisional."] if reviewed < 3 else []),
+    }
+
+
+def calculate_employee_reliability_badge(
+    profile: dict[str, Any],
+    requests: list[dict[str, Any]],
+    history: list[dict[str, Any]],
+    *,
+    card: dict[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Return the public, aggregate badge view without private metric details."""
+    current_time = now or datetime.now(timezone.utc)
+    employee_id = str(profile.get("profile_id") or profile.get("id") or "")
+    reliability = card or calculate_employee_reliability(profile, requests, history, now=current_time)
+    meaningful_events = [
+        row for row in history
+        if str(row.get("changed_by")) == employee_id
+        and row.get("new_status") in MEANINGFUL_RESPONSE_STATUSES
+        and _time(row.get("created_at")) is not None
+    ]
+    meaningful_request_ids = {str(row.get("referral_request_id")) for row in meaningful_events}
+    recent_cutoff = current_time - timedelta(days=RECENT_ACTIVITY_DAYS)
+    recent_request_ids = {
+        str(row.get("referral_request_id")) for row in meaningful_events
+        if (_time(row.get("created_at")) or current_time) >= recent_cutoff
+    }
+    overdue_unanswered = 0
+    for request in requests:
+        created = _time(request.get("created_at"))
+        if (
+            request.get("status") in ACTIVE_REQUEST_STATUSES
+            and str(request.get("id")) not in meaningful_request_ids
+            and created
+            and current_time - created >= timedelta(hours=SILENCE_AFTER_HOURS)
+        ):
+            overdue_unanswered += 1
+
+    metrics = {metric["key"]: metric for metric in reliability["metrics"]}
+    reviewed = int(reliability["requestsReviewed"])
+    reliable = (
+        reviewed >= 3
+        and reliability["score"] >= 70
+        and metrics["response_consistency"]["score"] >= 25
+        and metrics["decision_transparency"]["score"] >= 10
+        and bool(recent_request_ids)
+        and overdue_unanswered == 0
+    )
+    if reviewed < 3:
+        badge_type = "new_referrer"
+        label = "New Referrer"
+        basis = "Referral history is still limited, so no reliability conclusion is presented yet."
+    elif reliable:
+        badge_type = "reliable_referrer"
+        label = "Reliable Referrer"
+        basis = "Recorded history shows consistent responses, transparent decisions, recent activity, and no overdue unanswered requests."
+    elif profile.get("verified_employee"):
+        badge_type = "verified_referrer"
+        label = "Verified Referrer"
+        basis = "The employee profile is verified; recorded referral behaviour does not yet meet every Reliable Referrer rule."
+    else:
+        badge_type = "developing_referrer"
+        label = "Developing Referrer"
+        basis = "The employee has referral history, but more consistent or recent evidence is needed for a reliability badge."
+
+    return {
+        "badgeType": badge_type,
+        "label": label,
+        "reliabilityLevel": reliability["label"],
+        "basis": basis,
+        "relevantCounts": {
+            "meaningfulResponses": reviewed,
+            "completedReferrals": int(reliability["completedReferrals"]),
+            "recentMeaningfulResponses": len(recent_request_ids),
+            "overdueUnansweredRequests": overdue_unanswered,
+        },
+        "lastCalculatedAt": current_time.isoformat().replace("+00:00", "Z"),
+        "limitations": [
+            "Based only on activity recorded in RefAI; it does not predict referral acceptance or hiring outcomes.",
+            "Responsible declines with a reason count as meaningful responses and do not reduce referral completion.",
+        ],
     }

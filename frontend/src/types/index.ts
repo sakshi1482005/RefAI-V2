@@ -63,6 +63,18 @@ export interface ResumeAnalysisResult extends MatchScore {
 export type ReferralReadiness = 'Ready to request referral' | 'Improve before requesting' | 'Not ready yet'
 export type EmployeeRecommendation = 'Ready for referral' | 'Review before referring' | 'Not ready yet'
 
+export type TrustScoreEvidenceStatus = 'Verified evidence' | 'Resume supported' | 'Self-declared' | 'Needs clarification' | 'Missing evidence'
+
+export interface TrustScoreEvidenceItem {
+  id: string
+  status: TrustScoreEvidenceStatus
+  factLabel: string
+  snippet: string | null
+  resumeSection: string | null
+  whyItAffectsScore: string
+  sourceType: 'resume' | 'derived' | 'missing'
+}
+
 export interface TrustScoreFactor {
   key: string
   label: string
@@ -73,6 +85,7 @@ export interface TrustScoreFactor {
   contribution: number
   reason: string
   details?: Record<string, unknown>
+  evidenceItems?: TrustScoreEvidenceItem[]
   formulaOrBasis?: string | null
   evidenceFound?: string[]
   evidenceMissing?: string[]
@@ -124,6 +137,14 @@ export interface TrustCardResult {
   scoreReasons: string[]
   aiSummary: string
   education: StudentEducation
+  inputKey?: string | null
+  jobDescriptionHash?: string | null
+  resumeContentHash?: string | null
+  schemaVersion?: string | null
+  generationVersion?: string | null
+  generatedAt?: string | null
+  narrativeSource?: 'groq' | 'deterministic_fallback'
+  generationLimitations?: string[]
 }
 
 export type ReferralStatus = 'draft' | 'submitted' | 'pending' | 'under_review' | 'more_info_requested' | 'approved' | 'referred' | 'declined' | 'withdrawn' | 'expired'
@@ -135,6 +156,7 @@ export interface ReferralRequestSummary {
   trustCardId: string
   targetRole: string
   targetCompany: string
+  employeeCompanySnapshot: string | null
   compatibilityScore: number | null
   compatibilityLabel: ReferralCompatibilityLabel | null
   status: ReferralStatus
@@ -185,6 +207,7 @@ export interface EmployeeCandidateProfile {
 }
 
 export interface EmployeeAnalysisSummary {
+  trustScore: number | null
   overallMatch: number | null
   roleFit: number | null
   proofScore: number | null
@@ -203,6 +226,7 @@ export interface EmployeeReferralRequestView {
   status: ReferralStatus
   targetRole: string
   targetCompany: string
+  employeeCompanySnapshot: string | null
   studentMessage: string
   employeeNote: string | null
   decisionReason: string | null
@@ -327,10 +351,11 @@ export interface EmployeeDirectoryItem {
   preferredMessageLength: 'concise' | 'standard' | 'detailed'
   referralGuidelines: string | null
   referralCategories: string[]
+  aiApplyOptIn?: boolean
   acceptingRequests: boolean
   activeRequestCount: number
   maxActiveRequests: number
-  reliability: EmployeeReliabilityCard
+  reliabilityBadge: EmployeeReliabilityBadge
 }
 
 export interface EmployeeProfessionalProfile {
@@ -355,10 +380,27 @@ export interface EmployeeProfessionalProfile {
   referralGuidelines: string | null
   declineReasonCodes: DeclineReasonCode[]
   referralCategories: ReferralCategory[]
+  aiApplyOptIn: boolean
   averageResponseTimeValue: number | null
   averageResponseTimeUnit: 'hours'
   respondedRequestCount: number
   responseTimeAvailable: boolean
+  reliabilityBadge: EmployeeReliabilityBadge
+}
+
+export interface EmployeeReliabilityBadge {
+  badgeType: 'new_referrer' | 'verified_referrer' | 'reliable_referrer' | 'developing_referrer'
+  label: 'New Referrer' | 'Verified Referrer' | 'Reliable Referrer' | 'Developing Referrer'
+  reliabilityLevel: 'Excellent' | 'Strong' | 'Verified' | 'Building history'
+  basis: string
+  relevantCounts: {
+    meaningfulResponses: number
+    completedReferrals: number
+    recentMeaningfulResponses: number
+    overdueUnansweredRequests: number
+  }
+  lastCalculatedAt: string
+  limitations: string[]
 }
 
 export interface EmployeeReliabilityMetric {
@@ -408,6 +450,85 @@ export interface ReferralCompatibility {
   limitations: string[]
   suggestedImprovements: string[]
   components: ReferralCompatibilityComponent[]
+}
+
+export type AIApplyTimeline = 'immediate' | 'within_30_days' | 'within_3_months' | 'exploring'
+export type AIApplyWorkMode = 'onsite' | 'hybrid' | 'remote' | 'flexible'
+
+export interface AIApplyGoal {
+  id: string
+  analysisId: string
+  trustCardId: string
+  targetRole: string
+  targetCompany: string
+  preferredDepartment: string | null
+  timeline: AIApplyTimeline | null
+  location: string | null
+  workMode: AIApplyWorkMode | null
+  minimumCompatibility: number
+  numberOfMatches: number
+  createdAt: string
+}
+
+export interface AIApplyMatch {
+  id: string
+  rank: number
+  employee: {
+    id: string
+    name: string
+    company: string | null
+    designation: string | null
+    department: string | null
+    supportedRoles: string[]
+    supportedDepartments: string[]
+    availability: 'accepting'
+  }
+  compatibility: ReferralCompatibility
+  semanticSimilarity: number | null
+  rankingScore: number
+  relevanceSource: 'goal_context' | 'deterministic_fallback'
+  reason: {
+    positiveFactors: string[]
+    cautions: string[]
+    semanticBasis: string
+    limitations: string[]
+  }
+  referralRequestId: string | null
+}
+
+export interface AIApplyMatchRun {
+  id: string
+  goal: AIApplyGoal
+  matchVersion: string
+  inputKey: string
+  vectorStatus: 'available' | 'partial' | 'unavailable' | 'not_used'
+  eligibleEmployeeCount: number
+  excludedEmployeeCount: number
+  exclusionReasons: { reason: string; count: number }[]
+  matches: AIApplyMatch[]
+  limitations: string[]
+  createdAt: string
+}
+
+export interface AIApplyAllowance {
+  minimumCompatibilityThreshold: number
+  weeklyCap: number
+  weeklyUsed: number
+  weeklyRemaining: number
+  creditBalance: number
+  available: boolean
+}
+
+export interface AIApplySubmission {
+  requestId: string
+  matchId: string
+  status: 'submitted'
+  chargedCredits: number
+  creditBalance: number
+  weeklyRemaining: number
+  compatibilityScore: number
+  compatibilityThreshold: number
+  idempotentReplay: boolean
 }
 
 export type ReferralMessageTone = 'professional_concise' | 'friendly' | 'alumni_connection' | 'first_time_outreach' | 'follow_up'
@@ -469,19 +590,29 @@ export interface ProofEntry {
   updatedAt: string
 }
 
-export type ClaimVerificationStatus = 'Verified evidence' | 'Resume supported' | 'Self-declared' | 'Needs clarification'
+export type ClaimVerificationStatus = 'Evidence supported' | 'Partially supported' | 'Self-declared' | 'Needs clarification' | 'Verified evidence' | 'Resume supported'
+
+export type ClaimVerificationCategory = 'experience' | 'project' | 'achievement' | 'leadership' | 'quantified_impact' | 'skill'
 
 export interface ClaimVerificationItem {
+  id: string
   claim: string
+  category: ClaimVerificationCategory
   status: ClaimVerificationStatus
   reason: string
   resumeEvidence: string[]
+  supportingEvidenceSnippets: string[]
+  resumeSection: string | null
+  resumeContext: string | null
+  missingSupport: string | null
+  suggestedClarificationQuestion: string | null
   proofEvidence: Pick<ProofEntry, 'id' | 'title' | 'proofType' | 'urlOrReference'>[]
 }
 
 export interface ClaimVerificationResult {
   statusVersion: string
   claims: ClaimVerificationItem[]
+  interpretationSource: 'deterministic' | 'groq_assisted' | 'deterministic_fallback'
   limitation: string
 }
 

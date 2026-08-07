@@ -5,7 +5,7 @@ import { useDemoMode } from '../../context/DemoModeContext'
 import { api } from '../../lib/apiClient'
 import { friendlyErrorMessage } from '../../lib/requestSafety'
 import type { InAppNotification } from '../../types'
-import { EmptyState, IconButton, InlineFeedback, SecondaryButton, Skeleton } from './primitives'
+import { EmptyState, InlineFeedback, SecondaryButton, Skeleton } from './primitives'
 
 export default function NotificationCentre() {
   const navigate = useNavigate()
@@ -29,7 +29,7 @@ export default function NotificationCentre() {
   useEffect(() => { void load() }, [load])
   useEffect(() => { if (open && loaded) void load() }, [open])
 
-  if (isDemoMode) return <IconButton label="Notifications are unavailable in Demo Mode" disabled><Bell className="size-[18px]" /></IconButton>
+  if (isDemoMode) return null
 
   const unread = items.filter((item) => !item.readAt).length
   const markRead = async (item: InAppNotification) => {
@@ -59,4 +59,3 @@ export default function NotificationCentre() {
     </div> : null}
   </div>
 }
-

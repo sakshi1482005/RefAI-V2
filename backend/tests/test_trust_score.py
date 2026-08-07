@@ -353,6 +353,51 @@ class CandidateTrustScoreTests(unittest.TestCase):
                     )
                 self.assert_reconciles(result)
 
+    def test_structured_evidence_links_exact_resume_snippet_section_and_reference(self):
+        resume = (
+            "Skills\nPython\n"
+            "Projects\nBuilt and deployed a Python API used by 120 students."
+        )
+        result = compute_candidate_trust_score(
+            resume, "Python is required. Build production APIs.", "Backend Engineer"
+        )
+
+        evidence = self.component(result, "evidenceStrength")["evidenceItems"]
+        supported = next(item for item in evidence if item["status"] == "Resume supported")
+        self.assertEqual(supported["snippet"], "Built and deployed a Python API used by 120 students.")
+        self.assertEqual(supported["resumeSection"], "Projects")
+        self.assertRegex(supported["id"], r"^EV-[A-F0-9]{10}$")
+        self.assertIn("evidence tier", supported["whyItAffectsScore"])
+
+    def test_structured_evidence_distinguishes_self_declared_and_missing_claims(self):
+        result = compute_candidate_trust_score(
+            "Skills\nPython", "Python and FastAPI are required.", "Backend Engineer"
+        )
+
+        evidence = self.component(result, "evidenceStrength")["evidenceItems"]
+        python = next(item for item in evidence if item["factLabel"] == "Python")
+        fastapi = next(item for item in evidence if item["factLabel"] == "FastAPI")
+        self.assertEqual(python["status"], "Self-declared")
+        self.assertEqual(python["resumeSection"], "Skills")
+        self.assertEqual(fastapi["status"], "Missing evidence")
+        self.assertIsNone(fastapi["snippet"])
+
+    def test_structured_explainability_does_not_change_score_or_weights(self):
+        result = compute_candidate_trust_score(
+            "Projects\nBuilt a Python service.",
+            "Python is required. Build reliable services.",
+            "Backend Engineer",
+        )
+        self.assertEqual(
+            result["trustScore"],
+            sum(component["score"] for component in result["scoreBreakdown"]),
+        )
+        self.assertEqual(
+            [component["maximumScore"] for component in result["scoreBreakdown"]],
+            [30, 25, 20, 15, 10],
+        )
+        self.assertTrue(all("evidenceItems" in component for component in result["scoreBreakdown"]))
+
 
 if __name__ == "__main__":
     unittest.main()

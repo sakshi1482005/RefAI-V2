@@ -1,24 +1,115 @@
+import time
+
+import httpx
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.db.supabase_client import supabase
 
-bearer_scheme = HTTPBearer()
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> dict:
-    """Validate the current token with Supabase and return the authenticated identity."""
-    token = creds.credentials
+# These errors mean Supabase/network temporarily failed.
+# They do NOT mean that the user's token is invalid.
+RETRYABLE_AUTH_ERRORS = (
+    httpx.RemoteProtocolError,
+    httpx.ConnectError,
+    httpx.ReadError,
+    httpx.ReadTimeout,
+    httpx.ConnectTimeout,
+    httpx.WriteError,
+)
+
+
+def _get_supabase_user_with_retry(token: str):
+    """
+    Validate a token with Supabase.
+
+    Temporary network/HTTP transport failures are retried before
+    reporting the authentication service as unavailable.
+    """
+    attempts = 3
+    delay = 0.25
+    last_error: Exception | None = None
+
+    for attempt in range(attempts):
+        try:
+            response = supabase.auth.get_user(token)
+            return response.user
+
+        except RETRYABLE_AUTH_ERRORS as exc:
+            last_error = exc
+
+            if attempt < attempts - 1:
+                time.sleep(delay)
+                delay *= 2
+
+    if last_error is not None:
+        raise last_error
+
+    return None
+
+
+def get_current_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(
+        bearer_scheme
+    ),
+) -> dict:
+    """
+    Validate the current Supabase access token and return
+    the authenticated user's identity.
+
+    401 = missing/invalid/expired token
+    503 = Supabase authentication service temporarily unavailable
+    """
+
+    # No Authorization: Bearer header
+    if creds is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing access token",
+        )
+
+    token = creds.credentials.strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing access token",
+        )
+
     try:
-        response = supabase.auth.get_user(token)
-        user = response.user
+        user = _get_supabase_user_with_retry(token)
+
         if not user:
-            raise ValueError("Supabase did not return a user")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+            )
+
         return {
             "sub": str(user.id),
             "email": user.email,
             "user_metadata": user.user_metadata or {},
         }
+
+    # Preserve HTTP errors that we intentionally raised above.
+    except HTTPException:
+        raise
+
+    # Supabase/network temporarily disconnected.
+    # This should NOT be reported as an invalid login.
+    except RETRYABLE_AUTH_ERRORS as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Authentication service is temporarily unavailable. "
+                "Please retry."
+            ),
+        ) from exc
+
+    # Genuine Supabase auth rejection or another auth problem.
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

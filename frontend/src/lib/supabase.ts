@@ -11,3 +11,28 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: window.localStorage,
   },
 })
+
+if (import.meta.env.DEV) {
+  void supabase.auth.getSession().then(async ({ data, error }) => {
+    console.log('[RefAI auth debug]', {
+      projectUrl: import.meta.env.VITE_SUPABASE_URL,
+      hasSession: Boolean(data.session),
+      hasAccessToken: Boolean(data.session?.access_token),
+      expiresAt: data.session?.expires_at,
+      userId: data.session?.user?.id,
+      sessionError: error?.message,
+    })
+
+    if (data.session?.access_token) {
+      const verified = await supabase.auth.getUser(
+        data.session.access_token,
+      )
+
+      console.log('[RefAI verified user]', {
+        userId: verified.data.user?.id,
+        email: verified.data.user?.email,
+        error: verified.error?.message,
+      })
+    }
+  })
+}

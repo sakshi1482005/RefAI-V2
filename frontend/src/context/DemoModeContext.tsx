@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { supabase } from '../lib/supabase'
 import { retryRead } from '../lib/requestSafety'
 import { clearAnalysisSession } from '../lib/analysisSession'
+import type { User } from '@supabase/supabase-js'
 
 const STORAGE_KEY = 'refai_demo_mode'
 const DECISION_KEY = 'refai_demo_decision'
@@ -19,6 +20,7 @@ type DemoModeValue = {
   isJudgeMode: boolean
   hasAuthenticatedUser: boolean
   authenticatedUserId: string | null
+  authenticatedUser: User | null
   authenticatedRole: AuthenticatedRole | null
   canEnterDemoMode: boolean
   canUseJudgeMode: boolean
@@ -40,6 +42,7 @@ function readAuthenticatedRole(role: unknown): AuthenticatedRole | null {
 export function DemoModeProvider({ children }: { children: ReactNode }) {
   const [hasAuthenticatedUser, setHasAuthenticatedUser] = useState(false)
   const [authenticatedUserId, setAuthenticatedUserId] = useState<string | null>(null)
+  const [authenticatedUser, setAuthenticatedUser] = useState<User | null>(null)
   const [authenticatedRole, setAuthenticatedRole] = useState<AuthenticatedRole | null>(null)
   const previousAuthenticatedUserId = useRef<string | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -49,7 +52,7 @@ export function DemoModeProvider({ children }: { children: ReactNode }) {
   const [demoJourneyStage, updateDemoJourneyStage] = useState<DemoJourneyStage>(() => requestedFromLanding ? 'profile' : (sessionStorage.getItem(JOURNEY_KEY) as DemoJourneyStage | null) ?? 'profile')
   useEffect(() => {
     let active = true
-    const applyAuthenticatedUser = (user: { id: string; user_metadata?: Record<string, unknown> } | null | undefined) => {
+    const applyAuthenticatedUser = (user: User | null | undefined) => {
       const nextUserId = user?.id ?? null
       const previousUserId = previousAuthenticatedUserId.current
       if (previousUserId && previousUserId !== nextUserId) {
@@ -58,6 +61,7 @@ export function DemoModeProvider({ children }: { children: ReactNode }) {
       previousAuthenticatedUserId.current = nextUserId
       setHasAuthenticatedUser(Boolean(user))
       setAuthenticatedUserId(nextUserId)
+      setAuthenticatedUser(user ?? null)
       setAuthenticatedRole(readAuthenticatedRole(user?.user_metadata?.role))
     }
     retryRead(async () => {
@@ -93,7 +97,7 @@ export function DemoModeProvider({ children }: { children: ReactNode }) {
   const isDemoMode = demoRequested && !hasAuthenticatedUser && !authLoading
   const canEnterDemoMode = !authLoading && !hasAuthenticatedUser
   const canUseJudgeMode = canEnterDemoMode && (import.meta.env.DEV || isDemoMode)
-  const value = useMemo(() => ({ isDemoMode, isJudgeMode: isDemoMode, hasAuthenticatedUser, authenticatedUserId, authenticatedRole, canEnterDemoMode, canUseJudgeMode, authLoading, demoDecision, demoJourneyStage, enterDemoMode, exitDemoMode, setJudgeMode, setDemoDecision, setDemoJourneyStage }), [authLoading, authenticatedRole, authenticatedUserId, canEnterDemoMode, canUseJudgeMode, demoDecision, demoJourneyStage, enterDemoMode, exitDemoMode, hasAuthenticatedUser, isDemoMode, setDemoDecision, setDemoJourneyStage, setJudgeMode])
+  const value = useMemo(() => ({ isDemoMode, isJudgeMode: isDemoMode, hasAuthenticatedUser, authenticatedUserId, authenticatedUser, authenticatedRole, canEnterDemoMode, canUseJudgeMode, authLoading, demoDecision, demoJourneyStage, enterDemoMode, exitDemoMode, setJudgeMode, setDemoDecision, setDemoJourneyStage }), [authLoading, authenticatedRole, authenticatedUser, authenticatedUserId, canEnterDemoMode, canUseJudgeMode, demoDecision, demoJourneyStage, enterDemoMode, exitDemoMode, hasAuthenticatedUser, isDemoMode, setDemoDecision, setDemoJourneyStage, setJudgeMode])
   return <DemoModeContext.Provider value={value}>{children}</DemoModeContext.Provider>
 }
 

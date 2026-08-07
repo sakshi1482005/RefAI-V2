@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type FocusEventHandler, type MouseEventHandler, type ReactNode } from 'react'
 import { AlertCircle, CheckCircle2, HelpCircle, Inbox, Info, LoaderCircle, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 export { default as Logo } from '../branding/RefAILogo'
@@ -13,6 +13,8 @@ type ButtonProps = {
   loading?: boolean
   disabledReason?: string
   type?: 'button' | 'submit'
+  onMouseEnter?: MouseEventHandler<HTMLButtonElement>
+  onFocus?: FocusEventHandler<HTMLButtonElement>
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
@@ -88,18 +90,18 @@ export function Avatar({ initials, photoUrl, className, size = 'md' }: { initial
   )
 }
 
-export function PrimaryButton({ children, className, onClick, disabled, loading, disabledReason, type = 'button' }: ButtonProps) {
+export function PrimaryButton({ children, className, onClick, disabled, loading, disabledReason, type = 'button', onMouseEnter, onFocus }: ButtonProps) {
   return (
-    <button type={type} onClick={onClick} disabled={disabled || loading} aria-busy={loading || undefined} title={disabled ? disabledReason : undefined} className={cn('inline-flex h-11 cursor-pointer select-none items-center justify-center rounded-xl bg-black px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:translate-y-0 disabled:scale-100 disabled:opacity-60 disabled:shadow-none', className)}>
+    <button type={type} onClick={onClick} onMouseEnter={onMouseEnter} onFocus={onFocus} disabled={disabled || loading} aria-busy={loading || undefined} title={disabled ? disabledReason : undefined} className={cn('inline-flex h-11 cursor-pointer select-none items-center justify-center rounded-xl bg-black px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:translate-y-0 disabled:scale-100 disabled:opacity-60 disabled:shadow-none', className)}>
       {loading ? <LoaderCircle className="mr-2 size-4 animate-spin" /> : null}
       {children}
     </button>
   )
 }
 
-export function SecondaryButton({ children, className, onClick, disabled, loading, disabledReason, type = 'button' }: ButtonProps) {
+export function SecondaryButton({ children, className, onClick, disabled, loading, disabledReason, type = 'button', onMouseEnter, onFocus }: ButtonProps) {
   return (
-    <button type={type} onClick={onClick} disabled={disabled || loading} aria-busy={loading || undefined} title={disabled ? disabledReason : undefined} className={cn('inline-flex h-11 cursor-pointer select-none items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:translate-y-0 disabled:scale-100 disabled:opacity-60 disabled:shadow-none', className)}>
+    <button type={type} onClick={onClick} onMouseEnter={onMouseEnter} onFocus={onFocus} disabled={disabled || loading} aria-busy={loading || undefined} title={disabled ? disabledReason : undefined} className={cn('inline-flex h-11 cursor-pointer select-none items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:translate-y-0 disabled:scale-100 disabled:opacity-60 disabled:shadow-none', className)}>
       {loading ? <LoaderCircle className="mr-2 size-4 animate-spin" /> : null}
       {children}
     </button>

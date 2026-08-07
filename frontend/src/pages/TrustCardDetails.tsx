@@ -58,7 +58,8 @@ export default function TrustCardDetails() {
         </div>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+      <TrustScoreExplanation isDemoMode={isDemoMode} trustCard={trustCard} />
+      <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <Card className="overflow-hidden bg-slate-950 text-white">
           <div className="border-b border-white/10 p-6 sm:p-8">
             <div className="flex items-center justify-between gap-3">
@@ -157,7 +158,6 @@ export default function TrustCardDetails() {
           </Card>
         </div>
       </div>
-      <TrustScoreExplanation isDemoMode={isDemoMode} trustCard={trustCard} />
       <AITransparencyPanel session={isDemoMode ? demoAnalysisSession : {}} isDemoMode={isDemoMode} audience="employee" includeEvidenceDetails />
     </PageShell>
   )

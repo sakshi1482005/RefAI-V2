@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import unittest
 
-from app.services.employee_reliability import WEIGHTS, calculate_employee_reliability
+from app.services.employee_reliability import WEIGHTS, calculate_employee_reliability, calculate_employee_reliability_badge
 
 
 NOW = datetime(2026, 7, 30, 12, 0, tzinfo=timezone.utc)
@@ -46,6 +46,12 @@ def response_event(request_id="request-1", hours_after=24, days_ago=4, status="d
 
 
 class EmployeeReliabilityTests(unittest.TestCase):
+    @staticmethod
+    def reviewed_history(*, response_hours=24, days_ago=(10, 8, 4)):
+        requests = [request("declined", days_ago=age, note="A clear role-alignment reason.", request_id=f"request-{index}") for index, age in enumerate(days_ago)]
+        history = [response_event(request_id=item["id"], hours_after=response_hours, days_ago=age, note=item["employee_note"]) for item, age in zip(requests, days_ago)]
+        return requests, history
+
     def test_weights_are_exact_and_components_reconcile(self):
         self.assertEqual(WEIGHTS, {
             "response_consistency": 30,
@@ -96,6 +102,45 @@ class EmployeeReliabilityTests(unittest.TestCase):
         self.assertEqual(metrics["referral_completion"]["score"], 18)
         self.assertEqual(metrics["decision_transparency"]["score"], 10)
         self.assertEqual(card["requestsReviewed"], 0)
+
+    def test_new_employee_receives_neutral_new_referrer_badge(self):
+        badge = calculate_employee_reliability_badge(profile(), [], [], now=NOW)
+        self.assertEqual(badge["badgeType"], "new_referrer")
+        self.assertEqual(badge["label"], "New Referrer")
+        self.assertEqual(badge["relevantCounts"]["meaningfulResponses"], 0)
+
+    def test_reliable_employee_badge_requires_timely_transparent_recent_responses(self):
+        requests, history = self.reviewed_history()
+        badge = calculate_employee_reliability_badge(profile(), requests, history, now=NOW)
+        self.assertEqual(badge["badgeType"], "reliable_referrer")
+        self.assertEqual(badge["relevantCounts"]["meaningfulResponses"], 3)
+        self.assertEqual(badge["relevantCounts"]["overdueUnansweredRequests"], 0)
+
+    def test_delayed_responses_do_not_receive_reliable_badge(self):
+        requests, history = self.reviewed_history(response_hours=120, days_ago=(12, 10, 8))
+        badge = calculate_employee_reliability_badge(profile(), requests, history, now=NOW)
+        self.assertEqual(badge["badgeType"], "verified_referrer")
+
+    def test_insufficient_history_remains_new_even_when_profile_is_verified(self):
+        requests, history = self.reviewed_history(days_ago=(8, 4))
+        badge = calculate_employee_reliability_badge(profile(), requests, history, now=NOW)
+        self.assertEqual(badge["badgeType"], "new_referrer")
+
+    def test_badge_changes_when_recent_month_activity_ages_out(self):
+        requests, history = self.reviewed_history(days_ago=(25, 20, 15))
+        current = calculate_employee_reliability_badge(profile(), requests, history, now=NOW)
+        later = calculate_employee_reliability_badge(profile(), requests, history, now=NOW + timedelta(days=31))
+        self.assertEqual(current["badgeType"], "reliable_referrer")
+        self.assertEqual(later["badgeType"], "verified_referrer")
+        self.assertEqual(later["relevantCounts"]["recentMeaningfulResponses"], 0)
+
+    def test_employee_viewed_event_is_not_a_meaningful_response(self):
+        pending = request("pending", days_ago=10)
+        viewed = response_event(status="pending", note=None)
+        viewed["event_type"] = "employee_viewed"
+        card = calculate_employee_reliability(profile(), [pending], [viewed], now=NOW)
+        self.assertEqual(card["requestsReviewed"], 0)
+        self.assertIn("1 request(s) remained unanswered", card["metrics"][0]["evidence"][1])
 
 
 if __name__ == "__main__":

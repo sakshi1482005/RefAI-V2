@@ -21,11 +21,19 @@ class QueueServiceStub:
 
 class EmployeeProfileServiceStub:
     def __init__(self): self.saved_actor = None
+    @staticmethod
+    def badge():
+        return {
+            "badgeType": "new_referrer", "label": "New Referrer", "reliabilityLevel": "Building history",
+            "basis": "Limited history.",
+            "relevantCounts": {"meaningfulResponses": 0, "completedReferrals": 0, "recentMeaningfulResponses": 0, "overdueUnansweredRequests": 0},
+            "lastCalculatedAt": datetime.now(timezone.utc).isoformat(), "limitations": [],
+        }
     def employee_profile(self, actor_id):
-        return {"profileId": actor_id, "company": "Acme", "designation": "Engineer"}
+        return {"profileId": actor_id, "company": "Acme", "designation": "Engineer", "reliabilityBadge": self.badge()}
     def save_employee_profile(self, actor_id, payload):
         self.saved_actor = actor_id
-        return {"profileId": actor_id, "company": payload.company, "designation": payload.designation}
+        return {"profileId": actor_id, "company": payload.company, "designation": payload.designation, "reliabilityBadge": self.badge()}
 
 
 class CompatibilityServiceStub:

@@ -1,5 +1,5 @@
 import { ArrowRight, CheckCircle2, FileText, Sparkles, Upload, ShieldCheck, BriefcaseBusiness } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageShell from '../components/dashboard/PageShell'
 import { Card, InlineFeedback, PrimaryButton, SecondaryButton } from '../components/dashboard/primitives'
@@ -9,7 +9,7 @@ import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
 import { demoAnalysisSession } from '../lib/demoData'
 import { friendlyErrorMessage, requireOnline } from '../lib/requestSafety'
 import { parseResumeAnalysisResponse, parseResumeUploadResponse } from '../lib/resumeContract'
-import { useAnalysisSession } from '../hooks/useAnalysisSession'
+import { refreshAuthenticatedAnalysisSession, setAuthenticatedAnalysisSession, useAnalysisSession } from '../hooks/useAnalysisSession'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import type { AnalysisSession, ResumeUploadResult } from '../lib/analysisSession'
 
@@ -32,7 +32,7 @@ function validateJobDescription(value: string) {
 export default function ResumeUpload() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { isDemoMode, demoJourneyStage, setDemoJourneyStage } = useDemoMode()
+  const { isDemoMode, authenticatedUserId, demoJourneyStage, setDemoJourneyStage } = useDemoMode()
   const analysisSession = useAnalysisSession()
   const { profile } = useCurrentUser()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -52,6 +52,20 @@ export default function ResumeUpload() {
   )
   const [jobDescriptionTouched, setJobDescriptionTouched] = useState(false)
   const jobDescriptionError = isDemoMode ? null : validateJobDescription(jobDescription)
+
+  useEffect(() => {
+    if (!isDemoMode && analysisSession.upload && !selectedFile && !uploading) {
+      setUploadedResume(analysisSession.upload)
+      setUploadedAt(analysisSession.analyzedAt)
+    }
+  }, [analysisSession.analyzedAt, analysisSession.upload, isDemoMode, selectedFile, uploading])
+
+  useEffect(() => {
+    if (isDemoMode) return
+    if (!targetRole && (analysisSession.role || profile?.preferredRole)) setTargetRole(analysisSession.role || profile?.preferredRole || '')
+    if (!targetCompany && (analysisSession.company || profile?.preferredCompany)) setTargetCompany(analysisSession.company || profile?.preferredCompany || '')
+    if (!jobDescriptionTouched && !jobDescription && !analysisSession.usedGeneralRoleExpectations && analysisSession.jobDescription) setJobDescription(analysisSession.jobDescription)
+  }, [analysisSession.company, analysisSession.jobDescription, analysisSession.role, analysisSession.usedGeneralRoleExpectations, isDemoMode, jobDescription, jobDescriptionTouched, profile?.preferredCompany, profile?.preferredRole, targetCompany, targetRole])
 
   const handleFileSelection = (file: File | null) => {
     if (!file) {
@@ -136,7 +150,17 @@ export default function ResumeUpload() {
 
       setUploadProgress(100)
       setUploadedResume(uploadResult)
-      setUploadedAt(new Date().toISOString())
+      const completedAt = new Date().toISOString()
+      setUploadedAt(completedAt)
+      if (authenticatedUserId) {
+        setAuthenticatedAnalysisSession(authenticatedUserId, {
+          upload: uploadResult,
+          role: targetRole.trim(),
+          company: targetCompany.trim(),
+          jobDescription: jobDescription.trim(),
+          analyzedAt: completedAt,
+        })
+      }
       setSelectedFile(null)
       setMessage('Resume uploaded successfully.')
       setMessageTone('success')
@@ -200,6 +224,10 @@ export default function ResumeUpload() {
         usedGeneralRoleExpectations: analysisResult.usedGeneralRoleExpectations,
         analyzedAt: new Date().toISOString(),
         processingTimeMs: uploadedResume.processingTimeMs + analysisResult.processingTimeMs,
+      }
+      if (authenticatedUserId) {
+        setAuthenticatedAnalysisSession(authenticatedUserId, freshSession)
+        void refreshAuthenticatedAnalysisSession(authenticatedUserId)
       }
       setMessage('Resume uploaded and analyzed successfully.')
       setMessageTone('success')

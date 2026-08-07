@@ -5,7 +5,7 @@ from uuid import UUID
 
 from app.db.supabase_client import supabase
 from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeProfessionalProfileUpdate, ProofEntryInput, ReferralCompatibilityRequest, ReferralMessageRequest, ReferralQualityRequest, ReferralSubmissionUpdate
-from app.services.employee_reliability import calculate_employee_reliability
+from app.services.employee_reliability import calculate_employee_reliability, calculate_employee_reliability_badge
 from app.services.employee_review_copilot import build_employee_review_copilot
 from app.services.groq_client import AIServiceUnavailable, generate_clarification_question, generate_employee_review_summary, generate_referral_message
 from app.services.referral_compatibility import calculate_referral_compatibility
@@ -20,7 +20,7 @@ EMPLOYEE_PROFILE_COLUMNS = (
     "supported_departments,accepts_freshers,minimum_evidence_expectations,"
     "max_active_requests,availability_status,preferred_candidate_levels,"
     "preferred_message_length,referral_guidelines,decline_reason_codes,"
-    "referral_categories,department,years_experience,verified_employee,"
+    "referral_categories,ai_apply_opt_in,department,years_experience,verified_employee,"
     "linkedin_url,company_profile_url,portfolio_url,updated_at"
 )
 ACTIVE_REFERRAL_STATUSES = ["submitted", "pending", "under_review", "more_info_requested"]
@@ -52,8 +52,14 @@ def _camel(row: dict[str, Any]) -> dict[str, Any]:
         "referral_date": "referralDate", "referral_confirmation_number": "referralConfirmationNumber",
         "referral_note_to_student": "referralNoteToStudent", "referral_submitted_at": "referralSubmittedAt",
         "referral_submitted_by": "referralSubmittedBy", "event_type": "eventType",
+        "employee_company_snapshot": "employeeCompanySnapshot",
     }
     return {mapping.get(key, key): value for key, value in row.items()}
+
+
+def _normalize_company(value: Any) -> str | None:
+    normalized = " ".join(str(value or "").split())
+    return normalized or None
 
 
 class ReferralRepository(Protocol):
@@ -151,7 +157,7 @@ class SupabaseReferralRepository:
     def list_employee_queue(self, employee_id: str) -> list[dict[str, Any]]:
         # Select only the two score keys needed by the queue. The complete Trust Card
         # payload (and any resume-derived evidence it contains) stays out of this query.
-        query = "id,student_id,employee_id,trust_card_id,target_role,target_company,status,created_at,updated_at,student:profiles!referral_requests_student_id_fkey(full_name),trust_card:trust_cards!referral_requests_trust_card_id_fkey(id,trust_score:payload->trustScore,overall_match:payload->overallMatch)"
+        query = "id,student_id,employee_id,trust_card_id,target_role,target_company,employee_company_snapshot,status,created_at,updated_at,student:profiles!referral_requests_student_id_fkey(full_name),trust_card:trust_cards!referral_requests_trust_card_id_fkey(id,trust_score:payload->trustScore,overall_match:payload->overallMatch)"
         return supabase.table("referral_requests").select(query).eq("employee_id", employee_id).order("created_at", desc=True).execute().data or []
 
     def transition(self, actor_id: str, request_id: str, status: str, reason: str, decision_message: str, private_note: str | None) -> dict[str, Any]:
@@ -310,6 +316,15 @@ class ReferralRequestService:
         if role not in {"student", "employee"}: raise ReferralForbidden("A protected profile role is required")
         return role
 
+    def _resolved_employee_profile(self, employee_id: str) -> dict[str, Any]:
+        profile = {"profile_id": employee_id, **(self.repository.get_employee_profile(employee_id) or {})}
+        company = _normalize_company(profile.get("company"))
+        if company is None:
+            metadata = self.repository.get_auth_metadata(employee_id)
+            company = _normalize_company(metadata.get("company_name")) or _normalize_company(metadata.get("company"))
+        profile["company"] = company
+        return profile
+
     @staticmethod
     def _proof_values(payload: ProofEntryInput) -> dict[str, Any]:
         return {
@@ -395,7 +410,7 @@ class ReferralRequestService:
         if self._role(actor_id) != "student": raise ReferralForbidden("Student access is required")
         employee_id = str(payload.employeeId)
         if self.repository.get_role(employee_id) != "employee": raise ReferralError("The selected recipient is not an employee")
-        employee_profile = {"profile_id": employee_id, **(self.repository.get_employee_profile(employee_id) or {})}
+        employee_profile = self._resolved_employee_profile(employee_id)
         card = self.repository.get_trust_card(str(payload.trustCardId))
         if not card or str(card.get("student_id")) != actor_id: raise ReferralForbidden("The Trust Card does not belong to this student")
         request = {
@@ -416,7 +431,7 @@ class ReferralRequestService:
         employee_id = str(payload.employeeId)
         if self.repository.get_role(employee_id) != "employee":
             raise ReferralNotFound("The selected employee is not discoverable")
-        employee_profile = self.repository.get_employee_profile(employee_id) or {}
+        employee_profile = self._resolved_employee_profile(employee_id)
         employee_public = self.repository.get_profile(employee_id) or {}
         card = self.repository.get_trust_card(str(payload.trustCardId))
         if not card or str(card.get("student_id")) != actor_id:
@@ -470,7 +485,7 @@ class ReferralRequestService:
         employee_id = str(payload.employeeId)
         if self.repository.get_role(employee_id) != "employee":
             raise ReferralNotFound("The selected employee is not discoverable")
-        employee_profile = self.repository.get_employee_profile(employee_id) or {}
+        employee_profile = self._resolved_employee_profile(employee_id)
         employee_public = self.repository.get_profile(employee_id) or {}
 
         card = self.repository.get_trust_card(str(payload.trustCardId))
@@ -592,6 +607,7 @@ class ReferralRequestService:
         row = self.repository.create_request({
             "student_id": actor_id, "employee_id": str(payload.employeeId), "trust_card_id": str(payload.trustCardId),
             **request_values,
+            "employee_company_snapshot": employee_profile.get("company"),
             "compatibility_score": compatibility["score"],
             "compatibility_label": compatibility["label"],
             "compatibility_version": compatibility["scoreVersion"],
@@ -642,10 +658,10 @@ class ReferralRequestService:
 
     @staticmethod
     def _analysis_from_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
-        analysis_keys = ("overallMatch", "roleFit", "proofScore", "gapScore", "confidence")
+        analysis_keys = ("trustScore", "overallMatch", "roleFit", "proofScore", "gapScore", "confidence")
         if not any(payload.get(key) is not None for key in analysis_keys): return None
         return {
-            "overallMatch": payload.get("overallMatch"), "roleFit": payload.get("roleFit"),
+            "trustScore": payload.get("trustScore"), "overallMatch": payload.get("overallMatch"), "roleFit": payload.get("roleFit"),
             "proofScore": payload.get("proofScore"), "gapScore": payload.get("gapScore"),
             "confidence": payload.get("confidence"), "matchedSkills": payload.get("matchedSkills"),
             "analysisReliability": payload.get("analysisReliability"),
@@ -675,6 +691,7 @@ class ReferralRequestService:
         return {
             "id": row["id"], "status": row["status"], "targetRole": row["target_role"],
             "targetCompany": row["target_company"], "studentMessage": row.get("student_message") or "",
+            "employeeCompanySnapshot": _normalize_company(row.get("employee_company_snapshot")),
             "employeeNote": self.repository.get_private_decision_note(request_id, actor_id),
             "decisionReason": row.get("decision_reason"), "decisionMessage": row.get("decision_message"),
             "decisionAt": row.get("decision_at"),
@@ -874,16 +891,24 @@ class ReferralRequestService:
         for row in rows:
             metadata = self.repository.get_auth_metadata(str(row["id"]))
             employee_id = str(row["id"])
+            resolved_company = _normalize_company(row.get("company")) or _normalize_company(metadata.get("company_name")) or _normalize_company(metadata.get("company"))
+            resolved_row = {**row, "company": resolved_company}
             active_count = counts.get(employee_id, 0)
             max_active = int(row.get("max_active_requests", 5))
             accepting = row.get("availability_status", "accepting") == "accepting" and max_active > active_count
             employee_activity = activity.get(employee_id, {"requests": [], "history": []})
-            reliability = calculate_employee_reliability(row, employee_activity["requests"], employee_activity["history"])
+            reliability = calculate_employee_reliability(resolved_row, employee_activity["requests"], employee_activity["history"])
+            reliability_badge = calculate_employee_reliability_badge(
+                resolved_row,
+                employee_activity["requests"],
+                employee_activity["history"],
+                card=reliability,
+            )
             employees.append({
                 "id": row["id"],
                 "name": row.get("full_name") or "Employee",
                 "photoUrl": metadata.get("avatar_url") or metadata.get("picture"),
-                "company": row.get("company") or metadata.get("company") or metadata.get("company_name") or metadata.get("preferred_company"),
+                "company": resolved_company,
                 "designation": row.get("designation") or metadata.get("designation") or metadata.get("job_title") or metadata.get("headline"),
                 "department": row.get("department"),
                 "yearsExperience": row.get("years_experience"),
@@ -900,10 +925,11 @@ class ReferralRequestService:
                 "preferredMessageLength": row.get("preferred_message_length", "concise"),
                 "referralGuidelines": row.get("referral_guidelines"),
                 "referralCategories": row.get("referral_categories") or [],
+                "aiApplyOptIn": row.get("ai_apply_opt_in", True),
                 "acceptingRequests": accepting,
                 "activeRequestCount": active_count,
                 "maxActiveRequests": max_active,
-                "reliability": reliability,
+                "reliabilityBadge": reliability_badge,
             })
         return employees
 
@@ -931,18 +957,22 @@ class ReferralRequestService:
             "referralGuidelines": row.get("referral_guidelines"),
             "declineReasonCodes": row.get("decline_reason_codes") or [],
             "referralCategories": row.get("referral_categories") or [],
+            "aiApplyOptIn": row.get("ai_apply_opt_in", True),
         }
 
     def employee_profile(self, actor_id: str) -> dict[str, Any]:
         if self._role(actor_id) != "employee": raise ReferralForbidden("Employee access is required")
-        row = self.repository.get_employee_profile(actor_id) or {}
+        row = self._resolved_employee_profile(actor_id)
         response_data = getattr(self.repository, "employee_response_time_data", None)
         requests, history = response_data(actor_id) if callable(response_data) else ([], [])
-        return {**self._employee_profile_payload(actor_id, row), **calculate_average_response_time(requests, history)}
+        activity_data = self.repository.referral_activity([actor_id]).get(actor_id, {"requests": [], "history": []})
+        reliability = calculate_employee_reliability(row, activity_data["requests"], activity_data["history"])
+        badge = calculate_employee_reliability_badge(row, activity_data["requests"], activity_data["history"], card=reliability)
+        return {**self._employee_profile_payload(actor_id, row), **calculate_average_response_time(requests, history), "reliabilityBadge": badge}
 
     def save_employee_profile(self, actor_id: str, update: EmployeeProfessionalProfileUpdate) -> dict[str, Any]:
         if self._role(actor_id) != "employee": raise ReferralForbidden("Employee access is required")
-        company = update.company.strip()
+        company = _normalize_company(update.company)
         if not company: raise ReferralError("Company name is required")
         designation = update.designation.strip() if update.designation and update.designation.strip() else None
         guidelines = update.referralGuidelines.strip() if update.referralGuidelines and update.referralGuidelines.strip() else None
@@ -967,6 +997,7 @@ class ReferralRequestService:
             "referral_guidelines": guidelines,
             "decline_reason_codes": update.declineReasonCodes,
             "referral_categories": update.referralCategories,
+            "ai_apply_opt_in": update.aiApplyOptIn,
         })
         if previous.get("availability_status", "accepting") == "accepting" and update.availabilityStatus != "accepting":
             employee = self.repository.get_profile(actor_id) or {}
@@ -983,4 +1014,7 @@ class ReferralRequestService:
                 )
         response_data = getattr(self.repository, "employee_response_time_data", None)
         requests, history = response_data(actor_id) if callable(response_data) else ([], [])
-        return {**self._employee_profile_payload(actor_id, row), **calculate_average_response_time(requests, history)}
+        activity_data = self.repository.referral_activity([actor_id]).get(actor_id, {"requests": [], "history": []})
+        reliability = calculate_employee_reliability(row, activity_data["requests"], activity_data["history"])
+        badge = calculate_employee_reliability_badge(row, activity_data["requests"], activity_data["history"], card=reliability)
+        return {**self._employee_profile_payload(actor_id, row), **calculate_average_response_time(requests, history), "reliabilityBadge": badge}

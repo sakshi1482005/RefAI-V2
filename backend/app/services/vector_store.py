@@ -1,6 +1,7 @@
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from functools import lru_cache
+from time import perf_counter
 
 from app.core.config import settings
 
@@ -39,10 +40,19 @@ def normalize_cosine_distance(distance: float) -> float:
 class ChromaProjectRelevanceProvider:
     """Scoped semantic comparison using the existing Chroma client and embeddings."""
 
-    def __init__(self, context_id: str):
+    def __init__(self, context_id: str, timing_callback=None):
         self.context_id = context_id
+        self.timing_callback = timing_callback
 
     def compare(self, resume_sections: list[str], comparison_contexts: list[str]) -> dict:
+        started_at = perf_counter()
+        try:
+            return self._compare(resume_sections, comparison_contexts)
+        finally:
+            if self.timing_callback:
+                self.timing_callback("vector_relevance", perf_counter() - started_at)
+
+    def _compare(self, resume_sections: list[str], comparison_contexts: list[str]) -> dict:
         if not resume_sections:
             raise ValueError("No meaningful project or experience text is available")
         if not comparison_contexts:

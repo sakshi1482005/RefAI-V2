@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { LayoutDashboard, Settings, ShieldCheck, ArrowRight, Menu, X, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, ShieldCheck, ArrowRight, Menu, X, type LucideIcon } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { IconButton, Logo } from './primitives'
 import StudentNavigation from './StudentNavigation'
@@ -20,7 +20,7 @@ const employeeNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/employee/dashboard', icon: LayoutDashboard }
 ]
 
-export default function PageShell({ title, description, eyebrow, action, children }: { title: string; description: string; eyebrow?: string; action?: ReactNode; children: ReactNode }) {
+export default function PageShell({ title, description, eyebrow, action, children, compact = false }: { title: string; description: string; eyebrow?: string; action?: ReactNode; children: ReactNode; compact?: boolean }) {
   const location = useLocation()
   const navigate = useNavigate()
   const isEmployeePortal = location.pathname.startsWith('/employee')
@@ -68,10 +68,6 @@ export default function PageShell({ title, description, eyebrow, action, childre
 
           <div className="flex shrink-0 items-center gap-1">
             <NotificationCentre />
-            <IconButton label={isEmployeePortal ? 'Employee settings unavailable' : 'Settings'} onClick={isEmployeePortal ? undefined : () => navigate('/settings')} disabled={isEmployeePortal} disabledReason={isEmployeePortal ? 'Employee settings are not available yet' : undefined}>
-              <Settings className="size-[18px]" />
-            </IconButton>
-            <div className="mx-3 h-7 w-px bg-slate-200" />
             <ProfileMenu portal={isEmployeePortal ? 'employee' : 'student'} />
             {!isEmployeePortal ? (
               <div className="xl:hidden">
@@ -93,13 +89,13 @@ export default function PageShell({ title, description, eyebrow, action, childre
       <NetworkStatusBanner />
       <DemoModeBanner />
 
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-[1440px] space-y-8 px-4 py-7 outline-none sm:px-6 sm:py-10 lg:px-8">
+      <main id="main-content" tabIndex={-1} className={`mx-auto max-w-[1440px] px-4 outline-none sm:px-6 lg:px-8 ${compact ? 'space-y-6 py-6 sm:py-8' : 'space-y-8 py-7 sm:py-10'}`}>
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-6 p-7 sm:p-10 lg:flex-row lg:items-end lg:justify-between lg:p-12">
+          <div className={`flex flex-col lg:flex-row lg:items-end lg:justify-between ${compact ? 'gap-4 p-5 sm:p-6 lg:p-7' : 'gap-6 p-7 sm:p-10 lg:p-12'}`}>
             <div>
-              {eyebrow ? <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{eyebrow}</p> : null}
-              <h1 className="text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">{title}</h1>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">{description}</p>
+              {eyebrow ? <p className={`${compact ? 'mb-2' : 'mb-3'} text-xs font-semibold uppercase tracking-[0.18em] text-slate-500`}>{eyebrow}</p> : null}
+              <h1 className={`${compact ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl'} font-semibold tracking-[-0.035em] text-slate-950`}>{title}</h1>
+              <p className={`${compact ? 'mt-2 text-sm leading-6' : 'mt-3 text-base leading-7'} max-w-2xl text-slate-600`}>{description}</p>
             </div>
             {action ? <div>{action}</div> : null}
           </div>
