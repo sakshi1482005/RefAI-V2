@@ -1,9 +1,7 @@
 import {
-  Building2,
   FileText,
   LayoutDashboard,
   ShieldCheck,
-  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
