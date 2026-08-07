@@ -34,6 +34,8 @@ function factorGlance(factor: TrustScoreFactor, displayScore: number) {
 
 export default function TrustScoreExplanation({ trustCard, isDemoMode }: { trustCard?: ExplainableTrustScore; isDemoMode: boolean }) {
   const [showFormula, setShowFormula] = useState(false)
+  const [showReliability, setShowReliability] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
   const displayedScores = trustCard?.scoreBreakdown.map((factor) => (
     factor.maximumScore === undefined || factor.maximumScore === null
       ? Math.round(factor.contribution)
@@ -106,19 +108,30 @@ export default function TrustScoreExplanation({ trustCard, isDemoMode }: { trust
           ) : null}
 
           {trustCard ? (
-            <p className="mt-8 max-w-2xl text-sm leading-6 text-black/55">A deterministic total from five weighted evidence components. Open any component below for its saved evidence, gaps, and limitation.</p>
+            <p className="mt-8 flex items-center gap-1.5 text-sm font-medium text-black/50">Five factors, one score <span aria-hidden="true">→</span> tap any card below to see why.</p>
           ) : null}
 
           {trustCard?.analysisReliability ? (
-            <div className="mt-6 flex items-start gap-3.5 rounded-2xl border border-black/10 bg-black/[0.025] p-4 sm:p-5">
-              <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-black text-white">
-                <ShieldCheck className="size-4" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-black">Analysis reliability <span className="font-normal text-black/40">· {trustCard.analysisReliability.label}</span></p>
-                <p className="mt-1.5 text-sm leading-6 text-black/60">{trustCard.analysisReliability.basis}</p>
-                <p className="mt-1.5 text-xs leading-5 text-black/45"><span className="font-semibold text-black/70">Limitation:</span> {trustCard.analysisReliability.limitations}</p>
-              </div>
+            <div className="mt-6 rounded-2xl border border-black/10 bg-black/[0.025] p-1.5">
+              <button
+                type="button"
+                aria-expanded={showReliability}
+                aria-controls="trust-score-reliability"
+                onClick={() => setShowReliability((value) => !value)}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 hover:bg-black/[0.03]"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black text-white">
+                  <ShieldCheck className="size-4" />
+                </span>
+                <span className="flex-1 text-sm font-semibold text-black">How reliable is this? <span className="font-normal text-black/40">· {trustCard.analysisReliability.label}</span></span>
+                <ChevronDown className={`size-4 shrink-0 text-black/40 transition-transform duration-200 ${showReliability ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </button>
+              {showReliability ? (
+                <div id="trust-score-reliability" className="animate-in fade-in slide-in-from-top-1 px-4 pb-3.5 pt-1 duration-200">
+                  <p className="text-sm leading-6 text-black/60">{trustCard.analysisReliability.basis}</p>
+                  <p className="mt-1.5 text-xs leading-5 text-black/45"><span className="font-semibold text-black/70">Limitation:</span> {trustCard.analysisReliability.limitations}</p>
+                </div>
+              ) : null}
             </div>
           ) : trustCard ? <p className="mt-6 text-xs leading-5 text-black/40">This older saved Trust Card does not include an Analysis Reliability assessment.</p> : null}
         </div>
@@ -131,8 +144,8 @@ export default function TrustScoreExplanation({ trustCard, isDemoMode }: { trust
                 <Layers className="size-4" />
               </span>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/40">Five weighted components</p>
-                <h2 className="mt-1 text-xl font-semibold tracking-[-0.01em] text-black sm:text-2xl">Evidence behind the score</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/40">The breakdown</p>
+                <h2 className="mt-1 text-xl font-semibold tracking-[-0.01em] text-black sm:text-2xl">Why this score?</h2>
               </div>
             </div>
             {trustCard ? (
@@ -143,7 +156,7 @@ export default function TrustScoreExplanation({ trustCard, isDemoMode }: { trust
                 onClick={() => setShowFormula((value) => !value)}
                 className="inline-flex min-h-10 items-center justify-center rounded-full border border-black/15 bg-white px-4 text-sm font-semibold text-black transition-colors duration-200 hover:border-black hover:bg-black hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
               >
-                <Calculator className="mr-2 size-4" aria-hidden="true" />How this score was calculated
+                <Calculator className="mr-2 size-4" aria-hidden="true" />Show the math
                 <ChevronDown className={`ml-2 size-4 transition-transform duration-200 ${showFormula ? 'rotate-180' : ''}`} aria-hidden="true" />
               </button>
             ) : null}
@@ -155,11 +168,11 @@ export default function TrustScoreExplanation({ trustCard, isDemoMode }: { trust
                 <div id="trust-score-formula" className="mt-5 animate-in fade-in slide-in-from-top-1 rounded-2xl border border-black/10 bg-black/[0.02] p-5 duration-200">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/40">Formula</p>
                   <p className="mt-2 font-mono text-sm font-medium leading-6 text-black/80">{trustCard.scoreFormula || 'The saved component contributions are added to produce the score out of 100.'}</p>
-                  <p className="mt-3 text-xs leading-5 text-black/40">Groq may word summaries, but it does not calculate or alter these points.</p>
+                  <p className="mt-3 text-xs leading-5 text-black/40">Just math — the AI writes the summary, never the number.</p>
                 </div>
               ) : null}
 
-              <p className="mt-7 text-sm leading-6 text-black/45">Component points add up exactly to the total above. Open a card for its supporting evidence and what would improve it.</p>
+              <p className="mt-7 text-sm font-medium text-black/45">Tap a card for the receipts 👇</p>
 
               <div className="mt-4 space-y-3">
                 {trustCard.scoreBreakdown.map((factor, index) => (
@@ -169,23 +182,34 @@ export default function TrustScoreExplanation({ trustCard, isDemoMode }: { trust
 
               {/* Reconciliation, reframed as a checklist-style confidence callout.
                   Distinguished by icon and border weight rather than color. */}
-              <div className={`mt-7 flex items-start gap-3.5 rounded-2xl border p-4 transition-colors duration-200 ${reconciles ? 'border-black bg-black/[0.03]' : 'border-dashed border-black/20 bg-white'}`}>
-                <span className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full ${reconciles ? 'bg-black text-white' : 'bg-black/5 text-black/35'}`}>
+              <div className={`mt-7 flex items-center gap-3 rounded-2xl border p-3.5 transition-colors duration-200 ${reconciles ? 'border-black bg-black/[0.03]' : 'border-dashed border-black/20 bg-white'}`}>
+                <span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${reconciles ? 'bg-black text-white' : 'bg-black/5 text-black/35'}`}>
                   <Gauge className="size-4" aria-hidden="true" />
                 </span>
-                <div>
-                  <p className="font-semibold text-black">Component total: {componentTotal} / 100</p>
-                  <p className="mt-1 text-sm leading-6 text-black/55">{reconciles ? 'The five displayed component points reconcile exactly with the Candidate Trust Score.' : 'This older saved card does not contain a complete reconcilable five-component breakdown. Its saved score is shown without inventing missing values.'}</p>
-                </div>
+                <p className="text-sm font-semibold text-black">
+                  {componentTotal} / 100 {reconciles ? <span className="font-normal text-black/50">— checks out exactly ✓</span> : <span className="font-normal text-black/50">— older card, no full breakdown saved</span>}
+                </p>
               </div>
 
-              <div className="mt-5 flex items-start gap-2.5 rounded-2xl bg-black/[0.025] p-4 text-xs leading-5 text-black/45">
-                <Info className="mt-0.5 size-4 shrink-0 text-black/30" aria-hidden="true" />
-                <p>Evidence labels describe what RefAI extracted from student-provided records. They do not independently verify a claim. AI-generated narrative wording is advisory and is not presented as verified evidence.</p>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  aria-expanded={showInfo}
+                  aria-controls="trust-score-info"
+                  onClick={() => setShowInfo((value) => !value)}
+                  className="inline-flex items-center gap-1.5 rounded-full px-1 text-xs font-semibold text-black/40 transition-colors duration-200 hover:text-black"
+                >
+                  <Info className="size-3.5" aria-hidden="true" />
+                  What counts as evidence?
+                  <ChevronDown className={`size-3.5 transition-transform duration-200 ${showInfo ? 'rotate-180' : ''}`} aria-hidden="true" />
+                </button>
+                {showInfo ? (
+                  <p id="trust-score-info" className="animate-in fade-in slide-in-from-top-1 mt-2 rounded-2xl bg-black/[0.025] p-4 text-xs leading-5 text-black/45 duration-200">Evidence labels describe what RefAI extracted from student-provided records. They do not independently verify a claim. AI-generated narrative wording is advisory and is not presented as verified evidence.</p>
+                ) : null}
               </div>
             </>
           ) : (
-            <EmptyState className="mt-8 rounded-2xl border-black/10 bg-black/[0.02]" icon={ShieldCheck} title="Generate a Trust Card to calculate the score" description="Complete resume analysis first. RefAI will then return the deterministic score, five weighted components, evidence references, and limitations together." />
+            <EmptyState className="mt-8 rounded-2xl border-black/10 bg-black/[0.02]" icon={ShieldCheck} title="No score yet" description="Run the resume analysis and your Trust Card — score, breakdown, and evidence — shows up right here." />
           )}
         </div>
       </Card>

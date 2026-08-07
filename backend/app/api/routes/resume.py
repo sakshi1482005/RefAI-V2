@@ -10,6 +10,8 @@ from app.services.vector_store import upsert_resume_chunks
 from app.services.resume_storage import store_resume
 from app.models.schemas import ImprovementSimulatorResponse, MatchAnalysisResponse, MatchScoreRequest, PersistedAnalysisSessionResponse, ResumeUploadResponse
 from app.services.resume_analysis import ResumeAnalysisInputError, ResumeAnalysisUnavailable, run_resume_analysis
+from app.services.groq_client import generate_interview_questions, AIServiceUnavailable
+from pydantic import BaseModel
 from app.services.student_persistence import StudentAnalysisNotFound, StudentPersistenceError, StudentPersistenceService
 from app.services.requirement_extractor import classify_job_description, general_expectations_for_role
 from app.services.analysis_reliability import assess_analysis_reliability
@@ -135,3 +137,39 @@ async def upload_resume(file: UploadFile = File(...), user: dict = Depends(get_c
         user["sub"], resume_id, response["extractionStatus"], storage_status, indexed,
     )
     return response
+
+class InterviewQuestionsResponse(BaseModel):
+    questions: list[dict]
+
+
+@router.get("/analysis/interview-questions", response_model=InterviewQuestionsResponse)
+def get_interview_questions(user: dict = Depends(get_current_user)):
+    try:
+        analysis = persistence_service.latest_session(user["sub"])
+    except StudentPersistenceError as exc:
+        logger.exception("Interview question lookup failed user=%s", user["sub"])
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not load your latest analysis.",
+        ) from exc
+
+    if not analysis:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No resume analysis found. Analyze your resume first.",
+        )
+
+    missing_skills = analysis.get("missingSkills") or []
+    gap_analysis = analysis.get("gapAnalysis") or ""
+
+    try:
+        questions = generate_interview_questions(missing_skills, gap_analysis)
+    except AIServiceUnavailable as exc:
+        logger.exception("Interview question generation failed user=%s", user["sub"])
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not generate interview questions. Please try again.",
+        ) from exc
+
+    return {"questions": questions}
+
