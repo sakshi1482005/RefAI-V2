@@ -23,6 +23,7 @@ EMPLOYEE_PROFILE_COLUMNS = (
     "referral_categories,ai_apply_opt_in,department,years_experience,verified_employee,"
     "linkedin_url,company_profile_url,portfolio_url,updated_at"
 )
+EMPLOYEE_PROFILE_BASE_COLUMNS = "profile_id,company,designation,created_at,updated_at"
 ACTIVE_REFERRAL_STATUSES = ["submitted", "pending", "under_review", "more_info_requested"]
 
 
@@ -62,6 +63,16 @@ def _normalize_company(value: Any) -> str | None:
     return normalized or None
 
 
+def _is_missing_employee_profile_column_error(exc: Exception) -> bool:
+    """Allow the directory to operate during an additive migration rollout only."""
+    message = str(exc).lower()
+    return (
+        "employee_profiles" in message
+        and ("column" in message or "schema cache" in message)
+        and ("does not exist" in message or "could not find" in message or "schema cache" in message)
+    )
+
+
 class ReferralRepository(Protocol):
     def get_role(self, user_id: str) -> str | None: ...
     def get_trust_card(self, trust_card_id: str) -> dict[str, Any] | None: ...
@@ -96,6 +107,15 @@ class ReferralRepository(Protocol):
 
 
 class SupabaseReferralRepository:
+    @staticmethod
+    def _employee_profile_select(primary, fallback):
+        try:
+            return primary().data or []
+        except Exception as exc:
+            if not _is_missing_employee_profile_column_error(exc):
+                raise
+            return fallback().data or []
+
     def get_role(self, user_id: str) -> str | None:
         rows = supabase.table("profiles").select("role").eq("id", user_id).limit(1).execute().data or []
         return rows[0]["role"] if rows else None
@@ -225,12 +245,18 @@ class SupabaseReferralRepository:
         if not profiles:
             return []
         profile_ids = [str(profile["id"]) for profile in profiles]
-        employee_profiles = supabase.table("employee_profiles").select(EMPLOYEE_PROFILE_COLUMNS).in_("profile_id", profile_ids).execute().data or []
+        employee_profiles = self._employee_profile_select(
+            lambda: supabase.table("employee_profiles").select(EMPLOYEE_PROFILE_COLUMNS).in_("profile_id", profile_ids).execute(),
+            lambda: supabase.table("employee_profiles").select(EMPLOYEE_PROFILE_BASE_COLUMNS).in_("profile_id", profile_ids).execute(),
+        )
         details_by_profile = {str(details["profile_id"]): details for details in employee_profiles}
         return [{**profile, **details_by_profile.get(str(profile["id"]), {})} for profile in profiles]
 
     def get_employee_profile(self, profile_id: str) -> dict[str, Any] | None:
-        rows = supabase.table("employee_profiles").select(EMPLOYEE_PROFILE_COLUMNS).eq("profile_id", profile_id).limit(1).execute().data or []
+        rows = self._employee_profile_select(
+            lambda: supabase.table("employee_profiles").select(EMPLOYEE_PROFILE_COLUMNS).eq("profile_id", profile_id).limit(1).execute(),
+            lambda: supabase.table("employee_profiles").select(EMPLOYEE_PROFILE_BASE_COLUMNS).eq("profile_id", profile_id).limit(1).execute(),
+        )
         return rows[0] if rows else None
 
     def upsert_employee_profile(self, profile_id: str, values: dict[str, Any]) -> dict[str, Any]:
@@ -862,7 +888,9 @@ class ReferralRequestService:
     def history(self, actor_id: str, request_id: str) -> list[dict[str, Any]]:
         self.get(actor_id, request_id)
         role = self._role(actor_id)
-        items = [_camel(row) for row in self.repository.list_history(request_id)]
+        # Empty history is a valid state for legacy requests and must not turn
+        # a timeline read into a server error.
+        items = [_camel(row) for row in (self.repository.list_history(request_id) or [])]
         if role == "student":
             for item in items: item["note"] = None
         return items

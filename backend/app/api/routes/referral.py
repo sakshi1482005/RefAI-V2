@@ -145,7 +145,7 @@ def get_request(request_id: str, user: dict = Depends(get_current_user)):
 
 @router.get("/requests/{request_id}/history", response_model=list[ReferralStatusHistoryEntry])
 def request_history(request_id: str, user: dict = Depends(get_current_user)):
-    try: return service.history(user["sub"], request_id)
+    try: return service.history(user["sub"], request_id) or []
     except Exception as exc: _raise_referral_error(exc)
 
 

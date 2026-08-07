@@ -5,7 +5,7 @@ import unittest
 from pydantic import ValidationError
 
 from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeProfessionalProfileUpdate, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView, ReferralCompatibilityRequest, ReferralMessageRequest, ReferralRequestDetail, ReferralSubmissionUpdate
-from app.services.referral_requests import InvalidReferralTransition, ReferralForbidden, ReferralRequestService
+from app.services.referral_requests import InvalidReferralTransition, ReferralForbidden, ReferralRequestService, SupabaseReferralRepository
 
 
 class FakeRepository:
@@ -183,6 +183,26 @@ class ReferralRequestTests(unittest.TestCase):
         request = self.create(); self.service.update_status(self.repository.employee, str(request["id"]), EmployeeDecisionUpdate(status="more_info_requested", reason="clarification_required", question="Please share testing evidence.", note="Review started"))
         history = self.service.history(self.repository.employee, str(request["id"]))
         self.assertEqual([(item["previousStatus"], item["newStatus"]) for item in history], [(None, "submitted"), ("submitted", "more_info_requested")])
+
+    def test_request_history_is_empty_when_no_events_exist(self):
+        request = self.create()
+        self.repository.history_rows.clear()
+        self.assertEqual(self.service.history(self.repository.student, str(request["id"])), [])
+
+    def test_employee_profile_directory_falls_back_only_for_missing_optional_columns(self):
+        calls = []
+
+        def primary():
+            calls.append("primary")
+            raise RuntimeError("Could not find the 'ai_apply_opt_in' column of 'employee_profiles' in the schema cache")
+
+        def fallback():
+            calls.append("fallback")
+            return type("Response", (), {"data": [{"profile_id": self.repository.employee, "company": "Acme"}]})()
+
+        rows = SupabaseReferralRepository._employee_profile_select(primary, fallback)
+        self.assertEqual(calls, ["primary", "fallback"])
+        self.assertEqual(rows[0]["company"], "Acme")
     def test_completed_decision_is_retrievable_after_service_refresh(self):
         request = self.create()
         request_id = str(request["id"])

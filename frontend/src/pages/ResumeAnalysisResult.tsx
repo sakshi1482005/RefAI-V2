@@ -8,7 +8,7 @@ import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
 import { demoEmployeeReview } from '../lib/demoData'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
 import { useToast } from '../components/feedback/ToastProvider'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/apiClient'
 import { FriendlyRequestError, friendlyErrorMessage, requireOnline } from '../lib/requestSafety'
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -28,6 +28,7 @@ export default function ResumeAnalysisResult() {
   const { session } = analysisResource
   const { isDemoMode, authenticatedUserId, demoJourneyStage, setDemoJourneyStage } = useDemoMode()
   const [generatingTrustCard, setGeneratingTrustCard] = useState(false)
+  const trustCardActionInFlight = useRef(false)
   const trustCardResource = useTrustCardResource({ analysisId: session.analysisId, initialCard: session.trustCard, autoLoad: false })
 
   const trustCardErrorMessage = (error: unknown) => {
@@ -72,7 +73,7 @@ export default function ResumeAnalysisResult() {
       navigate('/dashboard/trust-card')
       return
     }
-    if (session.trustCard) {
+    if (session.trustCard || trustCardResource.card) {
       navigate('/dashboard/trust-card')
       return
     }
@@ -81,10 +82,20 @@ export default function ResumeAnalysisResult() {
       navigate('/dashboard/resume')
       return
     }
-    if (generatingTrustCard) return
+    if (generatingTrustCard || trustCardActionInFlight.current) return
+    trustCardActionInFlight.current = true
     setGeneratingTrustCard(true)
     try {
       requireOnline()
+      const persisted = await trustCardResource.prefetch()
+      if (persisted.card) {
+        navigate('/dashboard/trust-card')
+        return
+      }
+      if (persisted.error || !persisted.notFound) {
+        toast({ title: 'Trust Card could not be loaded', description: friendlyErrorMessage(persisted.error, 'The saved Trust Card could not be checked. Please retry.'), tone: 'error' })
+        return
+      }
       const { data, status } = await api.post<unknown>('/trust-card/generate', {
         candidateName: profile?.fullName || profile?.email || 'Candidate',
         analysisId: session.analysisId,
@@ -99,6 +110,7 @@ export default function ResumeAnalysisResult() {
       toast({ title: 'Trust Card could not be generated', description: trustCardErrorMessage(error), tone: 'error' })
     } finally {
       setGeneratingTrustCard(false)
+      trustCardActionInFlight.current = false
     }
   }
 

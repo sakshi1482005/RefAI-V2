@@ -147,11 +147,21 @@ api.interceptors.response.use(
       RETRYABLE_STATUS.has(status ?? 0)
 
     const retryCount = config?._refaiRetryCount ?? 0
+    const headers = config?.headers as (Record<string, unknown> & {
+      get?: (name: string) => unknown
+    }) | undefined
+    const retryOptOut = String(
+      headers?.get?.('X-RefAI-No-Retry') ??
+      headers?.['X-RefAI-No-Retry'] ??
+      headers?.['x-refai-no-retry'] ??
+      '',
+    ).toLowerCase() === 'true'
 
     if (
       config &&
       safeToRetry &&
       retryableFailure &&
+      !retryOptOut &&
       retryCount < 2 &&
       navigator.onLine
     ) {

@@ -81,7 +81,7 @@ export function prefetchAuthenticatedTrustCard(
         analysisId,
         signal
       )
-  )
+  ).then(() => trustCardResource.getSnapshot(key).data)
 }
 
 
@@ -217,23 +217,35 @@ export function useTrustCardResource({
   ])
 
 
-  const prefetch = useCallback(() => {
+  const prefetch = useCallback(async () => {
     if (
       !authenticatedUserId ||
       !analysisId ||
       isDemoMode
     ) {
-      return Promise.resolve()
+      return {
+        card: null,
+        notFound: false,
+        error: null,
+      }
     }
 
-    return prefetchAuthenticatedTrustCard(
+    const card = await prefetchAuthenticatedTrustCard(
       authenticatedUserId,
       analysisId
     )
+    const nextState = trustCardResource.getSnapshot(key)
+
+    return {
+      card,
+      notFound: nextState.notFound,
+      error: nextState.error,
+    }
   }, [
     analysisId,
     authenticatedUserId,
-    isDemoMode
+    isDemoMode,
+    key,
   ])
 
 

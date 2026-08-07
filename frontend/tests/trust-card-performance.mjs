@@ -42,8 +42,11 @@ try {
   assert.match(resultSource, /onFocus=.*prefetch/, 'Trust Card action should prefetch on keyboard focus')
   assert.match(cardSource, /loadingPersisted/, 'Trust Card page should distinguish persisted-card loading')
   assert.match(cardSource, /deterministic_fallback/, 'Trust Card page should identify deterministic narrative fallback')
+  assert.match(resultSource, /await trustCardResource\.prefetch\(\)/, 'analysis results must check the shared persisted-card resource before generating')
+  assert.match(resultSource, /persisted\.notFound/, 'generation must run only after a persisted-card lookup confirms absence')
+  assert.match(resultSource, /trustCardActionInFlight/, 'rapid CTA clicks must not create duplicate Trust Card generation requests')
 
-  console.log('Trust Card performance resource tests: 12 passed')
+  console.log('Trust Card performance resource tests: 15 passed')
 } finally {
   await server.close()
 }

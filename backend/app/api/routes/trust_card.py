@@ -22,7 +22,6 @@ from app.services.trust_card_cache import (
     persisted_trust_card_response,
 )
 from app.services.trust_card_engine import InsufficientJobRequirements, build_trust_card
-from app.services.vector_store import ChromaProjectRelevanceProvider
 
 
 router = APIRouter(prefix="/trust-card", tags=["trust-card"])
@@ -143,6 +142,9 @@ def generate_trust_card(payload: TrustCardRequest, user: dict = Depends(get_curr
                 request_id, stage, round(duration_seconds * 1000), input_key[:12] if input_key else "direct",
             )
 
+        # Chroma is only needed for an actual rebuild. Saved-card reads return
+        # above without importing the vector/embedding runtime at all.
+        from app.services.vector_store import ChromaProjectRelevanceProvider
         similarity_provider = ChromaProjectRelevanceProvider(
             f"{user['sub']}-{analysis_id or 'direct'}",
             timing_callback=stage_callback,

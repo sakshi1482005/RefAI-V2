@@ -19,6 +19,11 @@ class QueueServiceStub:
         return [] if self.item is None else [self.item]
 
 
+class HistoryServiceStub:
+    def history(self, actor_id, request_id):
+        return []
+
+
 class EmployeeProfileServiceStub:
     def __init__(self): self.saved_actor = None
     @staticmethod
@@ -110,6 +115,17 @@ class EmployeeQueueRouteTests(unittest.TestCase):
         referral.service = QueueServiceStub()
         try: response = self.client.get("/referral/employee/queue", headers={"Authorization": "Bearer test"})
         finally: referral.service = original
+        self.assertEqual(response.json(), [])
+
+    def test_request_history_returns_an_empty_array_when_no_events_exist(self):
+        app.dependency_overrides[get_current_user] = lambda: {"sub": "student-user"}
+        original = referral.service
+        referral.service = HistoryServiceStub()
+        try:
+            response = self.client.get(f"/referral/requests/{uuid4()}/history", headers={"Authorization": "Bearer test"})
+        finally:
+            referral.service = original
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
 
     def test_student_is_forbidden(self):
