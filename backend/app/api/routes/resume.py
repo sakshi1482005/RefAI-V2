@@ -20,6 +20,10 @@ from app.services.hybrid_candidate_intelligence import build_hybrid_candidate_in
 from app.services.skill_gap_recommendations import build_skill_gap_recommendations
 from app.services.improvement_simulator import attach_intelligence_snapshot, simulate_hypothetical_improvements
 from app.services.model_comparison import build_model_comparison
+from app.services.candidate_intelligence_cache import (
+    candidate_intelligence_cache_key,
+    get_or_build_candidate_intelligence,
+)
 from app.services.referral_requests import ReferralRequestService
 from app.services.student_persistence import StudentProfileForbidden
 
@@ -86,42 +90,49 @@ def latest_analysis(user: dict = Depends(get_current_user)):
 
 def _load_improvement_intelligence(student_id: str) -> dict:
     """Load current student-owned inputs shared by simulator read and simulation routes."""
-    profile = persistence_service.get_profile(student_id)
     session = persistence_service.latest_session(student_id)
     if not session:
         raise StudentAnalysisNotFound("Persisted resume analysis was not found")
     trust_card = session.get("trustCard")
     if not isinstance(trust_card, dict) or not trust_card.get("id"):
         raise StudentAnalysisNotFound("Generate a current Trust Card before using the improvement simulator")
-    analysis = persistence_service.get_analysis(student_id, str(session["analysisId"]))
-    fuzzy_inputs, fuzzy_sources = build_fuzzy_suitability_inputs(session, profile)
-    fuzzy_result = evaluate_fuzzy_candidate_suitability(fuzzy_inputs).model_dump()
-    fuzzy_result["inputValuesUsed"] = fuzzy_inputs.model_dump()
-    fuzzy_result["inputSources"] = fuzzy_sources
-    job_description = None if analysis.get("used_general_role_expectations") else str(analysis.get("job_description") or "")
-    semantic_result = build_semantic_job_match(
-        resume_text=str(analysis.get("resume_text") or ""),
-        target_role=str(analysis.get("target_role") or session.get("role") or ""),
-        job_description=job_description,
-        analysis_id=str(analysis["id"]),
-        analysis_version=str(analysis.get("updated_at") or analysis.get("created_at") or ""),
-    ).model_dump()
-    claim_verification = referral_service.student_claim_verifications(student_id, str(trust_card["id"]))
-    hybrid_result = build_hybrid_candidate_intelligence(
-        trust_card=trust_card, fuzzy_suitability=fuzzy_result,
-        semantic_job_match=semantic_result, claim_verification=claim_verification,
-    ).model_dump()
-    effective_description = job_description or general_expectations_for_role(str(analysis.get("target_role") or session.get("role") or ""))
-    skill_gaps = build_skill_gap_recommendations(
-        requirements=extract_requirements(effective_description), semantic_job_match=semantic_result,
-        fuzzy_suitability=fuzzy_result, claim_verification=claim_verification,
-    ).model_dump()
-    return {
-        "trust_card": trust_card, "fuzzy": fuzzy_result, "semantic": semantic_result,
-        "hybrid": hybrid_result, "claims": claim_verification,
-        "skill_gaps": skill_gaps, "recommendations": skill_gaps["recommendations"],
-        "target_role": str(analysis.get("target_role") or session.get("role") or "") or None,
-    }
+    cache_key = candidate_intelligence_cache_key(student_id, session)
+
+    def build() -> dict:
+        profile = persistence_service.get_profile(student_id)
+        analysis = persistence_service.get_analysis(student_id, str(session["analysisId"]))
+        fuzzy_inputs, fuzzy_sources = build_fuzzy_suitability_inputs(session, profile)
+        fuzzy_result = evaluate_fuzzy_candidate_suitability(fuzzy_inputs).model_dump()
+        fuzzy_result["inputValuesUsed"] = fuzzy_inputs.model_dump()
+        fuzzy_result["inputSources"] = fuzzy_sources
+        job_description = None if analysis.get("used_general_role_expectations") else str(analysis.get("job_description") or "")
+        semantic_result = build_semantic_job_match(
+            resume_text=str(analysis.get("resume_text") or ""),
+            target_role=str(analysis.get("target_role") or session.get("role") or ""),
+            job_description=job_description,
+            analysis_id=str(analysis["id"]),
+            analysis_version=str(analysis.get("updated_at") or analysis.get("created_at") or ""),
+        ).model_dump()
+        claim_verification = referral_service.student_claim_verifications(student_id, str(trust_card["id"]))
+        hybrid_result = build_hybrid_candidate_intelligence(
+            trust_card=trust_card, fuzzy_suitability=fuzzy_result,
+            semantic_job_match=semantic_result, claim_verification=claim_verification,
+        ).model_dump()
+        effective_description = job_description or general_expectations_for_role(str(analysis.get("target_role") or session.get("role") or ""))
+        skill_gaps = build_skill_gap_recommendations(
+            requirements=extract_requirements(effective_description), semantic_job_match=semantic_result,
+            fuzzy_suitability=fuzzy_result, claim_verification=claim_verification,
+        ).model_dump()
+        return {
+            "trust_card": trust_card, "fuzzy": fuzzy_result, "semantic": semantic_result,
+            "hybrid": hybrid_result, "claims": claim_verification,
+            "skill_gaps": skill_gaps, "recommendations": skill_gaps["recommendations"],
+            "target_role": str(analysis.get("target_role") or session.get("role") or "") or None,
+        }
+
+    context, cache_hit = get_or_build_candidate_intelligence(cache_key, build)
+    logger.debug("candidate_intelligence_context cache=%s", "hit" if cache_hit else "miss")
+    return context
 
 
 @router.get("/analysis/candidate-intelligence", response_model=CandidateIntelligenceResponse)
@@ -136,6 +147,9 @@ def candidate_intelligence(user: dict = Depends(get_current_user)):
     except StudentPersistenceError as exc:
         logger.exception("Candidate intelligence persisted data read failed user=%s", user["sub"])
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Candidate intelligence could not be loaded. Please retry.") from exc
+    except Exception as exc:
+        logger.exception("Candidate intelligence derivation failed user=%s", user["sub"])
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Candidate intelligence is temporarily unavailable. Please retry.") from exc
 
     card = context["trust_card"]
     return {
@@ -161,6 +175,9 @@ def model_comparison(user: dict = Depends(get_current_user)):
     except StudentPersistenceError as exc:
         logger.exception("Model comparison persisted data read failed user=%s", user["sub"])
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model comparison could not be loaded. Please retry.") from exc
+    except Exception as exc:
+        logger.exception("Model comparison derivation failed user=%s", user["sub"])
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model comparison is temporarily unavailable. Please retry.") from exc
     return build_model_comparison(
         trust_card=context["trust_card"], fuzzy_suitability=context["fuzzy"],
         semantic_job_match=context["semantic"], hybrid_intelligence=context["hybrid"],
@@ -183,6 +200,9 @@ def improvement_simulator(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except StudentPersistenceError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The improvement simulator could not load saved analyses.") from exc
+    except Exception as exc:
+        logger.exception("Improvement simulator load failed user=%s", user["sub"])
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The improvement simulator is temporarily unavailable. Please retry.") from exc
 
 
 @router.post("/analysis/improvement-simulator/simulate", response_model=ImprovementSimulatorResponse)
@@ -206,6 +226,9 @@ def simulate_improvement(payload: HypotheticalImprovementRequest, user: dict = D
     except StudentPersistenceError as exc:
         logger.exception("Improvement simulation persisted data read failed user=%s", user["sub"])
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The improvement simulator could not load saved analyses.") from exc
+    except Exception as exc:
+        logger.exception("Improvement simulation failed user=%s", user["sub"])
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The improvement estimate is temporarily unavailable. Please retry.") from exc
 
 
 @router.get("/analysis/fuzzy-suitability", response_model=FuzzyCandidateSuitabilityAnalysisResponse)

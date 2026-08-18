@@ -23,7 +23,7 @@ export function useCandidateIntelligence(analysisId: string | null | undefined, 
     intelligenceResource.activate(key || null)
     if (!key || !enabled) return
     void intelligenceResource.load(key, async (signal) => {
-      const { data } = await api.get<CandidateIntelligenceResult>('/resume/analysis/candidate-intelligence', { signal })
+      const { data } = await api.get<CandidateIntelligenceResult>('/resume/analysis/candidate-intelligence', { signal, headers: { 'X-RefAI-No-Retry': 'true' } })
       return data
     })
   }, [authLoading, enabled, key])
@@ -31,7 +31,7 @@ export function useCandidateIntelligence(analysisId: string | null | undefined, 
   const retry = useCallback(() => {
     if (!key || !enabled) return
     void intelligenceResource.load(key, async (signal) => {
-      const { data } = await api.get<CandidateIntelligenceResult>('/resume/analysis/candidate-intelligence', { signal })
+      const { data } = await api.get<CandidateIntelligenceResult>('/resume/analysis/candidate-intelligence', { signal, headers: { 'X-RefAI-No-Retry': 'true' } })
       return data
     }, true)
   }, [enabled, key])

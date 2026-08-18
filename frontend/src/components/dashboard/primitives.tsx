@@ -131,9 +131,9 @@ export function EmptyState({ title, description, action, icon: Icon = Inbox, cla
   )
 }
 
-export function InlineFeedback({ tone, children }: { tone: 'error' | 'success' | 'info'; children: ReactNode }) {
+export function InlineFeedback({ tone, children, className }: { tone: 'error' | 'success' | 'info'; children: ReactNode; className?: string }) {
   const Icon = tone === 'error' ? AlertCircle : tone === 'success' ? CheckCircle2 : Info
-  return <div role={tone === 'error' ? 'alert' : 'status'} aria-live={tone === 'error' ? 'assertive' : 'polite'} className={cn('flex items-start gap-3 rounded-xl border p-4 text-sm shadow-sm', tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700' : tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-700')}><Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><div className="min-w-0 flex-1 leading-6">{children}</div></div>
+  return <div role={tone === 'error' ? 'alert' : 'status'} aria-live={tone === 'error' ? 'assertive' : 'polite'} className={cn('flex items-start gap-3 rounded-xl border p-4 text-sm shadow-sm', tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700' : tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-700', className)}><Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><div className="min-w-0 flex-1 leading-6">{children}</div></div>
 }
 
 export function SectionHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {

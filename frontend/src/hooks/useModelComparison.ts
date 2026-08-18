@@ -22,7 +22,7 @@ export function useModelComparison(analysisId: string | null | undefined, trustC
   const load = useCallback((force = false) => {
     if (!key || !enabled) return Promise.resolve()
     return modelComparisonResource.load(key, async (signal) => {
-      const { data } = await api.get<ModelComparisonResult>('/resume/analysis/model-comparison', { signal })
+      const { data } = await api.get<ModelComparisonResult>('/resume/analysis/model-comparison', { signal, headers: { 'X-RefAI-No-Retry': 'true' } })
       return data
     }, force)
   }, [enabled, key])

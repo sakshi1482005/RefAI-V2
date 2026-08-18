@@ -1,5 +1,5 @@
 import { ArrowUpRight, RefreshCw, Sparkles, TrendingUp } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { api } from '../../lib/apiClient'
 import { friendlyErrorMessage } from '../../lib/requestSafety'
 import type { ImprovementSimulatorResult } from '../../types'
@@ -7,18 +7,17 @@ import { Badge, Card, EmptyState, InlineFeedback, SecondaryButton, Skeleton } fr
 
 export default function ImprovementSimulatorPanel() {
   const [result, setResult] = useState<ImprovementSimulatorResult | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [addProjectEvidence, setAddProjectEvidence] = useState(false)
   const [simulating, setSimulating] = useState(false)
   const load = async () => {
     setLoading(true); setError(null)
-    try { const { data } = await api.get<ImprovementSimulatorResult>('/resume/analysis/improvement-simulator'); setResult(data) }
+    try { const { data } = await api.get<ImprovementSimulatorResult>('/resume/analysis/improvement-simulator', { headers: { 'X-RefAI-No-Retry': 'true' } }); setResult(data) }
     catch (cause) { setError(friendlyErrorMessage(cause, 'Improvement opportunities could not be loaded.')) }
     finally { setLoading(false) }
   }
-  useEffect(() => { void load() }, [])
   const clearEstimate = () => setResult((current) => current?.simulation ? { ...current, simulation: null } : current)
   const toggleSkill = (skill: string) => { clearEstimate(); setSelectedSkills((current) => current.includes(skill) ? current.filter((item) => item !== skill) : [...current, skill]) }
   const toggleProjectEvidence = () => { clearEstimate(); setAddProjectEvidence((current) => !current) }
@@ -35,6 +34,7 @@ export default function ImprovementSimulatorPanel() {
   const hasSelection = selectedSkills.length > 0 || addProjectEvidence
 
   return <Card className="overflow-hidden p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-slate-100 text-slate-800"><TrendingUp className="size-4" /></span><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Smart Improvement Simulator</p><h3 className="mt-1 text-xl font-semibold tracking-tight">Explore truthful evidence improvements</h3></div></div><Badge tone="info">Simulation only</Badge></div>
+    {!result && !loading && !error ? <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4"><div><p className="text-sm font-semibold text-slate-900">Ready when you are</p><p className="mt-1 text-xs leading-5 text-slate-500">Load your saved evidence options, then choose an improvement to estimate.</p></div><SecondaryButton onClick={load}><Sparkles className="mr-2 size-4" />Open simulator</SecondaryButton></div> : null}
     {loading ? <div className="mt-5 space-y-3"><Skeleton className="h-24" /><Skeleton className="h-20" /></div> : null}
     {error ? <div className="mt-5"><InlineFeedback tone="error">{error}</InlineFeedback><SecondaryButton className="mt-3" onClick={load}><RefreshCw className="mr-2 size-4" />Retry</SecondaryButton></div> : null}
     {result ? <><div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto_1fr]"><div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Current score</p><p className="mt-1 text-3xl font-semibold tabular-nums text-slate-950">{currentScore ?? '—'}</p></div><div className="hidden items-center justify-center text-slate-400 sm:flex">→</div><div className={`rounded-xl border p-4 ${result.simulation ? 'border-slate-300 bg-slate-100' : 'border-dashed border-slate-300 bg-slate-50'}`}><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Simulated score</p><div className="mt-1 flex items-baseline gap-2"><p className="text-3xl font-semibold tabular-nums text-slate-950">{result.simulation ? simulatedScore : '—'}</p>{result.simulation ? <span className="text-sm font-semibold text-slate-700">{result.simulation.difference >= 0 ? '+' : ''}{result.simulation.difference}</span> : null}</div></div></div><p className="mt-2 text-xs text-slate-500">Estimates use hypothetical evidence only. They do not update your profile, resume, or saved scores.</p>

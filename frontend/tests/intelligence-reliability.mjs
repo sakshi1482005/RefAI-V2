@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8')
+const apiClient = read('../src/lib/apiClient.ts')
+const intelligenceHook = read('../src/hooks/useCandidateIntelligence.ts')
+const comparisonHook = read('../src/hooks/useModelComparison.ts')
+const intelligencePanel = read('../src/components/dashboard/CandidateIntelligencePanel.tsx')
+const simulator = read('../src/components/dashboard/ImprovementSimulatorPanel.tsx')
+const claims = read('../src/components/dashboard/ClaimVerificationPanel.tsx')
+const opportunities = read('../src/pages/AIOpportunityRecommendations.tsx')
+const studentDashboard = read('../src/pages/StudentDashboard.tsx')
+
+assert.match(apiClient, /configuredApiBaseUrl/)
+assert.match(apiClient, /import\.meta\.env\.DEV \? 'http:\/\/localhost:8000' : undefined/)
+assert.match(intelligenceHook, /X-RefAI-No-Retry/)
+assert.match(comparisonHook, /X-RefAI-No-Retry/)
+assert.match(intelligencePanel, /error && !data/)
+assert.match(intelligencePanel, /Saved intelligence is shown/)
+assert.match(claims, /error && result/)
+assert.match(claims, /Saved claim verification is shown/)
+assert.doesNotMatch(simulator, /useEffect\(\(\) => \{ void load\(\) \}, \[\]\)/)
+assert.match(simulator, /Open simulator/)
+assert.match(simulator, /X-RefAI-No-Retry/)
+assert.match(opportunities, /allowanceError/)
+assert.match(opportunities, /Saved recommendations were reused/)
+assert.match(studentDashboard, />View details</)
+assert.match(studentDashboard, /recommendation \? <Badge/)
+
+console.log('Intelligence reliability assertions: 14 passed')

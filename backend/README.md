@@ -13,10 +13,12 @@ python -m uvicorn app.main:app --reload
 Docs available at `http://localhost:8000/docs` (use this instead of Postman
 collections for quick manual testing, or import the OpenAPI schema into Postman).
 
-The frontend defaults to `http://localhost:8000`; set `VITE_API_BASE_URL` when
-the API is hosted elsewhere. Private PDF persistence is required for resume
-uploads and Employee review. Set `RESUME_STORAGE_BUCKET=resumes` and configure
-the service-role key only on the backend.
+The frontend uses `http://localhost:8000` only in local development. Set
+`VITE_API_BASE_URL` to the Render API URL for every Vercel deployment; this is
+required so production browsers never attempt to call localhost. Private PDF
+persistence is required for resume uploads and Employee review. Set
+`RESUME_STORAGE_BUCKET=resumes` and configure the service-role key only on the
+backend.
 
 ## Fresh Supabase setup
 

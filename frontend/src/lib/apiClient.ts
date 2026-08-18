@@ -27,10 +27,13 @@ const RETRYABLE_STATUS = new Set([
   504,
 ])
 
+const configuredApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
+
 export const api = axios.create({
-  baseURL:
-    (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
-    'http://localhost:8000',
+  // localhost is a development-only default. Production deployments must use
+  // VITE_API_BASE_URL (for example the Render API); silently sending Vercel
+  // users to localhost makes every authenticated read look like a network bug.
+  baseURL: configuredApiBaseUrl || (import.meta.env.DEV ? 'http://localhost:8000' : undefined),
   timeout: 30_000,
 })
 
