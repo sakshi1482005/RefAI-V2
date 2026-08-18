@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Protocol
 from uuid import UUID
 
 from app.db.supabase_client import supabase
-from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeProfessionalProfileUpdate, ProofEntryInput, ReferralCompatibilityRequest, ReferralMessageRequest, ReferralQualityRequest, ReferralSubmissionUpdate
+from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeDiscoveryRecommendationRequest, EmployeeProfessionalProfileUpdate, MoreInformationResponseInput, ProofEntryInput, ReferralCompatibilityRequest, ReferralMessageRequest, ReferralQualityRequest, ReferralSubmissionUpdate
 from app.services.employee_reliability import calculate_employee_reliability, calculate_employee_reliability_badge
-from app.services.employee_review_copilot import build_employee_review_copilot
+from app.services.employee_review_copilot import build_employee_review_copilot, build_employee_review_copilot_input_key
 from app.services.groq_client import AIServiceUnavailable, generate_clarification_question, generate_employee_review_summary, generate_referral_message
 from app.services.referral_compatibility import calculate_referral_compatibility
 from app.services.referral_quality import calculate_referral_message_quality
 from app.services.resume_storage import SIGNED_RESUME_TTL_SECONDS, create_resume_signed_url, find_latest_student_resume
+from app.services.resume_storage import ResumeStorageUnavailable
 from app.services.claim_verification import build_claim_verifications
 from app.services.notifications import create_notification
 from app.services.employee_response_time import calculate_average_response_time
+from app.core.config import settings
 
 EMPLOYEE_PROFILE_COLUMNS = (
     "profile_id,company,designation,supported_companies,supported_roles,"
@@ -31,6 +35,7 @@ class ReferralError(Exception): pass
 class ReferralForbidden(ReferralError): pass
 class ReferralNotFound(ReferralError): pass
 class ReferralUnavailable(ReferralError): pass
+class ReferralStorageUnavailable(ReferralError): pass
 class ReferralQualityBlocked(ReferralError):
     def __init__(self, quality: dict[str, Any]):
         super().__init__("Blocking factual-integrity errors must be resolved before submission")
@@ -54,6 +59,9 @@ def _camel(row: dict[str, Any]) -> dict[str, Any]:
         "referral_note_to_student": "referralNoteToStudent", "referral_submitted_at": "referralSubmittedAt",
         "referral_submitted_by": "referralSubmittedBy", "event_type": "eventType",
         "employee_company_snapshot": "employeeCompanySnapshot",
+        "referral_request_id": "referralRequestId", "student_response": "studentResponse",
+        "proof_entry_ids": "proofEntryIds", "responded_at": "studentRespondedAt",
+        "balance_after": "balanceAfter",
     }
     return {mapping.get(key, key): value for key, value in row.items()}
 
@@ -92,6 +100,10 @@ class ReferralRepository(Protocol):
     def get_private_decision_note(self, request_id: str, employee_id: str) -> str | None: ...
     def list_history(self, request_id: str) -> list[dict[str, Any]]: ...
     def record_employee_viewed(self, actor_id: str, request_id: str) -> bool: ...
+    def respond_to_more_information(self, actor_id: str, request_id: str, response: str, proof_entry_ids: list[str]) -> dict[str, Any]: ...
+    def get_more_information_response(self, request_id: str) -> dict[str, Any] | None: ...
+    def list_more_information_responses(self, request_ids: list[str]) -> list[dict[str, Any]]: ...
+    def get_proofs_by_ids(self, proof_ids: list[str]) -> list[dict[str, Any]]: ...
     def employee_response_time_data(self, employee_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]: ...
     def persist_trust_card(self, student_id: str, payload: dict[str, Any], analysis_id: str | None = None) -> dict[str, Any]: ...
     def list_employees(self) -> list[dict[str, Any]]: ...
@@ -104,6 +116,15 @@ class ReferralRepository(Protocol):
     def list_proofs(self, trust_card_id: str) -> list[dict[str, Any]]: ...
     def update_proof(self, proof_id: str, values: dict[str, Any]) -> dict[str, Any]: ...
     def delete_proof(self, proof_id: str) -> None: ...
+    def get_ai_message_cache(self, user_id: str, input_key: str) -> dict[str, Any] | None: ...
+    def reserve_ai_credit(self, user_id: str, action: str, operation_key: str, cost: int) -> dict[str, Any]: ...
+    def finish_ai_credit(self, user_id: str, operation_key: str, input_key: str, payload: dict[str, Any], charge: bool) -> dict[str, Any]: ...
+    def credit_balance(self, user_id: str) -> dict[str, Any]: ...
+    def credit_history(self, user_id: str) -> list[dict[str, Any]]: ...
+    def purchase_credits(self, user_id: str, plan: str, key: str, credits: int) -> dict[str, Any]: ...
+    def persist_feedback_outcome(self, values: dict[str, Any]) -> None: ...
+    def get_employee_review_copilot_cache(self, employee_id: str, request_id: str, input_key: str) -> dict[str, Any] | None: ...
+    def save_employee_review_copilot_cache(self, employee_id: str, request_id: str, input_key: str, payload: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class SupabaseReferralRepository:
@@ -146,7 +167,7 @@ class SupabaseReferralRepository:
 
     def get_analysis(self, student_id: str, analysis_id: str) -> dict[str, Any] | None:
         rows = (
-            supabase.table("resume_analyses").select("id,student_id,resume_text")
+            supabase.table("resume_analyses").select("id,student_id,resume_text,updated_at")
             .eq("id", analysis_id).eq("student_id", student_id).limit(1).execute().data or []
         )
         return rows[0] if rows else None
@@ -222,6 +243,32 @@ class SupabaseReferralRepository:
     def record_employee_viewed(self, actor_id: str, request_id: str) -> bool:
         result = supabase.rpc("record_referral_employee_viewed_as", {"p_actor_id": actor_id, "p_request_id": request_id}).execute().data
         return bool(result)
+
+    def respond_to_more_information(self, actor_id: str, request_id: str, response: str, proof_entry_ids: list[str]) -> dict[str, Any]:
+        try:
+            rows = supabase.rpc("respond_to_referral_more_information_as", {
+                "p_actor_id": actor_id, "p_request_id": request_id,
+                "p_student_response": response, "p_proof_entry_ids": proof_entry_ids,
+            }).execute().data
+        except Exception as exc:
+            if "invalid referral status transition" in str(exc).lower() or "duplicate key" in str(exc).lower():
+                raise InvalidReferralTransition("This clarification request has already been answered") from exc
+            raise
+        if isinstance(rows, list): rows = rows[0] if rows else None
+        if not rows: raise ReferralNotFound("Referral request not found")
+        return rows
+
+    def get_more_information_response(self, request_id: str) -> dict[str, Any] | None:
+        rows = supabase.table("referral_more_information_responses").select("*").eq("referral_request_id", request_id).limit(1).execute().data or []
+        return rows[0] if rows else None
+
+    def list_more_information_responses(self, request_ids: list[str]) -> list[dict[str, Any]]:
+        if not request_ids: return []
+        return supabase.table("referral_more_information_responses").select("*").in_("referral_request_id", request_ids).execute().data or []
+
+    def get_proofs_by_ids(self, proof_ids: list[str]) -> list[dict[str, Any]]:
+        if not proof_ids: return []
+        return supabase.table("proof_entries").select("*").in_("id", proof_ids).execute().data or []
 
     def employee_response_time_data(self, employee_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         requests = supabase.table("referral_requests").select("id,created_at").eq("employee_id", employee_id).execute().data or []
@@ -331,6 +378,45 @@ class SupabaseReferralRepository:
     def delete_proof(self, proof_id: str) -> None:
         supabase.table("proof_entries").delete().eq("id", proof_id).execute()
 
+    def get_employee_review_copilot_cache(self, employee_id: str, request_id: str, input_key: str) -> dict[str, Any] | None:
+        rows = (
+            supabase.table("employee_review_copilot_cache").select("payload")
+            .eq("employee_id", employee_id).eq("referral_request_id", request_id).eq("input_key", input_key)
+            .limit(1).execute().data or []
+        )
+        return rows[0] if rows else None
+
+    def save_employee_review_copilot_cache(self, employee_id: str, request_id: str, input_key: str, payload: dict[str, Any]) -> dict[str, Any]:
+        rows = supabase.table("employee_review_copilot_cache").upsert(
+            {
+                "employee_id": employee_id,
+                "referral_request_id": request_id,
+                "input_key": input_key,
+                "payload": payload,
+            },
+            on_conflict="employee_id,referral_request_id,input_key",
+        ).execute().data or []
+        if not rows:
+            raise ReferralError("Employee Copilot summary was not cached")
+        return rows[0]
+
+    def persist_feedback_outcome(self, values: dict[str, Any]) -> None:
+        supabase.table("referral_feedback_outcomes").upsert(values, on_conflict="referral_request_id").execute()
+
+    def get_ai_message_cache(self, user_id, input_key):
+        rows = supabase.table("refai_ai_output_cache").select("payload").eq("user_id", user_id).eq("input_key", input_key).limit(1).execute().data or []
+        return rows[0] if rows else None
+    def reserve_ai_credit(self, user_id, action, operation_key, cost):
+        return supabase.rpc("reserve_refai_ai_credit", {"p_user_id": user_id, "p_action": action, "p_operation_key": operation_key, "p_cost": cost, "p_free_credits": settings.refai_free_ai_credits}).execute().data
+    def purchase_credits(self, user_id, plan, key, credits):
+        return supabase.rpc("purchase_refai_credits", {"p_user_id": user_id, "p_plan": plan, "p_operation_key": key, "p_credits": credits, "p_free_credits": settings.refai_free_ai_credits}).execute().data
+    def finish_ai_credit(self, user_id, operation_key, input_key, payload, charge):
+        return supabase.rpc("finish_refai_ai_credit", {"p_user_id": user_id, "p_operation_key": operation_key, "p_input_key": input_key, "p_payload": payload, "p_charge": charge}).execute().data
+    def credit_balance(self, user_id):
+        return supabase.rpc("get_refai_credit_balance", {"p_user_id": user_id, "p_free_credits": settings.refai_free_ai_credits}).execute().data
+    def credit_history(self, user_id):
+        return supabase.table("refai_credit_ledger").select("id,action,amount,balance_after,created_at").eq("user_id", user_id).order("created_at", desc=True).execute().data or []
+
 
 class ReferralRequestService:
     def __init__(self, repository: ReferralRepository | None = None, notifier=None):
@@ -344,11 +430,13 @@ class ReferralRequestService:
 
     def _resolved_employee_profile(self, employee_id: str) -> dict[str, Any]:
         profile = {"profile_id": employee_id, **(self.repository.get_employee_profile(employee_id) or {})}
-        company = _normalize_company(profile.get("company"))
-        if company is None:
-            metadata = self.repository.get_auth_metadata(employee_id)
-            company = _normalize_company(metadata.get("company_name")) or _normalize_company(metadata.get("company"))
-        profile["company"] = company
+        # Professional directory identity is sourced exclusively from the
+        # employee-owned employee_profiles record. Auth metadata can contain
+        # stale onboarding values and must not silently become an employer or
+        # job title in an authenticated production directory.
+        profile["company"] = _normalize_company(profile.get("company"))
+        profile["designation"] = _normalize_company(profile.get("designation"))
+        profile["department"] = _normalize_company(profile.get("department"))
         return profile
 
     @staticmethod
@@ -584,6 +672,15 @@ class ReferralRequestService:
         if payload.action in {"shorter", "more_formal", "remove_weak_claims"} and not current:
             raise ReferralError("Generate or enter a message before applying this edit")
 
+        cache_material = {"user": actor_id, "card": str(payload.trustCardId), "employee": employee_id, "company": payload.targetCompany.strip(), "role": payload.targetRole.strip(), "jobDescription": payload.jobDescription.strip(), "tone": payload.tone, "action": payload.action, "current": current, "facts": facts}
+        input_key = hashlib.sha256(json.dumps(cache_material, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        cached = self.repository.get_ai_message_cache(actor_id, input_key)
+        if isinstance((cached or {}).get("payload"), dict):
+            return cached["payload"]
+        reservation = self.repository.reserve_ai_credit(actor_id, "referral_message", input_key, settings.refai_credit_cost_referral_message)
+        if not reservation.get("ok"):
+            raise ReferralUnavailable("No AI credits are available. Free profile, Trust Card, tracking, and discovery features remain available.")
+
         used_fallback = False
         used_facts = facts
         try:
@@ -604,7 +701,7 @@ class ReferralRequestService:
             )
             limitations.append("Groq was unavailable or returned invalid output; a deterministic template was used.")
 
-        return {
+        response = {
             "message": message,
             "usedFacts": used_facts,
             "omittedOrUnavailableFacts": omitted,
@@ -614,6 +711,21 @@ class ReferralRequestService:
             "alumniConnectionAvailable": alumni_available,
             "followUpAvailable": follow_up_available,
         }
+        self.repository.finish_ai_credit(actor_id, input_key, input_key, response, charge=not used_fallback)
+        return response
+
+    def credits(self, actor_id: str) -> dict[str, Any]:
+        return self.repository.credit_balance(actor_id)
+
+    def credit_history(self, actor_id: str) -> list[dict[str, Any]]:
+        return [_camel(item) for item in self.repository.credit_history(actor_id)]
+
+    def purchase_credits(self, actor_id: str, plan: str, key: str) -> dict[str, Any]:
+        plans = json.loads(settings.refai_credit_plans); item = plans.get(plan)
+        if not isinstance(item, dict) or not isinstance(item.get("credits"), int): raise ReferralError("Selected credit plan is unavailable")
+        result = self.repository.purchase_credits(actor_id, plan, key, item["credits"])
+        if not result.get("ok"): raise ReferralError("Simulated purchase could not be completed")
+        return {"balance": result["balance"], "purchasedCredits": item["credits"], "plan": plan}
 
     def create(self, actor_id: str, payload: CreateReferralRequest) -> dict[str, Any]:
         if payload.studentId and str(payload.studentId) != actor_id: raise ReferralForbidden("Students may only create their own requests")
@@ -653,17 +765,37 @@ class ReferralRequestService:
             result["employeeNote"] = None
         else:
             result["employeeNote"] = self.repository.get_private_decision_note(request_id, actor_id)
-        return result
+        return self._with_more_information(result, request_id)
 
     def list(self, actor_id: str) -> list[dict[str, Any]]:
         role = self._role(actor_id)
         field = "student_id" if role == "student" else "employee_id"
-        return [_camel(row) for row in self.repository.list_requests(field, actor_id)]
+        rows = self.repository.list_requests(field, actor_id)
+        list_responses = getattr(self.repository, "list_more_information_responses", None)
+        response_rows = list_responses([str(row["id"]) for row in rows]) if callable(list_responses) else []
+        responses = {str(item["referral_request_id"]): item for item in response_rows}
+        return [self._with_more_information(_camel(row), str(row["id"]), responses.get(str(row["id"]))) for row in rows]
+
+    def _with_more_information(self, result: dict[str, Any], request_id: str, response: dict[str, Any] | None = None) -> dict[str, Any]:
+        get_response = getattr(self.repository, "get_more_information_response", None)
+        response = response if response is not None else (get_response(request_id) if callable(get_response) else None)
+        result["moreInformationQuestion"] = result.get("decisionMessage") if result.get("decisionReason") == "clarification_required" else None
+        result["studentResponse"] = response.get("student_response") if response else None
+        result["studentRespondedAt"] = response.get("responded_at") if response else None
+        proof_ids = [str(item) for item in (response or {}).get("proof_entry_ids", [])]
+        get_proofs = getattr(self.repository, "get_proofs_by_ids", None)
+        proof_rows = get_proofs(proof_ids) if proof_ids and callable(get_proofs) else []
+        proofs = {str(item["id"]): _camel(item) for item in proof_rows}
+        result["studentResponseProofEntries"] = [proofs[proof_id] for proof_id in proof_ids if proof_id in proofs]
+        return result
 
     def employee_queue(self, actor_id: str) -> list[dict[str, Any]]:
         if self._role(actor_id) != "employee": raise ReferralForbidden("Employee access is required")
         items = []
-        for row in self.repository.list_employee_queue(actor_id):
+        queue_rows = self.repository.list_employee_queue(actor_id)
+        list_responses = getattr(self.repository, "list_more_information_responses", None)
+        response_ids = {str(item["referral_request_id"]) for item in (list_responses([str(row["id"]) for row in queue_rows]) if callable(list_responses) else [])}
+        for row in queue_rows:
             row = dict(row)
             student = row.pop("student", None) or {}
             card = row.pop("trust_card", None) or {}
@@ -672,6 +804,7 @@ class ReferralRequestService:
                 **_camel(row), "candidateId": row["student_id"], "studentName": student.get("full_name"),
                 "college": education.get("college"), "trustScore": card.get("trust_score"),
                 "overallMatch": card.get("overall_match"), "resumeExists": bool(card), "trustCardExists": bool(card),
+                "studentResponseAvailable": str(row["id"]) in response_ids,
             })
         return items
 
@@ -714,7 +847,7 @@ class ReferralRequestService:
         analysis = self._analysis_from_payload(payload)
         resume = self.repository.find_resume(str(row["student_id"]))
         graduation_year = education.get("graduationYear")
-        return {
+        result = {
             "id": row["id"], "status": row["status"], "targetRole": row["target_role"],
             "targetCompany": row["target_company"], "studentMessage": row.get("student_message") or "",
             "employeeCompanySnapshot": _normalize_company(row.get("employee_company_snapshot")),
@@ -741,8 +874,9 @@ class ReferralRequestService:
             "analysis": analysis, "resumeExists": bool(resume), "trustCardExists": bool(card),
             "analysisExists": analysis is not None,
         }
+        return self._with_more_information(result, request_id)
 
-    def employee_review_copilot(self, actor_id: str, request_id: str) -> dict[str, Any]:
+    def employee_review_copilot(self, actor_id: str, request_id: str, refresh: bool = False) -> dict[str, Any]:
         row = self._assigned_employee_request(actor_id, request_id)
         card = self.repository.get_trust_card(str(row["trust_card_id"])) if row.get("trust_card_id") else None
         if not card:
@@ -752,20 +886,43 @@ class ReferralRequestService:
             if card.get("analysis_id") else None
         )
         education = self.repository.get_student_education(str(row["student_id"])) or {}
-        return build_employee_review_copilot(
+        proofs = self.repository.list_proofs(str(card["id"]))
+        input_key = build_employee_review_copilot_input_key(
+            employee_id=actor_id,
+            request=row,
+            trust_card=card,
+            analysis=analysis,
+            verified_profile=education,
+            proofs=proofs,
+        )
+        if not refresh:
+            cached = self.repository.get_employee_review_copilot_cache(actor_id, request_id, input_key)
+            cached_payload = (cached or {}).get("payload")
+            if isinstance(cached_payload, dict):
+                return cached_payload
+        result = build_employee_review_copilot(
             request=row,
             trust_card=card,
             resume_text=str((analysis or {}).get("resume_text") or ""),
             verified_profile=education,
             generator=generate_employee_review_summary,
         )
+        self.repository.save_employee_review_copilot_cache(actor_id, request_id, input_key, result)
+        return result
 
     def employee_resume(self, actor_id: str, request_id: str) -> dict[str, Any]:
         row = self._assigned_employee_request(actor_id, request_id)
-        resume = self.repository.find_resume(str(row["student_id"]))
+        try:
+            resume = self.repository.find_resume(str(row["student_id"]))
+        except ResumeStorageUnavailable as exc:
+            raise ReferralStorageUnavailable("The private resume service is temporarily unavailable. Please try again shortly.") from exc
         if not resume: raise ReferralUnavailable("No stored resume is available for this referral request")
-        try: signed_url = self.repository.sign_resume(resume["path"], SIGNED_RESUME_TTL_SECONDS)
-        except Exception as exc: raise ReferralUnavailable("The private resume could not be opened") from exc
+        try:
+            signed_url = self.repository.sign_resume(resume["path"], SIGNED_RESUME_TTL_SECONDS)
+        except ResumeStorageUnavailable as exc:
+            raise ReferralStorageUnavailable("The private resume service is temporarily unavailable. Please try again shortly.") from exc
+        except Exception as exc:
+            raise ReferralStorageUnavailable("The private resume service is temporarily unavailable. Please try again shortly.") from exc
         return {"requestId": row["id"], "fileName": resume["file_name"], "signedUrl": signed_url, "expiresIn": SIGNED_RESUME_TTL_SECONDS}
 
     def employee_trust_card(self, actor_id: str, request_id: str) -> dict[str, Any]:
@@ -808,6 +965,11 @@ class ReferralRequestService:
             "not_accepting_referrals": "The employee is not currently accepting referral requests.",
             "job_closed": "The employee indicated that this opportunity is closed or no longer available.",
             "unable_to_verify_experience": "The employee could not confirm enough experience evidence to proceed with this referral.",
+            "skill_mismatch": "The employee could not support this request because the available skill evidence did not align closely enough with this referral opportunity. Consider adding truthful role-relevant project evidence before a future request.",
+            "experience_gap": "The employee could not support this request because the available experience examples did not yet demonstrate the requested scope. Consider adding concrete project contributions and outcomes where available.",
+            "resume_quality": "The employee could not support this request because the resume evidence was difficult to evaluate for this opportunity. Consider clarifying responsibilities, dates, and measurable outcomes where truthful and available.",
+            "employee_company_policy": "The employee could not support this request under their current referral policy. This is specific to this referral and does not evaluate your overall potential.",
+            "opportunity_unavailable": "The employee could not support this request because the opportunity is unavailable or filled. This is specific to this opportunity.",
             "other": "The employee is unable to support this referral request at this time.",
         }
         if status == "approved": return approve[reason]
@@ -853,6 +1015,15 @@ class ReferralRequestService:
         if str(row["employee_id"]) != actor_id: raise ReferralForbidden("This request is assigned to another employee")
         message = self._student_decision_message(update.status, update.reason, update.question)
         result = _camel(self.repository.transition(actor_id, request_id, update.status, update.reason, message, update.note))
+        if update.status in {"declined", "more_info_requested", "approved"}:
+            tags = {
+                "insufficient_evidence": ["evidence_strength"], "skill_mismatch": ["skill_gap", "role_alignment"],
+                "experience_gap": ["project_experience"], "resume_quality": ["resume_completeness"],
+            }.get(update.reason, [])
+            self.repository.persist_feedback_outcome({
+                "referral_request_id": request_id, "employee_id": actor_id, "outcome_status": update.status,
+                "reason_code": update.reason, "student_summary": message, "actionable_tags": tags,
+            })
         result["employeeNote"] = update.note
         event = {
             "more_info_requested": ("more_information_requested", "More information requested"),
@@ -866,6 +1037,23 @@ class ReferralRequestService:
             referral_request_id=request_id,
         )
         return result
+
+    def respond_to_more_information(self, actor_id: str, request_id: str, payload: MoreInformationResponseInput) -> dict[str, Any]:
+        if self._role(actor_id) != "student":
+            raise ReferralForbidden("Student access is required")
+        row = self.repository.get_request(request_id)
+        if not row: raise ReferralNotFound("Referral request not found")
+        if str(row["student_id"]) != actor_id: raise ReferralForbidden("Referral request access denied")
+        if str(row.get("status")) != "more_info_requested":
+            raise InvalidReferralTransition("This request is not awaiting more information")
+        result = _camel(self.repository.respond_to_more_information(actor_id, request_id, payload.response, [str(item) for item in payload.proofEntryIds]))
+        self.notify(
+            recipient_id=str(row["employee_id"]), event_type="student_responded",
+            event_key=f"student_responded:{request_id}", title="Student provided more information",
+            body="The student responded to your clarification request.",
+            target_url=f"/employee/review/{request_id}", referral_request_id=request_id,
+        )
+        return self._with_more_information(result, request_id)
 
     def mark_referral_submitted(self, actor_id: str, request_id: str, update: ReferralSubmissionUpdate) -> dict[str, Any]:
         if self._role(actor_id) != "employee": raise ReferralForbidden("Employee access is required")
@@ -919,11 +1107,22 @@ class ReferralRequestService:
         for row in rows:
             metadata = self.repository.get_auth_metadata(str(row["id"]))
             employee_id = str(row["id"])
-            resolved_company = _normalize_company(row.get("company")) or _normalize_company(metadata.get("company_name")) or _normalize_company(metadata.get("company"))
-            resolved_row = {**row, "company": resolved_company}
+            has_professional_profile = bool(row.get("profile_id"))
+            resolved_company = _normalize_company(row.get("company"))
+            resolved_designation = _normalize_company(row.get("designation"))
+            resolved_department = _normalize_company(row.get("department"))
+            resolved_row = {
+                **row,
+                "company": resolved_company,
+                "designation": resolved_designation,
+                "department": resolved_department,
+            }
             active_count = counts.get(employee_id, 0)
-            max_active = int(row.get("max_active_requests", 5))
-            accepting = row.get("availability_status", "accepting") == "accepting" and max_active > active_count
+            # An employee without a saved professional profile has not stated
+            # their availability or capacity, so they are never presented as
+            # accepting referrals by a UI default.
+            max_active = int(row.get("max_active_requests") or 0) if has_professional_profile else 0
+            accepting = has_professional_profile and row.get("availability_status") == "accepting" and max_active > active_count
             employee_activity = activity.get(employee_id, {"requests": [], "history": []})
             reliability = calculate_employee_reliability(resolved_row, employee_activity["requests"], employee_activity["history"])
             reliability_badge = calculate_employee_reliability_badge(
@@ -934,11 +1133,11 @@ class ReferralRequestService:
             )
             employees.append({
                 "id": row["id"],
-                "name": row.get("full_name") or "Employee",
+                "name": _normalize_company(row.get("full_name")) or "Not provided",
                 "photoUrl": metadata.get("avatar_url") or metadata.get("picture"),
                 "company": resolved_company,
-                "designation": row.get("designation") or metadata.get("designation") or metadata.get("job_title") or metadata.get("headline"),
-                "department": row.get("department"),
+                "designation": resolved_designation,
+                "department": resolved_department,
                 "yearsExperience": row.get("years_experience"),
                 "verifiedEmployee": row.get("verified_employee", False),
                 "linkedinUrl": row.get("linkedin_url"),
@@ -960,6 +1159,18 @@ class ReferralRequestService:
                 "reliabilityBadge": reliability_badge,
             })
         return employees
+
+    def employee_recommendations(self, actor_id: str, payload: EmployeeDiscoveryRecommendationRequest) -> list[dict[str, Any]]:
+        if self._role(actor_id) != "student": raise ReferralForbidden("Student access is required")
+        card = self.repository.get_trust_card(str(payload.trustCardId))
+        if not card or str(card.get("student_id")) != actor_id: raise ReferralForbidden("The Trust Card does not belong to this student")
+        results = []
+        for employee in self.employee_directory(actor_id):
+            profile = self._resolved_employee_profile(str(employee["id"]))
+            compatibility = calculate_referral_compatibility(profile, {**(card.get("payload") or {}), "_available": True}, {"target_role": payload.targetRole.strip(), "target_company": payload.targetCompany.strip(), "job_description": payload.jobDescription.strip(), "student_message": ""})
+            results.append({"employeeId": employee["id"], "compatibility": compatibility, "matchReasons": compatibility.get("positiveFactors", [])[:3], "concern": (compatibility.get("missingOrConflictingFactors") or [None])[0], "acceptingRequests": employee["acceptingRequests"], "reliabilityLabel": employee["reliabilityBadge"]["label"]})
+        ranks = {"Verified Referrer": 3, "Reliable Referrer": 2, "Developing Referrer": 1, "New Referrer": 0}
+        return sorted(results, key=lambda item: (not item["acceptingRequests"], -int(item["compatibility"]["score"]), -ranks.get(item["reliabilityLabel"], 0), str(item["employeeId"])))
 
     @staticmethod
     def _employee_profile_payload(profile_id: str, row: dict[str, Any]) -> dict[str, Any]:

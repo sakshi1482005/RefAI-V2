@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import ai_apply, auth, resume, match, trust_card, referral, notifications
 from app.core.config import settings
+from app.db.supabase_client import supabase
 
 
 app = FastAPI(title="RefAI API", version="0.1.0")
@@ -30,11 +31,8 @@ async def preserve_transport_response(request, call_next):
 # error responses alike.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://refaiog.vercel.app",
-    ],
+    allow_origins=settings.cors_origin_list,
+    allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,6 +50,31 @@ app.include_router(notifications.router)
 app.include_router(ai_apply.router)
 
 
+def _supabase_health_status() -> str:
+    """Perform a minimal server-side Supabase configuration and DB probe."""
+    if not settings.supabase_url.strip() or not settings.supabase_service_key.strip():
+        return "not_configured"
+
+    try:
+        # The service client is required by RefAI's private Storage and trusted
+        # persistence flows. A one-row query verifies the configured project is
+        # reachable without returning any user data.
+        supabase.table("profiles").select("id").limit(1).execute()
+    except Exception as exc:
+        logger.warning("Supabase health probe failed error_type=%s", type(exc).__name__)
+        return "unavailable"
+
+    return "ok"
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    supabase_status = _supabase_health_status()
+    body = {
+        "status": "ok" if supabase_status == "ok" else "degraded",
+        "dependencies": {"supabase": {"status": supabase_status}},
+    }
+    return JSONResponse(
+        status_code=200 if supabase_status == "ok" else 503,
+        content=body,
+    )

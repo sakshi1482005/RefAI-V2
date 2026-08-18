@@ -24,6 +24,7 @@ function isQueueItem(value: unknown): value is EmployeeReferralQueueItem {
     && isNullableScore(item.overallMatch)
     && typeof item.resumeExists === 'boolean'
     && typeof item.trustCardExists === 'boolean'
+    && typeof item.studentResponseAvailable === 'boolean'
 }
 
 export function parseEmployeeQueue(value: unknown): EmployeeReferralQueueItem[] {

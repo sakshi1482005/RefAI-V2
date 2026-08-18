@@ -5,8 +5,7 @@ import PageShell from '../components/dashboard/PageShell'
 import { Card, InlineFeedback, PrimaryButton, SecondaryButton } from '../components/dashboard/primitives'
 import { api } from '../lib/apiClient'
 import { useToast } from '../components/feedback/ToastProvider'
-import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
-import { demoAnalysisSession } from '../lib/demoData'
+import { useAuthSession } from '../context/AuthSessionContext'
 import { friendlyErrorMessage, requireOnline } from '../lib/requestSafety'
 import { parseResumeAnalysisResponse, parseResumeUploadResponse } from '../lib/resumeContract'
 import { refreshAuthenticatedAnalysisSession, setAuthenticatedAnalysisSession, useAnalysisSession } from '../hooks/useAnalysisSession'
@@ -32,40 +31,36 @@ function validateJobDescription(value: string) {
 export default function ResumeUpload() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { isDemoMode, authenticatedUserId, demoJourneyStage, setDemoJourneyStage } = useDemoMode()
+  const { authenticatedUserId } = useAuthSession()
   const analysisSession = useAnalysisSession()
   const { profile } = useCurrentUser()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploadedResume, setUploadedResume] = useState<ResumeUploadResult | undefined>(isDemoMode ? demoAnalysisSession.upload : analysisSession.upload)
-  const [uploadedAt, setUploadedAt] = useState<string | undefined>(isDemoMode ? demoAnalysisSession.analyzedAt : analysisSession.analyzedAt)
+  const [uploadedResume, setUploadedResume] = useState<ResumeUploadResult | undefined>(analysisSession.upload)
+  const [uploadedAt, setUploadedAt] = useState<string | undefined>(analysisSession.analyzedAt)
   const [uploading, setUploading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [message, setMessage] = useState<string | null>(null)
   const [messageTone, setMessageTone] = useState<'success' | 'error' | 'info'>('info')
-  const [targetRole, setTargetRole] = useState(isDemoMode ? demoAnalysisSession.role ?? '' : analysisSession.role || profile?.preferredRole || '')
-  const [targetCompany, setTargetCompany] = useState(isDemoMode ? demoAnalysisSession.company ?? '' : analysisSession.company || profile?.preferredCompany || '')
-  const [jobDescription, setJobDescription] = useState(
-    isDemoMode ? demoAnalysisSession.jobDescription ?? '' :
-      analysisSession.usedGeneralRoleExpectations ? '' : analysisSession.jobDescription || '',
-  )
+  const [targetRole, setTargetRole] = useState(analysisSession.role || profile?.preferredRole || '')
+  const [targetCompany, setTargetCompany] = useState(analysisSession.company || profile?.preferredCompany || '')
+  const [jobDescription, setJobDescription] = useState(analysisSession.usedGeneralRoleExpectations ? '' : analysisSession.jobDescription || '')
   const [jobDescriptionTouched, setJobDescriptionTouched] = useState(false)
-  const jobDescriptionError = isDemoMode ? null : validateJobDescription(jobDescription)
+  const jobDescriptionError = validateJobDescription(jobDescription)
 
   useEffect(() => {
-    if (!isDemoMode && analysisSession.upload && !selectedFile && !uploading) {
+    if (analysisSession.upload && !selectedFile && !uploading) {
       setUploadedResume(analysisSession.upload)
       setUploadedAt(analysisSession.analyzedAt)
     }
-  }, [analysisSession.analyzedAt, analysisSession.upload, isDemoMode, selectedFile, uploading])
+  }, [analysisSession.analyzedAt, analysisSession.upload, selectedFile, uploading])
 
   useEffect(() => {
-    if (isDemoMode) return
     if (!targetRole && (analysisSession.role || profile?.preferredRole)) setTargetRole(analysisSession.role || profile?.preferredRole || '')
     if (!targetCompany && (analysisSession.company || profile?.preferredCompany)) setTargetCompany(analysisSession.company || profile?.preferredCompany || '')
     if (!jobDescriptionTouched && !jobDescription && !analysisSession.usedGeneralRoleExpectations && analysisSession.jobDescription) setJobDescription(analysisSession.jobDescription)
-  }, [analysisSession.company, analysisSession.jobDescription, analysisSession.role, analysisSession.usedGeneralRoleExpectations, isDemoMode, jobDescription, jobDescriptionTouched, profile?.preferredCompany, profile?.preferredRole, targetCompany, targetRole])
+  }, [analysisSession.company, analysisSession.jobDescription, analysisSession.role, analysisSession.usedGeneralRoleExpectations, jobDescription, jobDescriptionTouched, profile?.preferredCompany, profile?.preferredRole, targetCompany, targetRole])
 
   const handleFileSelection = (file: File | null) => {
     if (!file) {
@@ -178,12 +173,6 @@ export default function ResumeUpload() {
 
   const handleAnalyze = async () => {
     if (analyzing || !uploadedResume) return
-    if (isDemoMode) {
-      if (!hasReachedDemoStage(demoJourneyStage, 'analyzed')) setDemoJourneyStage('analyzed')
-      toast({ title: 'Demo resume analyzed', description: 'Ananya’s isolated sample resume and Atlassian role analysis are ready.', tone: 'success' })
-      navigate('/dashboard/resume-analysis')
-      return
-    }
     setJobDescriptionTouched(true)
     if (!targetRole.trim() || !targetCompany.trim() || jobDescriptionError) return
 
@@ -311,10 +300,10 @@ export default function ResumeUpload() {
             </div>
             <div className="mt-4 grid gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Role</span><input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Associate Software Engineer" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
-                <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Company</span><input value={targetCompany} onChange={(event) => setTargetCompany(event.target.value)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Atlassian" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
+                <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Role</span><input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} disabled={uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Associate Software Engineer" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
+                <label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Company</span><input value={targetCompany} onChange={(event) => setTargetCompany(event.target.value)} disabled={uploading || analyzing || !uploadedResume || Boolean(selectedFile)} placeholder="Atlassian" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:bg-slate-100" /></label>
               </div>
-              <label className="block"><span className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500"><span>Job Description (Optional)</span><span className="font-normal normal-case tracking-normal">{jobDescription.length.toLocaleString()}/{MAX_JOB_DESCRIPTION_CHARS.toLocaleString()}</span></span><p className="mb-3 text-xs leading-5 text-slate-500">Paste the job description if you have one. This helps RefAI compare your resume against the specific role and generate a more accurate Trust Card. You can skip this if you're only exploring opportunities.</p><textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} onBlur={() => setJobDescriptionTouched(true)} disabled={isDemoMode || uploading || analyzing || !uploadedResume || Boolean(selectedFile)} maxLength={MAX_JOB_DESCRIPTION_CHARS + 1} rows={6} placeholder="Paste the employer’s job description here." className={`w-full resize-y rounded-xl border bg-white p-3 text-sm leading-6 outline-none transition focus:ring-2 disabled:bg-slate-100 ${jobDescriptionTouched && jobDescriptionError ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-100' : 'border-slate-300 focus:border-black focus:ring-black/10'}`} />{jobDescriptionTouched && jobDescriptionError ? <p className="mt-2 text-xs font-medium text-rose-700">{jobDescriptionError}</p> : null}</label>
+              <label className="block"><span className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500"><span>Job Description (Optional)</span><span className="font-normal normal-case tracking-normal">{jobDescription.length.toLocaleString()}/{MAX_JOB_DESCRIPTION_CHARS.toLocaleString()}</span></span><p className="mb-3 text-xs leading-5 text-slate-500">Paste the job description if you have one. This helps RefAI compare your resume against the specific role and generate a more accurate Trust Card. You can skip this if you're only exploring opportunities.</p><textarea value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} onBlur={() => setJobDescriptionTouched(true)} disabled={uploading || analyzing || !uploadedResume || Boolean(selectedFile)} maxLength={MAX_JOB_DESCRIPTION_CHARS + 1} rows={6} placeholder="Paste the employer’s job description here." className={`w-full resize-y rounded-xl border bg-white p-3 text-sm leading-6 outline-none transition focus:ring-2 disabled:bg-slate-100 ${jobDescriptionTouched && jobDescriptionError ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-100' : 'border-slate-300 focus:border-black focus:ring-black/10'}`} />{jobDescriptionTouched && jobDescriptionError ? <p className="mt-2 text-xs font-medium text-rose-700">{jobDescriptionError}</p> : null}</label>
             </div>
           </div>
 
@@ -364,7 +353,7 @@ export default function ResumeUpload() {
 
             <div className="mt-6 rounded-xl border border-slate-200 p-4">
               <p className="text-sm font-semibold">{targetRole.trim() || 'Target role not added'}</p>
-              <p className="mt-2 text-sm text-slate-500">{isDemoMode ? 'This sample target is isolated from authenticated analysis data.' : targetRole.trim() && targetCompany.trim() ? `RefAI will analyze your resume for this role at ${targetCompany.trim()}.` : 'Add the target role and company before continuing.'}</p>
+              <p className="mt-2 text-sm text-slate-500">{targetRole.trim() && targetCompany.trim() ? `RefAI will analyze your resume for this role at ${targetCompany.trim()}.` : 'Add the target role and company before continuing.'}</p>
             </div>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">

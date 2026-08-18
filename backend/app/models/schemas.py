@@ -86,6 +86,120 @@ class AnalysisReliability(BaseModel):
     limitations: str
 
 
+class FuzzyCandidateSuitabilityInput(BaseModel):
+    """Normalized academic inputs for the isolated fuzzy suitability module."""
+
+    skill_match: float = Field(ge=0, le=100)
+    project_relevance: float = Field(ge=0, le=100)
+    experience: float = Field(ge=0, le=100)
+    education: float = Field(ge=0, le=100)
+    evidence_strength: float = Field(ge=0, le=100)
+    resume_quality: float = Field(ge=0, le=100)
+
+
+class FuzzyMembershipValues(BaseModel):
+    low: float = Field(ge=0, le=1)
+    medium: float = Field(ge=0, le=1)
+    high: float = Field(ge=0, le=1)
+
+
+class FuzzySuitabilityFactor(BaseModel):
+    input: Literal["skill_match", "project_relevance", "experience", "education", "evidence_strength", "resume_quality"]
+    value: float = Field(ge=0, le=100)
+    dominant_membership: Literal["Low", "Medium", "High"]
+    membership: float = Field(ge=0, le=1)
+
+
+class FuzzyActivatedRule(BaseModel):
+    id: str
+    rule: str
+    consequent: Literal["Low", "Moderate", "High"]
+    activation: float = Field(gt=0, le=1)
+
+
+class FuzzyCandidateSuitabilityResponse(BaseModel):
+    algorithm_version: Literal["fuzzy-candidate-suitability-v1"] = "fuzzy-candidate-suitability-v1"
+    fuzzy_suitability_score: float = Field(ge=0, le=100)
+    label: Literal["Low", "Moderate", "High"]
+    input_memberships: dict[str, FuzzyMembershipValues]
+    activated_rules: list[FuzzyActivatedRule]
+    strongest_positive_factors: list[FuzzySuitabilityFactor]
+    weakest_factors: list[FuzzySuitabilityFactor]
+    explanation: str
+
+
+class FuzzyCandidateSuitabilityAnalysisResponse(FuzzyCandidateSuitabilityResponse):
+    """Fuzzy result plus the persisted RefAI inputs used to produce it."""
+
+    inputValuesUsed: FuzzyCandidateSuitabilityInput
+    inputSources: dict[str, str]
+
+
+class SemanticJobMatchEvidence(BaseModel):
+    resume_evidence: str = Field(min_length=1, max_length=320)
+    compared_to: str = Field(min_length=1, max_length=500)
+    match_type: Literal["semantic", "required_skill"]
+    normalized_similarity: float | None = Field(default=None, ge=0, le=100)
+
+
+class SemanticJobMatchResponse(BaseModel):
+    semantic_match_version: Literal["semantic-job-match-v1"] = "semantic-job-match-v1"
+    semantic_match_score: float = Field(ge=0, le=100)
+    matched_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    strongest_matching_evidence: list[SemanticJobMatchEvidence] = Field(default_factory=list)
+    weak_missing_evidence: list[str] = Field(default_factory=list)
+    role_relevance_explanation: str
+    relevance_source: Literal["job_description", "role_context"]
+    cache_status: Literal["hit", "miss"]
+    limitations: list[str] = Field(default_factory=list)
+
+
+class HybridScoreComponent(BaseModel):
+    """One transparent contribution to the academic Hybrid Candidate Intelligence score."""
+
+    key: Literal["trust_score_v2", "fuzzy_suitability", "semantic_job_match", "claim_evidence_verification"]
+    label: str = Field(min_length=1, max_length=100)
+    score: float = Field(ge=0, le=100)
+    weight: int = Field(ge=0, le=100)
+    contribution: float = Field(ge=0, le=100)
+    basis: str = Field(min_length=1, max_length=700)
+    limitation: str | None = Field(default=None, max_length=700)
+
+
+class HybridCandidateIntelligenceResponse(BaseModel):
+    """Separate academic composite. Candidate Trust Score v2 remains unchanged."""
+
+    algorithm_version: Literal["hybrid-candidate-intelligence-v1"] = "hybrid-candidate-intelligence-v1"
+    hybrid_score: float = Field(ge=0, le=100)
+    label: Literal["Low", "Moderate", "High"]
+    component_scores: dict[str, float]
+    contribution_breakdown: list[HybridScoreComponent] = Field(min_length=4, max_length=4)
+    positive_factors: list[str] = Field(default_factory=list, max_length=8)
+    risk_gap_factors: list[str] = Field(default_factory=list, max_length=8)
+    explanation: str = Field(min_length=1, max_length=1200)
+
+
+class SkillGapRecommendation(BaseModel):
+    skill: str = Field(min_length=1, max_length=180)
+    priority: Literal["High", "Medium", "Low"]
+    reason: str = Field(min_length=1, max_length=700)
+    learning_order: int = Field(ge=1, le=50)
+    estimated_suitability_impact: float = Field(ge=0, le=25)
+    project_improvement: str = Field(min_length=1, max_length=700)
+    evidence_basis: str = Field(min_length=1, max_length=500)
+
+
+class SkillGapRecommendationResponse(BaseModel):
+    algorithm_version: Literal["skill-gap-recommendation-v1"] = "skill-gap-recommendation-v1"
+    current_suitability_score: float = Field(ge=0, le=100)
+    current_suitability_label: Literal["Low", "Moderate", "High"]
+    missing_skills: list[str] = Field(default_factory=list)
+    recommendations: list[SkillGapRecommendation] = Field(default_factory=list, max_length=20)
+    recommended_learning_order: list[str] = Field(default_factory=list, max_length=20)
+    limitations: list[str] = Field(default_factory=list, max_length=8)
+
+
 class StudentEducation(BaseModel):
     college: str | None = None
     degree: str | None = None
@@ -193,6 +307,56 @@ class ImprovementComparison(BaseModel):
     scoreVersion: str
 
 
+class ImprovementSkillScenario(BaseModel):
+    skill: str = Field(min_length=1, max_length=180)
+    priority: Literal["High", "Medium", "Low"]
+
+
+class ImprovementIntelligenceSnapshot(BaseModel):
+    fuzzySuitabilityScore: float = Field(ge=0, le=100)
+    semanticJobMatchScore: float = Field(ge=0, le=100)
+    hybridScore: float = Field(ge=0, le=100)
+    algorithmVersion: str
+    availableSkillScenarios: list[ImprovementSkillScenario] = Field(default_factory=list, max_length=10)
+
+
+class HypotheticalImprovementRequest(BaseModel):
+    """Requested evidence scenarios only; no resume/profile records are changed."""
+
+    skillEvidence: list[str] = Field(default_factory=list, max_length=5)
+    addProjectEvidence: bool = False
+
+    @field_validator("skillEvidence")
+    @classmethod
+    def normalize_skill_evidence(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(item.strip() for item in value if isinstance(item, str) and item.strip()))
+
+    @model_validator(mode="after")
+    def require_a_hypothesis(self):
+        if not self.skillEvidence and not self.addProjectEvidence:
+            raise ValueError("Select at least one skill evidence or project evidence scenario.")
+        return self
+
+
+class HypotheticalAffectedComponent(BaseModel):
+    key: str
+    label: str
+    currentScore: float = Field(ge=0, le=100)
+    simulatedScore: float = Field(ge=0, le=100)
+    difference: float
+    whyChanged: str
+
+
+class HypotheticalImprovementSimulation(BaseModel):
+    isSimulation: Literal[True] = True
+    currentScore: float = Field(ge=0, le=100)
+    simulatedScore: float = Field(ge=0, le=100)
+    difference: float
+    affectedComponents: list[HypotheticalAffectedComponent] = Field(default_factory=list)
+    whyScoreChanged: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
 class ImprovementSimulatorResponse(BaseModel):
     simulatorVersion: str
     scoreVersion: str
@@ -202,6 +366,8 @@ class ImprovementSimulatorResponse(BaseModel):
     totalMaximumPotentialPoints: int = Field(ge=0, le=100)
     comparison: ImprovementComparison | None = None
     limitations: list[str]
+    intelligenceSnapshot: ImprovementIntelligenceSnapshot | None = None
+    simulation: HypotheticalImprovementSimulation | None = None
 
 
 class EmployeeReliabilityMetric(BaseModel):
@@ -432,6 +598,94 @@ class TrustCardResponse(BaseModel):
     generationLimitations: list[str] = Field(default_factory=list)
 
 
+PassportVisibility = Literal["identity", "role", "scores", "evidence", "reliability"]
+
+
+class TrustPassportCreate(BaseModel):
+    trustCardId: UUID
+    visibility: list[PassportVisibility] = Field(min_length=1, max_length=5)
+    expiresInDays: int | None = Field(default=30, ge=1, le=365)
+
+
+class TrustPassportStatus(BaseModel):
+    passportId: UUID | None = None
+    enabled: bool
+    visibility: list[PassportVisibility] = Field(default_factory=list)
+    expiresAt: datetime | None = None
+    accessCount: int | None = Field(default=None, ge=0)
+    shareToken: str | None = None
+
+
+class PublicTrustPassport(BaseModel):
+    candidateName: str | None = None
+    targetRole: str | None = None
+    trustScore: float | None = Field(default=None, ge=0, le=100)
+    hybridScore: float | None = Field(default=None, ge=0, le=100)
+    fuzzySuitabilityScore: float | None = Field(default=None, ge=0, le=100)
+    verifiedSkills: list[str] = Field(default_factory=list)
+    verifiedEvidenceCount: int | None = Field(default=None, ge=0)
+    strongestVerifiedEvidence: list[str] = Field(default_factory=list)
+    reliability: dict[str, str | None] | None = None
+    algorithmVersion: str | None = None
+    generatedAt: datetime | None = None
+    issuedAt: datetime | None = None
+    expiresAt: datetime | None = None
+    visibility: list[PassportVisibility] = Field(default_factory=list)
+
+
+class CandidateIntelligenceResponse(BaseModel):
+    """Current authenticated candidate-intelligence signals for the student dashboard."""
+
+    trustScore: float = Field(ge=0, le=100)
+    trustScoreVersion: str | None = None
+    trustScoreBreakdown: list[TrustScoreFactor] = Field(default_factory=list)
+    hybrid: HybridCandidateIntelligenceResponse
+    fuzzy: FuzzyCandidateSuitabilityAnalysisResponse
+    semantic: SemanticJobMatchResponse
+    skillGaps: SkillGapRecommendationResponse
+
+
+class ModelComparisonComponent(BaseModel):
+    key: str = Field(min_length=1, max_length=100)
+    label: str = Field(min_length=1, max_length=180)
+    value: float = Field(ge=0)
+    maximumScore: float | None = Field(default=None, ge=0)
+    unit: Literal["points", "normalized_input", "membership", "count"]
+    basis: str = Field(min_length=1, max_length=500)
+
+
+class ModelComparisonModel(BaseModel):
+    key: Literal["trust_score_v2", "fuzzy_suitability", "semantic_job_match", "hybrid_candidate_intelligence"]
+    label: str
+    score: float = Field(ge=0, le=100)
+    maximumScore: Literal[100] = 100
+    algorithmVersion: str
+    measures: str = Field(min_length=1, max_length=800)
+    components: list[ModelComparisonComponent] = Field(default_factory=list, max_length=30)
+    limitations: list[str] = Field(default_factory=list, max_length=8)
+
+
+class ModelComparisonResponse(BaseModel):
+    comparisonVersion: Literal["model-comparison-v1"] = "model-comparison-v1"
+    targetRole: str | None = None
+    relevanceSource: Literal["job_description", "role_context"]
+    models: list[ModelComparisonModel] = Field(min_length=4, max_length=4)
+    # These fields expose the existing saved explainability artefacts for the
+    # academic Intelligence Lab. They do not introduce a second calculation.
+    activatedFuzzyRules: list[FuzzyActivatedRule] = Field(default_factory=list, max_length=10)
+    fuzzyExplanation: str | None = Field(default=None, max_length=1200)
+    semanticEvidence: list[SemanticJobMatchEvidence] = Field(default_factory=list, max_length=12)
+    semanticExplanation: str | None = Field(default=None, max_length=1200)
+    semanticMatchedSkills: list[str] = Field(default_factory=list, max_length=50)
+    semanticMissingSkills: list[str] = Field(default_factory=list, max_length=50)
+    semanticWeakEvidence: list[str] = Field(default_factory=list, max_length=12)
+    hybridContributions: list[HybridScoreComponent] = Field(default_factory=list, max_length=4)
+    hybridExplanation: str | None = Field(default=None, max_length=1200)
+    hybridPositiveFactors: list[str] = Field(default_factory=list, max_length=8)
+    hybridRiskGapFactors: list[str] = Field(default_factory=list, max_length=8)
+    methodologyNote: str = Field(min_length=1, max_length=1000)
+
+
 ReferralMessageTone = Literal[
     "professional_concise", "friendly", "alumni_connection",
     "first_time_outreach", "follow_up",
@@ -472,6 +726,20 @@ class ReferralMessageResponse(BaseModel):
     wordCount: int = Field(ge=1, le=120)
     alumniConnectionAvailable: bool = False
     followUpAvailable: bool = False
+
+
+class CreditBalanceResponse(BaseModel):
+    balance: int = Field(ge=0)
+
+
+class CreditLedgerEntryResponse(BaseModel):
+    id: int
+    action: str
+    amount: int
+    balanceAfter: int
+    createdAt: datetime
+class CreditPurchaseRequest(BaseModel): plan: Literal["starter", "boost", "pro"]; idempotencyKey: str = Field(min_length=8, max_length=100)
+class CreditPurchaseResponse(CreditBalanceResponse): purchasedCredits: int; plan: str
 
 
 class ReferralQualityRequest(BaseModel):
@@ -539,6 +807,22 @@ class ReferralCompatibilityRequest(BaseModel):
     targetCompany: str = Field(min_length=1, max_length=200)
     jobDescription: str = Field(default="", max_length=100_000)
     studentMessage: str = Field(default="", max_length=1_000)
+
+
+class EmployeeDiscoveryRecommendationRequest(BaseModel):
+    trustCardId: UUID
+    targetRole: str = Field(min_length=1, max_length=200)
+    targetCompany: str = Field(min_length=1, max_length=200)
+    jobDescription: str = Field(default="", max_length=100_000)
+
+
+class EmployeeDiscoveryRecommendation(BaseModel):
+    employeeId: UUID
+    compatibility: ReferralCompatibilityResponse
+    matchReasons: list[str] = Field(default_factory=list, max_length=3)
+    concern: str | None = Field(default=None, max_length=500)
+    acceptingRequests: bool
+    reliabilityLabel: str
 
 
 AIApplyTimeline = Literal["immediate", "within_30_days", "within_3_months", "exploring"]
@@ -695,6 +979,10 @@ class ReferralRequestSummary(BaseModel):
     referralNoteToStudent: str | None = None
     referralSubmittedAt: datetime | None = None
     referralSubmittedBy: UUID | None = None
+    moreInformationQuestion: str | None = None
+    studentResponse: str | None = None
+    studentResponseProofEntries: list["ProofEntryResponse"] = Field(default_factory=list)
+    studentRespondedAt: datetime | None = None
     createdAt: datetime
     updatedAt: datetime
 
@@ -717,6 +1005,7 @@ class EmployeeReferralQueueItem(ReferralRequestSummary):
     overallMatch: int | None = Field(default=None, ge=0, le=100)
     resumeExists: bool
     trustCardExists: bool
+    studentResponseAvailable: bool = False
 
 
 class EmployeeCandidateProfile(BaseModel):
@@ -920,7 +1209,8 @@ class EmployeeDecisionUpdate(BaseModel):
         "suitable_profile", "strong_evidence", "relevant_role_alignment",
         "will_refer_externally", "additional_details_required_first",
         "role_mismatch", "insufficient_evidence", "not_accepting_referrals",
-        "job_closed", "unable_to_verify_experience", "other",
+        "job_closed", "unable_to_verify_experience", "skill_mismatch", "experience_gap",
+        "resume_quality", "employee_company_policy", "opportunity_unavailable", "other",
         "clarification_required",
     ]
     note: str | None = Field(default=None, max_length=2_000)
@@ -929,7 +1219,7 @@ class EmployeeDecisionUpdate(BaseModel):
     @model_validator(mode="after")
     def validate_decision_reason(self):
         approve = {"suitable_profile", "strong_evidence", "relevant_role_alignment", "will_refer_externally", "additional_details_required_first"}
-        decline = {"role_mismatch", "insufficient_evidence", "not_accepting_referrals", "job_closed", "unable_to_verify_experience", "other"}
+        decline = {"role_mismatch", "insufficient_evidence", "not_accepting_referrals", "job_closed", "unable_to_verify_experience", "skill_mismatch", "experience_gap", "resume_quality", "employee_company_policy", "opportunity_unavailable", "other"}
         if self.status == "approved" and self.reason not in approve: raise ValueError("Select an approved referral reason")
         if self.status == "declined" and self.reason not in decline: raise ValueError("Select a decline reason")
         if self.status == "more_info_requested":
@@ -939,6 +1229,19 @@ class EmployeeDecisionUpdate(BaseModel):
         if self.status not in {"approved", "declined", "more_info_requested"}: raise ValueError("Choose approve, decline, or request more information")
         self.note = self.note.strip() if self.note else None
         return self
+
+
+class MoreInformationResponseInput(BaseModel):
+    response: str = Field(min_length=1, max_length=2_000)
+    proofEntryIds: list[UUID] = Field(default_factory=list, max_length=10)
+
+    @field_validator("response")
+    @classmethod
+    def normalize_response(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Write a response for the assigned employee")
+        return normalized
 
 
 class ReferralSubmissionUpdate(BaseModel):
@@ -971,14 +1274,14 @@ class ReferralStatusHistoryEntry(BaseModel):
     note: str | None = None
     decisionReason: str | None = None
     decisionMessage: str | None = None
-    eventType: Literal["request_created", "status_changed", "employee_viewed"] = "status_changed"
+    eventType: Literal["request_created", "status_changed", "employee_viewed", "student_responded"] = "status_changed"
     createdAt: datetime
 
 
 NotificationEventType = Literal[
     "employee_viewed_request", "more_information_requested", "request_approved",
     "referral_submitted", "request_declined", "employee_stopped_accepting",
-    "resume_reanalysis_completed",
+    "resume_reanalysis_completed", "student_responded",
 ]
 
 
@@ -996,3 +1299,7 @@ class NotificationResponse(BaseModel):
 
 class MarkAllNotificationsReadResponse(BaseModel):
     updated: int = Field(ge=0)
+
+
+class ClearAllNotificationsResponse(BaseModel):
+    cleared: int = Field(ge=0)

@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     ai_apply_initial_credit_balance: int = 5
     ai_apply_submission_rate_limit: int = 6
     ai_apply_submission_rate_window_seconds: int = 600
+    refai_free_ai_credits: int = 10
+    refai_credit_cost_referral_message: int = 1
+    refai_credit_cost_premium_analysis: int = 1
+    refai_credit_plans: str = '{"starter":{"priceInr":19,"credits":10},"boost":{"priceInr":39,"credits":25},"pro":{"priceInr":79,"credits":60}}'
     cors_origins: str = ",".join(REQUIRED_CORS_ORIGINS)
 
     class Config:

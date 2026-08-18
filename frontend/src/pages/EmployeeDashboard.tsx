@@ -5,8 +5,6 @@ import PageShell from '../components/dashboard/PageShell'
 import { Badge, Card, EmptyState, InlineFeedback, PrimaryButton, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
 import ReferralJourneyTimeline from '../components/dashboard/ReferralJourneyTimeline'
 import EmployeeReliabilityBadge from '../components/dashboard/EmployeeReliabilityBadge'
-import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
-import { DEMO_CANDIDATE_ID, demoEmployeeReview } from '../lib/demoData'
 import { employeeReviewHref, employeeStatusLabel } from '../lib/employeeWorkflow'
 import { parseEmployeeQueue } from '../lib/employeeQueueContract'
 import { api } from '../lib/apiClient'
@@ -14,7 +12,7 @@ import { FriendlyRequestError, friendlyErrorMessage } from '../lib/requestSafety
 import type { AvailabilityStatus, CandidateLevel, DeclineReasonCode, EmployeeProfessionalProfile, EmployeeReferralQueueItem, EmployeeReliabilityBadge as EmployeeReliabilityBadgeData, EvidenceExpectation, MessageLength, ReferralCategory, ReferralStatus } from '../types'
 
 type QueueFilter = 'highest_compatibility' | 'recently_submitted' | 'awaiting_response' | 'more_information_received' | 'approved' | 'completed'
-type CandidateQueueItem = { id: string; name: string; college: string | null; role: string; company: string; trustScore: number | null; compatibilityScore: number | null; compatibilityLabel: string | null; status: string; rawStatus: ReferralStatus; createdAt: string; time: string; resumeExists: boolean; trustCardExists: boolean; journeyStatus?: ReferralStatus; demo?: boolean }
+type CandidateQueueItem = { id: string; name: string; college: string | null; role: string; company: string; trustScore: number | null; compatibilityScore: number | null; compatibilityLabel: string | null; status: string; rawStatus: ReferralStatus; createdAt: string; time: string; resumeExists: boolean; trustCardExists: boolean; studentResponseAvailable: boolean; journeyStatus?: ReferralStatus }
 const evidenceOptions: { value: EvidenceExpectation; label: string }[] = [['resume', 'Resume'], ['trust_card', 'Trust Card'], ['project_evidence', 'Project evidence'], ['quantified_outcomes', 'Quantified outcomes'], ['education_details', 'Education details'], ['portfolio_links', 'Portfolio links']].map(([value, label]) => ({ value: value as EvidenceExpectation, label }))
 const candidateLevelOptions: { value: CandidateLevel; label: string }[] = [['student', 'Student'], ['fresher', 'Fresher'], ['entry_level', 'Entry level'], ['experienced', 'Experienced']].map(([value, label]) => ({ value: value as CandidateLevel, label }))
 const formatResponseTime = (hours: number) => {
@@ -27,18 +25,9 @@ const formatResponseTime = (hours: number) => {
 const categoryOptions: { value: ReferralCategory; label: string }[] = [['internship', 'Internship'], ['full_time', 'Full time'], ['apprenticeship', 'Apprenticeship'], ['graduate_program', 'Graduate program'], ['campus_hiring', 'Campus hiring'], ['contract', 'Contract']].map(([value, label]) => ({ value: value as ReferralCategory, label }))
 const declineOptions: { value: DeclineReasonCode; label: string }[] = [['insufficient_evidence', 'Insufficient evidence'], ['role_mismatch', 'Role mismatch'], ['capacity_unavailable', 'At capacity'], ['profile_incomplete', 'Profile incomplete'], ['experience_mismatch', 'Experience mismatch'], ['unsupported_category', 'Unsupported category'], ['other', 'Other']].map(([value, label]) => ({ value: value as DeclineReasonCode, label }))
 const splitPreferenceList = (value: string) => [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))].slice(0, 20)
-const demoReliabilityBadge: EmployeeReliabilityBadgeData = {
-  badgeType: 'reliable_referrer', label: 'Reliable Referrer', reliabilityLevel: 'Strong',
-  basis: 'Demo history illustrates consistent, transparent referral responses.',
-  relevantCounts: { meaningfulResponses: 12, completedReferrals: 5, recentMeaningfulResponses: 3, overdueUnansweredRequests: 0 },
-  lastCalculatedAt: '2026-07-30T12:00:00Z',
-  limitations: ['Demo data is isolated and does not represent a real employee record.'],
-}
-
 export default function EmployeeDashboard() {
-  const { isDemoMode, demoDecision, demoJourneyStage } = useDemoMode()
   const [requests, setRequests] = useState<EmployeeReferralQueueItem[]>([])
-  const [loading, setLoading] = useState(!isDemoMode)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('recently_submitted')
@@ -64,15 +53,13 @@ export default function EmployeeDashboard() {
   const [declineReasonCodes, setDeclineReasonCodes] = useState<DeclineReasonCode[]>([])
   const [referralCategories, setReferralCategories] = useState<ReferralCategory[]>([])
   const [aiApplyOptIn, setAiApplyOptIn] = useState(true)
-  const [professionalProfileLoading, setProfessionalProfileLoading] = useState(!isDemoMode)
+  const [professionalProfileLoading, setProfessionalProfileLoading] = useState(true)
   const [professionalProfileSaving, setProfessionalProfileSaving] = useState(false)
   const [responseTime, setResponseTime] = useState<{ value: number | null; available: boolean; count: number }>({ value: null, available: false, count: 0 })
-  const [reliabilityBadge, setReliabilityBadge] = useState<EmployeeReliabilityBadgeData | null>(isDemoMode ? demoReliabilityBadge : null)
+  const [reliabilityBadge, setReliabilityBadge] = useState<EmployeeReliabilityBadgeData | null>(null)
   const [professionalProfileFeedback, setProfessionalProfileFeedback] = useState<{ tone: 'error' | 'success'; message: string } | null>(null)
-  const referralSent = isDemoMode && hasReachedDemoStage(demoJourneyStage, 'referral-sent')
 
   useEffect(() => {
-    if (isDemoMode) { setLoading(false); setError(null); return }
     let active = true
     setLoading(true); setError(null)
     api.get<unknown>('/referral/employee/queue').then((response) => {
@@ -81,10 +68,9 @@ export default function EmployeeDashboard() {
       if (active) setError(queueError)
     }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [isDemoMode, reloadKey])
+  }, [reloadKey])
 
   useEffect(() => {
-    if (isDemoMode) { setProfessionalProfileLoading(false); setProfessionalProfileFeedback(null); setReliabilityBadge(demoReliabilityBadge); return }
     let active = true
     setProfessionalProfileLoading(true)
     setReliabilityBadge(null)
@@ -119,17 +105,14 @@ export default function EmployeeDashboard() {
       if (active) setProfessionalProfileFeedback({ tone: 'error', message: friendlyErrorMessage(profileError, 'We could not load your professional profile. Please try again.') })
     }).finally(() => { if (active) setProfessionalProfileLoading(false) })
     return () => { active = false }
-  }, [isDemoMode])
+  }, [])
 
-  const demoStatus = demoDecision === 'approved' ? 'Approved' : demoDecision === 'declined' ? 'Declined' : demoDecision === 'more_info_requested' ? 'More information requested' : 'Pending'
-  const queue: CandidateQueueItem[] = isDemoMode
-    ? referralSent ? [{ id: DEMO_CANDIDATE_ID, name: demoEmployeeReview.candidateName, college: 'PES University', role: demoEmployeeReview.role, company: demoEmployeeReview.company, trustScore: 91, compatibilityScore: 88, compatibilityLabel: 'Good fit', status: demoStatus, rawStatus: demoDecision === 'approved' ? 'approved' : demoDecision === 'declined' ? 'declined' : demoDecision === 'more_info_requested' ? 'more_info_requested' : 'submitted', createdAt: new Date().toISOString(), time: demoEmployeeReview.submitted, resumeExists: true, trustCardExists: true, demo: true }] : []
-    : requests.map((request) => ({ id: request.id, name: request.studentName || 'Student applicant', college: request.college, role: request.targetRole, company: request.targetCompany, trustScore: request.trustScore, compatibilityScore: request.compatibilityScore, compatibilityLabel: request.compatibilityLabel, status: employeeStatusLabel[request.status], rawStatus: request.status, createdAt: request.createdAt, journeyStatus: request.status, time: new Date(request.createdAt).toLocaleDateString(), resumeExists: request.resumeExists, trustCardExists: request.trustCardExists }))
+  const queue: CandidateQueueItem[] = requests.map((request) => ({ id: request.id, name: request.studentName || 'Student applicant', college: request.college, role: request.targetRole, company: request.targetCompany, trustScore: request.trustScore, compatibilityScore: request.compatibilityScore, compatibilityLabel: request.compatibilityLabel, status: employeeStatusLabel[request.status], rawStatus: request.status, createdAt: request.createdAt, journeyStatus: request.status, time: new Date(request.createdAt).toLocaleDateString(), resumeExists: request.resumeExists, trustCardExists: request.trustCardExists, studentResponseAvailable: request.studentResponseAvailable }))
   const filteredQueue = useMemo(() => {
     const statePriority: Record<ReferralStatus, number> = { more_info_requested: 0, submitted: 1, pending: 1, under_review: 2, approved: 3, referred: 4, draft: 5, declined: 6, withdrawn: 7, expired: 8 }
     let items = [...queue]
     if (queueFilter === 'awaiting_response') items = items.filter((item) => ['submitted', 'pending', 'under_review'].includes(item.rawStatus))
-    if (queueFilter === 'more_information_received') items = items.filter((item) => item.rawStatus === 'more_info_requested')
+    if (queueFilter === 'more_information_received') items = items.filter((item) => item.studentResponseAvailable)
     if (queueFilter === 'approved') items = items.filter((item) => item.rawStatus === 'approved')
     if (queueFilter === 'completed') items = items.filter((item) => item.rawStatus === 'referred')
     return items.sort((a, b) => queueFilter === 'highest_compatibility'
@@ -139,10 +122,9 @@ export default function EmployeeDashboard() {
         : statePriority[a.rawStatus] - statePriority[b.rawStatus] || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [queue, queueFilter])
   const metrics = useMemo(() => {
-    if (isDemoMode) return { pending: demoDecision === 'pending' ? 1 : 0, completed: demoDecision === 'approved' ? 1 : 0 }
     const count = (status: string) => requests.filter((request) => request.status === status).length
     return { pending: count('submitted') + count('pending') + count('under_review') + count('more_info_requested'), completed: count('referred') }
-  }, [demoDecision, isDemoMode, requests])
+  }, [requests])
   const errorKind = error instanceof FriendlyRequestError ? error.kind : 'unknown'
   const errorText = error ? friendlyErrorMessage(error, 'We could not load your referral queue. Please try again.') : null
   const saveProfessionalProfile = async () => {
@@ -192,16 +174,16 @@ export default function EmployeeDashboard() {
   }
 
   return <PageShell compact eyebrow="Employee portal" title="Referral review workspace" description="Review assigned requests using candidate evidence, deterministic scores, and an advisory AI summary. Every decision remains yours.">
-    <div className={`grid min-w-0 gap-6 ${isDemoMode ? '' : 'xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]'}`}>
+    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
       <section id="candidate-queue" className="min-w-0 scroll-mt-24 space-y-6">
-        <Card className="p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Queue overview</p><div className="flex flex-wrap items-center justify-end gap-2">{reliabilityBadge ? <EmployeeReliabilityBadge badge={reliabilityBadge} /> : null}<Badge tone={isDemoMode ? 'warning' : 'neutral'}><Sparkles className="mr-1.5 size-3.5" />{isDemoMode ? 'Demo data' : 'Secured live queue'}</Badge></div></div>
+        <Card className="p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Queue overview</p><div className="flex flex-wrap items-center justify-end gap-2">{reliabilityBadge ? <EmployeeReliabilityBadge badge={reliabilityBadge} /> : null}<Badge tone="neutral"><Sparkles className="mr-1.5 size-3.5" />Secured live queue</Badge></div></div>
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">{loading ? Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-xl" />) : [
             { label: 'Pending Reviews', value: String(metrics.pending) },
             { label: 'Average Response Time', value: responseTime.available && responseTime.value !== null ? formatResponseTime(responseTime.value) : 'Not enough data' },
             { label: 'Completed Referrals', value: String(metrics.completed) },
             { label: 'Availability', value: availabilityStatus === 'accepting' ? 'Accepting' : availabilityStatus === 'paused' ? 'Paused' : 'Unavailable' },
           ].map((item) => <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4"><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{item.label}</p><p className="mt-2 text-base font-semibold">{item.value}</p></div>)}</div>
-          {!isDemoMode ? <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-end"><label className="flex-1 text-xs font-semibold text-slate-600">Quick availability update<select value={availabilityStatus} onChange={(event) => setAvailabilityStatus(event.target.value as AvailabilityStatus)} className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-black focus:ring-2 focus:ring-black/10"><option value="accepting">Accepting requests</option><option value="paused">Paused</option><option value="unavailable">Unavailable</option></select></label><SecondaryButton onClick={() => { void saveProfessionalProfile() }} loading={professionalProfileSaving} disabled={!company.trim()}>Save availability</SecondaryButton></div> : null}
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-end"><label className="flex-1 text-xs font-semibold text-slate-600">Quick availability update<select value={availabilityStatus} onChange={(event) => setAvailabilityStatus(event.target.value as AvailabilityStatus)} className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-black focus:ring-2 focus:ring-black/10"><option value="accepting">Accepting requests</option><option value="paused">Paused</option><option value="unavailable">Unavailable</option></select></label><SecondaryButton onClick={() => { void saveProfessionalProfile() }} loading={professionalProfileSaving} disabled={!company.trim()}>Save availability</SecondaryButton></div>
         </Card>
 
         <Card className="p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-xl font-semibold">Candidate review queue</h3><p className="mt-1 text-sm text-slate-500">Sorted by request state and relevance—not as a student ranking.</p></div><SecondaryButton onClick={() => setReloadKey((key) => key + 1)}><RefreshCw className="mr-2 size-4" />Refresh</SecondaryButton></div>
@@ -213,18 +195,18 @@ export default function EmployeeDashboard() {
             {loading ? Array.from({ length: 2 }).map((_, index) => <Skeleton key={index} className="h-40 rounded-xl" />) : null}
             {!loading ? filteredQueue.map((candidate) => <div key={candidate.id} className="min-w-0 rounded-xl border border-slate-200 p-4 transition-colors hover:bg-slate-50 sm:p-5">
               <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-semibold">{candidate.name}</p><Badge tone={candidate.demo ? 'warning' : 'info'}>{candidate.status}</Badge>{candidate.demo ? <Badge tone="warning">Demo</Badge> : null}</div><p className="mt-2 break-words text-sm text-slate-600">{candidate.role} · {candidate.company}</p><p className="mt-1 break-words text-xs text-slate-500">{candidate.college || 'College not provided'} · {candidate.time}</p></div>
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-semibold">{candidate.name}</p><Badge tone="info">{candidate.status}</Badge></div><p className="mt-2 break-words text-sm text-slate-600">{candidate.role} · {candidate.company}</p><p className="mt-1 break-words text-xs text-slate-500">{candidate.college || 'College not provided'} · {candidate.time}</p></div>
                 <div className="grid min-w-0 grid-cols-3 gap-2 text-center"><div className="min-w-0 rounded-lg bg-slate-50 px-2 py-2"><p className="text-sm font-semibold">{candidate.trustScore ?? '—'}</p><p className="truncate text-[10px] text-slate-500">Trust Score</p></div><div className="min-w-0 rounded-lg bg-slate-50 px-2 py-2"><p className="text-sm font-semibold">{candidate.compatibilityScore ?? '—'}</p><p className="truncate text-[10px] text-slate-500">Compatibility</p></div><div className="min-w-0 rounded-lg bg-slate-50 px-2 py-2"><p className="text-sm font-semibold">{candidate.resumeExists && candidate.trustCardExists ? 'Ready' : 'Partial'}</p><p className="truncate text-[10px] text-slate-500">Evidence</p></div></div>
               </div>
-              <details className="mt-4 rounded-lg border border-slate-200 bg-white p-3"><summary className="cursor-pointer rounded-md text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2">Journey & review guidance</summary>{!isDemoMode && candidate.journeyStatus ? <div className="mt-4"><ReferralJourneyTimeline requestId={candidate.id} currentStatus={candidate.journeyStatus} /></div> : null}<p className="mt-3 text-xs leading-5 text-slate-500">The AI Review Copilot is available inside Candidate Review as an advisory summary. It cannot approve, decline, or change scores.</p></details>
-              <div className="mt-4"><Link to={isDemoMode ? `/employee/review/${candidate.id}` : employeeReviewHref({ id: candidate.id })} className="inline-flex h-10 items-center justify-center rounded-xl bg-black px-4 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2">Open Candidate Review</Link></div>
+              <details className="mt-4 rounded-lg border border-slate-200 bg-white p-3"><summary className="cursor-pointer rounded-md text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2">Journey & review guidance</summary>{candidate.journeyStatus ? <div className="mt-4"><ReferralJourneyTimeline requestId={candidate.id} currentStatus={candidate.journeyStatus} /></div> : null}<p className="mt-3 text-xs leading-5 text-slate-500">The AI Review Copilot is available inside Candidate Review as an advisory summary. It cannot approve, decline, or change scores.</p></details>
+              <div className="mt-4"><Link to={employeeReviewHref({ id: candidate.id })} className="inline-flex h-10 items-center justify-center rounded-xl bg-black px-4 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2">Open Candidate Review</Link></div>
             </div>) : null}
             {!loading && !error && filteredQueue.length === 0 ? <EmptyState className="py-6" title={queue.length ? "No requests match this filter" : "Your review queue is clear"} description={queue.length ? "Choose another queue filter to see assigned requests in a different state." : "Assigned referral requests will appear here with candidate evidence and compatibility signals."} icon={BriefcaseBusiness} action={<SecondaryButton onClick={() => setReloadKey((key) => key + 1)}><RefreshCw className="mr-2 size-4" />Refresh queue</SecondaryButton>} /> : null}
           </div>
         </Card>
       </section>
 
-      {!isDemoMode ? <section className="min-w-0 space-y-6"><Card className="p-5 sm:p-6"><details><summary className="cursor-pointer list-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"><div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><BriefcaseBusiness className="size-5" /></div><div><h3 className="text-lg font-semibold">Profile & referral preferences</h3><p className="mt-1 text-sm text-slate-500">Expand to edit directory details and referral settings.</p></div></div></summary>{professionalProfileLoading ? <div className="mt-6 space-y-4"><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /><Skeleton className="h-32 w-full" /></div> : <form className="mt-6 space-y-4" onSubmit={(event) => { event.preventDefault(); void saveProfessionalProfile() }}>
+      <section className="min-w-0 space-y-6"><Card className="p-5 sm:p-6"><details><summary className="cursor-pointer list-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"><div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><BriefcaseBusiness className="size-5" /></div><div><h3 className="text-lg font-semibold">Profile & referral preferences</h3><p className="mt-1 text-sm text-slate-500">Expand to edit directory details and referral settings.</p></div></div></summary>{professionalProfileLoading ? <div className="mt-6 space-y-4"><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /><Skeleton className="h-32 w-full" /></div> : <form className="mt-6 space-y-4" onSubmit={(event) => { event.preventDefault(); void saveProfessionalProfile() }}>
         <div className="flex items-center justify-between gap-3"><p className="text-xs text-slate-500">Professional identity</p><Badge tone={verifiedEmployee ? 'success' : 'neutral'}>{verifiedEmployee ? 'Verified employee' : 'Verification pending'}</Badge></div>
         <div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Company Name</span><input value={company} onChange={(event) => setCompany(event.target.value)} required maxLength={200} autoComplete="organization" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10" placeholder="Company name" /></label><label className="block"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Designation <span className="font-normal normal-case tracking-normal">(optional)</span></span><input value={designation} onChange={(event) => setDesignation(event.target.value)} maxLength={200} autoComplete="organization-title" className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10" placeholder="Software Engineer" /></label><label className="block"><span className="mb-2 block text-xs font-semibold text-slate-600">Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} maxLength={120} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm" placeholder="Engineering" /></label><label className="block"><span className="mb-2 block text-xs font-semibold text-slate-600">Years of experience</span><input type="number" min={0} max={60} value={yearsExperience} onChange={(event) => setYearsExperience(event.target.value === '' ? '' : Math.min(60, Math.max(0, Number(event.target.value))))} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm" /></label></div>
         <details className="rounded-xl border border-slate-200 p-4"><summary className="cursor-pointer rounded-md text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2">Professional links</summary><div className="mt-4 space-y-3">{([['LinkedIn URL', linkedinUrl, setLinkedinUrl, 'https://linkedin.com/in/...'], ['Company profile URL', companyProfileUrl, setCompanyProfileUrl, 'https://company.com/team/...'], ['Portfolio URL', portfolioUrl, setPortfolioUrl, 'https://...']] as const).map(([label, value, setter, placeholder]) => <label key={label} className="block"><span className="mb-2 block text-xs font-semibold text-slate-600">{label}</span><input type="url" value={value} onChange={(event) => setter(event.target.value)} maxLength={500} className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-black focus:ring-2 focus:ring-black/10" placeholder={placeholder} /></label>)}</div></details>
@@ -241,7 +223,7 @@ export default function EmployeeDashboard() {
           <label className="block"><span className="mb-2 block text-xs font-semibold text-slate-600">Referral guidelines <span className="font-normal">(optional)</span></span><textarea value={referralGuidelines} onChange={(event) => setReferralGuidelines(event.target.value)} maxLength={2000} rows={4} className="w-full resize-y rounded-xl border border-slate-300 p-3 text-sm" placeholder="What should a student include before requesting a referral?" /><span className="mt-1 block text-right text-xs text-slate-500">{referralGuidelines.length}/2000</span></label>
         </div></details>
         {professionalProfileFeedback ? <InlineFeedback tone={professionalProfileFeedback.tone}>{professionalProfileFeedback.message}</InlineFeedback> : null}<PrimaryButton className="w-full" type="submit" loading={professionalProfileSaving} disabled={!company.trim()} disabledReason="Company Name is required">{savedCompany ? 'Save changes' : 'Save profile'}</PrimaryButton></form>}</details></Card>
-      </section> : null}
+      </section>
     </div>
   </PageShell>
 }

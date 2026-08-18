@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 
 import { ToastProvider } from './components/feedback/ToastProvider'
-import { DemoModeProvider } from './context/DemoModeContext'
+import { AuthSessionProvider } from './context/AuthSessionContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 
 import './index.css'
@@ -23,6 +23,9 @@ const TrustCard = lazy(() => import('./pages/TrustCard'))
 const ActionPlan = lazy(() => import('./pages/ActionPlan'))
 const TrustCardDetails = lazy(() => import('./pages/TrustCardDetails'))
 const DecisionConfirmation = lazy(() => import('./pages/DecisionConfirmation'))
+const AIOpportunityRecommendations = lazy(() => import('./pages/AIOpportunityRecommendations'))
+const TrustPassport = lazy(() => import('./pages/TrustPassport'))
+const IntelligenceLab = lazy(() => import('./pages/IntelligenceLab'))
 
 function PageLoader() {
   return (
@@ -72,14 +75,14 @@ class PageErrorBoundary extends React.Component<{ children: React.ReactNode }, {
 
 function LegacyReviewRedirect() {
   const { requestId } = useParams()
-  return <Navigate to={`/employee/review/${requestId ?? 'sg-001'}`} replace />
+  return requestId ? <Navigate to={`/employee/review/${requestId}`} replace /> : <Navigate to="/employee/dashboard" replace />
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <ToastProvider>
-        <DemoModeProvider>
+        <AuthSessionProvider>
         <PageErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             <RouteTransition>
@@ -87,9 +90,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<App />} />
           <Route path="/auth" element={<Login />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/passport/:token" element={<TrustPassport />} />
           <Route path="/login" element={<Navigate to="/auth" replace />} />
 
-        {/* Student routes require a student account. Isolated Demo Mode may explore both roles. */}
+        {/* Student routes require a student account. */}
         <Route element={<ProtectedRoute requiredRole="student" />}>
           <Route path="/dashboard" element={<StudentDashboard />} />
           <Route path="/dashboard/student" element={<Navigate to="/dashboard" replace />} />
@@ -98,6 +102,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/dashboard/resume-analysis" element={<ResumeAnalysisResult />} />
           <Route path="/dashboard/trust-card" element={<TrustCard />} />
           <Route path="/dashboard/action-plan" element={<ActionPlan />} />
+          <Route path="/dashboard/opportunities" element={<AIOpportunityRecommendations />} />
+          <Route path="/dashboard/intelligence-lab" element={<IntelligenceLab />} />
           <Route path="/settings" element={<ProfileSettings />} />
           <Route path="/profile" element={<Navigate to="/settings#profile" replace />} />
         </Route>
@@ -120,7 +126,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             </RouteTransition>
           </Suspense>
         </PageErrorBoundary>
-        </DemoModeProvider>
+        </AuthSessionProvider>
       </ToastProvider>
     </BrowserRouter>
   </React.StrictMode>

@@ -1,11 +1,10 @@
-import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Gauge, Search, Sparkles, Target, Zap, FileText, RefreshCw } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, Building2, CheckCircle2, Gauge, Search, Sparkles, Zap, FileText, RefreshCw } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import PageShell from '../components/dashboard/PageShell'
-import { AnimatedNumber, Card, EmptyState, InlineFeedback, MetricTooltip, PrimaryButton, ScoreExplanation, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
+import { AnimatedNumber, Card, EmptyState, InlineFeedback, MetricTooltip, PrimaryButton, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
 import { useAnalysisSessionResource } from '../hooks/useAnalysisSession'
 import { setAuthenticatedTrustCardResource, useTrustCardResource } from '../hooks/useTrustCardResource'
-import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
-import { demoEmployeeReview } from '../lib/demoData'
+import { useAuthSession } from '../context/AuthSessionContext'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
 import { useToast } from '../components/feedback/ToastProvider'
 import { useEffect, useRef, useState } from 'react'
@@ -26,7 +25,7 @@ export default function ResumeAnalysisResult() {
   const routedSession = (location.state as { analysisSession?: AnalysisSession } | null)?.analysisSession
   const analysisResource = useAnalysisSessionResource(routedSession)
   const { session } = analysisResource
-  const { isDemoMode, authenticatedUserId, demoJourneyStage, setDemoJourneyStage } = useDemoMode()
+  const { authenticatedUserId } = useAuthSession()
   const [generatingTrustCard, setGeneratingTrustCard] = useState(false)
   const trustCardActionInFlight = useRef(false)
   const trustCardResource = useTrustCardResource({ analysisId: session.analysisId, initialCard: session.trustCard, autoLoad: false })
@@ -49,30 +48,22 @@ export default function ResumeAnalysisResult() {
   }, [location.pathname, navigate, routedSession])
 
   const workflow = getStudentWorkflowState({ profile, session })
-  const scoreReasons = session.analysis?.scoreReasons ?? []
   const metrics = [
-    { label: 'Resume', value: session.upload ? 'Processed' : 'Unavailable', description: isDemoMode ? `${session.upload?.fileName} · Demo` : session.upload?.fileName ?? 'Upload a resume to begin', icon: FileText },
-    { label: 'Extracted chunks', value: session.upload ? String(session.upload.chunkCount) : '—', score: session.upload?.chunkCount, description: isDemoMode ? 'Sample analyzed sections' : 'Returned by the resume upload API', icon: CheckCircle2 },
-    { label: 'Resume Match', value: session.matchScore ? `${session.matchScore.overall}%` : '—', score: session.matchScore?.overall, suffix: '%', description: isDemoMode ? 'Demo match result' : session.matchScore ? 'Returned by the match API' : 'No completed match analysis', icon: Target },
+    { label: 'Resume', value: session.upload ? 'Processed' : 'Unavailable', description: session.upload?.fileName ?? 'Upload a resume to begin', icon: FileText },
+    { label: 'Extracted chunks', value: session.upload ? String(session.upload.chunkCount) : '—', score: session.upload?.chunkCount, description: 'Returned by the resume upload API', icon: CheckCircle2 },
+    { label: 'Evidence status', value: session.analysis ? 'Structured' : '—', description: session.analysis ? 'Resume evidence and role requirements are ready for review' : 'No completed analysis', icon: CheckCircle2 },
     ...(session.trustCard ? [{ label: 'Trust Score', value: String(session.trustCard.trustScore), score: session.trustCard.trustScore, description: 'Backend-calculated weighted Trust Score', icon: Sparkles }] : []),
     { label: 'Target Role', value: session.role || '—', description: session.role ? 'Saved analysis target' : 'No target-role API is available', icon: Zap }
   ]
   const metricHelp: Record<string, string> = {
     Resume: 'Shows whether RefAI has processed a resume for this analysis session.',
     'Extracted chunks': 'The number of resume text sections created for analysis—not a quality score.',
-    'Resume Match': 'The combined role-fit and repeated-evidence score for this job description.',
-    'Trust Score': 'The standardized demo Trust Score shown across Ananya’s referral journey.',
+    'Evidence status': 'Confirms that RefAI has structured the resume evidence and selected-role context for review.',
+    'Trust Score': 'The backend-calculated, five-component Candidate Trust Score for this analysis.',
     'Target Role': 'The role used to frame this analysis and its recommendations.',
   }
 
   const continueToTrustCard = async () => {
-    if (isDemoMode && session.matchScore && !hasReachedDemoStage(demoJourneyStage, 'trust-card-generated')) {
-      setDemoJourneyStage('trust-card-generated')
-      sessionStorage.setItem('refai_trust_card_celebration', 'pending')
-      toast({ title: 'Trust Card generated', description: 'Ananya’s 91 Trust Score is ready for review.', tone: 'success' })
-      navigate('/dashboard/trust-card')
-      return
-    }
     if (session.trustCard || trustCardResource.card) {
       navigate('/dashboard/trust-card')
       return
@@ -149,8 +140,8 @@ export default function ResumeAnalysisResult() {
         </div>
       }
     >
-      {!isDemoMode && session.usedGeneralRoleExpectations ? <div className="mb-6"><InlineFeedback tone="info">Analysis is based on general expectations for this role. Add a job description for more personalized insights.</InlineFeedback></div> : null}
-      <AITransparencyPanel session={session} isDemoMode={isDemoMode} />
+      {session.usedGeneralRoleExpectations ? <div className="mb-6"><InlineFeedback tone="info">Analysis is based on general expectations for this role. Add a job description for more personalized insights.</InlineFeedback></div> : null}
+      <AITransparencyPanel session={session} />
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="p-6 sm:p-8">
@@ -173,7 +164,7 @@ export default function ResumeAnalysisResult() {
                     <div className="flex size-9 items-center justify-center rounded-lg bg-slate-100">
                       <Icon className="size-4" />
                     </div>
-                    <span className="text-xl font-semibold">{metric.score !== undefined ? <AnimatedNumber value={metric.score} suffix={metric.suffix} /> : metric.value}</span>
+                    <span className="text-xl font-semibold">{metric.score !== undefined ? <AnimatedNumber value={metric.score} /> : metric.value}</span>
                   </div>
                   <p className="mt-4 text-sm font-semibold"><MetricTooltip label={metric.label} explanation={metricHelp[metric.label]} /></p>
                   <p className="mt-1 text-xs text-slate-500">{metric.description}</p>
@@ -181,14 +172,13 @@ export default function ResumeAnalysisResult() {
               )
             })}
           </div>
-          {scoreReasons.length > 0 ? <ScoreExplanation className="mt-6" points={scoreReasons} /> : null}
 
           <div id="evidence" className="mt-6 scroll-mt-24 rounded-xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex items-center gap-2">
               <FileText className="size-4 text-slate-700" />
               <p className="text-sm font-semibold">Evidence extracted</p>
             </div>
-            {isDemoMode ? <div className="mt-4 space-y-2">{demoEmployeeReview.evidence.map((point) => <p key={point} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">{point} · Demo</p>)}</div> : session.analysis ? <div className="mt-4 space-y-2">{session.analysis.strengths.map((point) => <p key={point} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">{point}</p>)}</div> : <p className="mt-4 text-sm text-slate-500">Run the updated resume analysis to load structured evidence.</p>}
+            {session.analysis ? <div className="mt-4 space-y-2">{session.analysis.strengths.map((point) => <p key={point} className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">{point}</p>)}</div> : <p className="mt-4 text-sm text-slate-500">Run the updated resume analysis to load structured evidence.</p>}
           </div>
         </Card>
 
@@ -234,7 +224,7 @@ export default function ResumeAnalysisResult() {
 
           <Card className="p-6 sm:p-8">
             <div className="flex items-center gap-3"><div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Building2 className="size-5" /></div><div><h3 className="text-lg font-semibold">Company-specific recommendations</h3><p className="mt-1 text-sm text-slate-500">Advice grounded in a specific company and role.</p></div></div>
-            {isDemoMode ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-sm font-semibold">Atlassian collaboration evidence · Demo</p><p className="mt-2 text-sm leading-6 text-slate-600">Emphasize the five-person product-team example and explain how technical trade-offs were communicated. Why: the demo role explicitly values cross-functional collaboration, while the 82% proof score indicates this evidence is present but less measurable than the technical delivery examples.</p></div> : session.company ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-sm font-semibold">Target company: {session.company}</p><p className="mt-2 text-sm leading-6 text-slate-600">The recommendations on this page use the submitted job description for this company. RefAI does not infer undocumented company preferences or hiring outcomes.</p></div> : <EmptyState className="mt-6" title="Company context has not been provided" description="Add the target company in the Resume workspace so this analysis is tied to one clear application context." icon={Building2} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Add Target Company</PrimaryButton>} />}
+            {session.company ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-sm font-semibold">Target company: {session.company}</p><p className="mt-2 text-sm leading-6 text-slate-600">The recommendations on this page use the submitted job description for this company. RefAI does not infer undocumented company preferences or hiring outcomes.</p></div> : <EmptyState className="mt-6" title="Company context has not been provided" description="Add the target company in the Resume workspace so this analysis is tied to one clear application context." icon={Building2} action={<PrimaryButton onClick={() => navigate('/dashboard/resume')}>Add Target Company</PrimaryButton>} />}
           </Card>
         </div>
       </div>

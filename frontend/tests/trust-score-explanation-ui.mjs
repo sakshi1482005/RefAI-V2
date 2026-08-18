@@ -71,7 +71,7 @@ try {
   for (const scenario of ['strong', 'weak']) {
     const trustCard = card(scenario === 'strong')
     const html = renderToStaticMarkup(
-      React.createElement(TrustScoreExplanation, { trustCard, isDemoMode: false }),
+      React.createElement(TrustScoreExplanation, { trustCard }),
     )
     assert.equal((html.match(/data-testid="trust-score-component-/g) ?? []).length, 5)
     assert.match(html, new RegExp(`Component total: ${trustCard.trustScore} / 100`))
@@ -88,7 +88,7 @@ try {
   }
 
   const selfDeclaredHtml = renderToStaticMarkup(
-    React.createElement(TrustScoreExplanation, { trustCard: card(true), isDemoMode: false }),
+    React.createElement(TrustScoreExplanation, { trustCard: card(true) }),
   )
   assert.ok(selfDeclaredHtml.includes('Self-declared claim'))
   assert.ok(selfDeclaredHtml.includes('Exact skill depth resume line.'))
@@ -99,7 +99,7 @@ try {
   legacy.scoreBreakdown = legacy.scoreBreakdown.map(({ evidenceItems, ...factor }) => factor)
   legacy.analysisReliability = null
   const legacyHtml = renderToStaticMarkup(
-    React.createElement(TrustScoreExplanation, { trustCard: legacy, isDemoMode: false }),
+    React.createElement(TrustScoreExplanation, { trustCard: legacy }),
   )
   assert.ok(legacyHtml.includes('does not include an Analysis Reliability assessment'))
   assert.ok(legacyHtml.includes('Saved evidence gap'))

@@ -4,7 +4,7 @@ import {
   useSyncExternalStore
 } from 'react'
 
-import { useDemoMode } from '../context/DemoModeContext'
+import { useAuthSession } from '../context/AuthSessionContext'
 import { api } from '../lib/apiClient'
 import { parseTrustCardResponse } from '../lib/resumeContract'
 import {
@@ -122,11 +122,7 @@ export function useTrustCardResource({
   initialCard?: TrustCardResult
   autoLoad?: boolean
 }) {
-  const {
-    isDemoMode,
-    authenticatedUserId,
-    authLoading
-  } = useDemoMode()
+  const { authenticatedUserId, authLoading } = useAuthSession()
 
   const key =
     authenticatedUserId && analysisId
@@ -164,7 +160,6 @@ export function useTrustCardResource({
 
   useEffect(() => {
     if (
-      isDemoMode ||
       authLoading ||
       !authenticatedUserId ||
       !analysisId
@@ -209,7 +204,6 @@ export function useTrustCardResource({
     authenticatedUserId,
     autoLoad,
     initialCard,
-    isDemoMode,
     key,
     state.data,
     state.loaded,
@@ -220,8 +214,7 @@ export function useTrustCardResource({
   const prefetch = useCallback(async () => {
     if (
       !authenticatedUserId ||
-      !analysisId ||
-      isDemoMode
+      !analysisId
     ) {
       return {
         card: null,
@@ -244,18 +237,14 @@ export function useTrustCardResource({
   }, [
     analysisId,
     authenticatedUserId,
-    isDemoMode,
     key,
   ])
 
 
   return {
-    card: isDemoMode
-      ? initialCard ?? null
-      : state.data ?? initialCard ?? null,
+    card: state.data ?? initialCard ?? null,
 
     loadingPersisted:
-      !isDemoMode &&
       Boolean(analysisId) &&
       !state.data &&
       !initialCard &&
@@ -265,14 +254,9 @@ export function useTrustCardResource({
         (autoLoad && !state.loaded)
       ),
 
-    notFound:
-      !isDemoMode &&
-      state.notFound,
+    notFound: state.notFound,
 
-    error:
-      isDemoMode
-        ? null
-        : state.error,
+    error: state.error,
 
     prefetch,
   }

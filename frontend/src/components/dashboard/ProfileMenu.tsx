@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, LayoutDashboard, LoaderCircle, LogOut, Settings, User } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
-import { useDemoMode } from '../../context/DemoModeContext'
-import { demoEmployee } from '../../lib/demoData'
 import { supabase } from '../../lib/supabase'
 import { clearTemporaryUserState } from '../../lib/sessionCleanup'
 import { friendlyErrorMessage, withRequestTimeout } from '../../lib/requestSafety'
@@ -20,19 +18,13 @@ export default function ProfileMenu({ portal, showDetails = false, onNavigate }:
   const navigate = useNavigate()
   const { toast } = useToast()
   const { profile, loading } = useCurrentUser()
-  const { isDemoMode, exitDemoMode } = useDemoMode()
   const [open, setOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const isDemoEmployee = isDemoMode && portal === 'employee'
-  const initials = isDemoEmployee ? demoEmployee.initials : profile?.initials ?? '—'
-  const name = isDemoEmployee ? demoEmployee.name : profile?.fullName || profile?.email || 'Signed-in user'
-  const role = isDemoEmployee
-    ? `${demoEmployee.designation} · Demo`
-    : isDemoMode
-      ? 'Demo student'
-      : profile?.role || (portal === 'employee' ? 'Employee' : 'Student')
+  const initials = profile?.initials ?? '—'
+  const name = profile?.fullName || profile?.email || 'Signed-in user'
+  const role = profile?.role || (portal === 'employee' ? 'Employee' : 'Student')
 
   useEffect(() => {
     if (!open) return
@@ -62,7 +54,6 @@ export default function ProfileMenu({ portal, showDetails = false, onNavigate }:
       const { error } = await withRequestTimeout(supabase.auth.signOut())
       if (error) throw error
 
-      exitDemoMode()
       clearTemporaryUserState()
       setOpen(false)
       toast({

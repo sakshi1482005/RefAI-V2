@@ -223,8 +223,10 @@ a:focus-visible {
 
 .hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.98fr) minmax(400px, 0.92fr);
-  gap: 54px;
+  /* Give the Trust Card its intended landscape credential proportion without
+     forcing a fixed width at smaller desktop sizes. */
+  grid-template-columns: minmax(0, 0.85fr) minmax(520px, 1.15fr);
+  gap: 38px;
   align-items: center;
 }
 
@@ -932,7 +934,6 @@ section h3 {
 }
 
 .eyebrow,
-.hero-proof-strip div,
 .metric-card,
 .summary-card,
 .feature-card,
@@ -955,46 +956,67 @@ section h3 {
   transform: translateY(0);
 }
 
-.hero-proof-strip {
+.trust-difference {
+  display: grid;
+  grid-template-columns: minmax(148px, 0.45fr) minmax(0, 1.55fr);
+  gap: 24px;
+  max-width: 650px;
+  margin-top: 26px;
+  padding: 15px 0;
+  border-top: 1px solid #e1e6ef;
+  border-bottom: 1px solid #e1e6ef;
+}
+
+.trust-difference-title {
+  margin: 1px 0 0;
+  color: #222a38;
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+.trust-difference-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  max-width: 520px;
-  margin-top: 24px;
 }
 
-.hero-proof-strip div {
-  border: 1px solid #e4e9f2;
-  border-radius: 16px;
-  padding: 14px 16px;
-  box-shadow: 0 10px 26px rgba(20, 28, 46, 0.045);
-  transition:
-    transform 0.22s ease,
-    border-color 0.22s ease;
+.trust-difference-item {
+  min-width: 0;
+  padding: 0 14px;
 }
 
-.hero-proof-strip div:hover {
-  transform: translateY(-2px);
-  border-color: #d3dbea;
+.trust-difference-item:first-child { padding-left: 0; }
+
+.trust-difference-item + .trust-difference-item {
+  border-left: 1px solid #e7ebf2;
 }
 
-.hero-proof-strip strong {
+.trust-difference-item svg {
   display: block;
-  font-family: "Space Grotesk", Inter, sans-serif;
-  font-size: 24px;
-  letter-spacing: -0.02em;
+  width: 15px;
+  height: 15px;
+  margin-bottom: 7px;
+  color: #2463d4;
+  stroke-width: 1.8;
 }
 
-.hero-proof-strip span {
-  display: block;
-  margin-top: 3px;
-  color: #737c8d;
+.trust-difference-item strong,
+.trust-difference-item span { display: block; }
+
+.trust-difference-item strong {
+  color: #1d2634;
   font-size: 12px;
   font-weight: 800;
 }
 
-.browser {
-  width: min(460px, 100%);
+.trust-difference-item span {
+  margin-top: 4px;
+  color: #697386;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.42;
 }
 
 .feature-card {
@@ -1119,8 +1141,30 @@ section h3 {
     width: 100%;
   }
 
-  .hero-proof-strip {
+  .trust-difference {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .trust-difference-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .trust-difference-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .trust-difference-item + .trust-difference-item {
+    border-top: 1px solid #e7ebf2;
+    border-left: 0;
+  }
+
+  .trust-difference-item svg {
+    flex: 0 0 auto;
+    margin: 1px 0 0;
   }
 
   .mockup-stage {
@@ -1370,46 +1414,43 @@ section h3 {
   color: var(--ink);
 }
 
-/* ============================================================
-   ROUND 4 ADDITIONS — infinite auto-scrolling logo marquee,
-   replacing the static "Built for referrals..." row.
-   Append to the END of your stylesheet.
-   ============================================================ */
-
+/* Original landing company marquee, reused with illustrative text-only examples. */
 .logo-marquee-wrap {
   margin-top: 18px;
   padding-top: 18px;
 }
 
+.logo-marquee-label-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
 .logo-marquee-label {
   display: block;
-  text-align: center;
+  margin: 0;
+  flex: none;
+  color: #a3abba;
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
   font-size: 11px;
   font-weight: 700;
-  color: #a3abba;
-  margin-bottom: 16px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.logo-marquee-line {
+  flex: 1;
+  height: 1px;
+  background: #e2e6ee;
 }
 
 .logo-marquee {
   position: relative;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0%,
-    #000 8%,
-    #000 92%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent 0%,
-    #000 8%,
-    #000 92%,
-    transparent 100%
-  );
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
 }
 
 .logo-marquee-track {
@@ -1427,7 +1468,7 @@ section h3 {
 }
 
 .logo-marquee-item {
-  color: #4f5868;
+  color: #2a2f3a;
   font-family: "Space Grotesk", Inter, sans-serif;
   font-size: 16px;
   font-weight: 700;
@@ -1440,27 +1481,37 @@ section h3 {
 }
 
 @keyframes logoMarqueeScroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 .logo-marquee:hover .logo-marquee-track {
   animation-play-state: paused;
 }
 
+.logo-marquee-disclaimer {
+  margin: 9px 0 0;
+  color: #7a8495;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .logo-marquee-track {
-    animation: none;
-  }
+  .logo-marquee-track { animation: none; }
 }
 
 @media (max-width: 760px) {
+  .logo-marquee-label-row {
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
   .logo-marquee-item {
     font-size: 14px;
+  }
+
+  .logo-marquee-disclaimer {
+    margin-top: 8px;
   }
 }
 
@@ -3302,38 +3353,6 @@ section h3 {
    .logo-marquee-label rule via cascade order.
    ============================================================ */
 
-.logo-marquee-label-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.logo-marquee-label {
-  display: block;
-  text-align: left;
-  margin-bottom: 0;
-  flex: none;
-  white-space: nowrap;
-}
-
-.logo-marquee-line {
-  flex: 1;
-  height: 1px;
-  background: #e2e6ee;
-}
-
-.logo-marquee-item {
-  color: #2a2f3a;
-}
-
-@media (max-width: 760px) {
-  .logo-marquee-label-row {
-    gap: 12px;
-    margin-bottom: 14px;
-  }
-}
-
 /* ============================================================
    FAQ SECTION — accordion list + contact CTA row.
    New selectors only. Append to the END of your stylesheet.
@@ -3494,6 +3513,57 @@ section h3 {
 .demo-score-why strong {
   color: #161a2e;
   font-weight: 700;
+}
+
+/* Landing Trust Card preview: its stage grows with the complete static card.
+   The hover tilt is visual only and the stage leaves room for its full edge. */
+#trust-card-preview {
+  min-height: 0;
+  margin-top: 0;
+  padding: 18px 0;
+  align-items: stretch;
+  overflow: visible;
+}
+
+#trust-card-preview .browser {
+  width: min(660px, 100%);
+  height: auto;
+  transform-origin: center center;
+  transition: transform 180ms ease-out, box-shadow 240ms ease;
+  will-change: transform;
+}
+
+#trust-card-preview .dash {
+  min-height: 0;
+}
+
+#trust-card-preview .dash-main {
+  min-width: 0;
+}
+
+#trust-card-preview .address-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 760px) {
+  #trust-card-preview {
+    padding: 12px 0 4px;
+  }
+
+  #trust-card-preview .browser-bar {
+    gap: 6px;
+    padding: 0 10px;
+  }
+
+  #trust-card-preview .analyzing-status {
+    display: none;
+  }
+
+  #trust-card-preview .dash-main {
+    padding: 14px;
+  }
 }
 
 @media (max-width: 640px) {

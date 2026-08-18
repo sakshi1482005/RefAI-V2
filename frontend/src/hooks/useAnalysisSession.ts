@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
-import { getAnalysisSessionScope, loadAnalysisSession } from '../lib/analysisSession'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import type { AnalysisSession } from '../lib/analysisSession'
 import type { TrustCardResult } from '../types'
-import { hasReachedDemoStage, useDemoMode } from '../context/DemoModeContext'
-import { demoAnalysisSession } from '../lib/demoData'
+import { useAuthSession } from '../context/AuthSessionContext'
 import { api } from '../lib/apiClient'
 import { parsePersistedAnalysisSessionResponse } from '../lib/resumeContract'
 import { FriendlyRequestError } from '../lib/requestSafety'
@@ -36,43 +34,29 @@ export function clearAuthenticatedAnalysisSession(userId: string) {
 }
 
 export function useAnalysisSessionResource(initialSession?: AnalysisSession) {
-  const { isDemoMode, authenticatedUserId, demoJourneyStage, authLoading } = useDemoMode()
+  const { authenticatedUserId, authLoading } = useAuthSession()
   const userId = authenticatedUserId ?? ''
   const subscribe = useCallback((listener: () => void) => userId ? analysisResource.subscribe(userId, listener) : () => undefined, [userId])
   const getSnapshot = useCallback(() => userId ? analysisResource.getSnapshot(userId) : EMPTY_ANALYSIS_STATE, [userId])
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   useEffect(() => {
-    if (isDemoMode || authLoading) return
+    if (authLoading) return
     analysisResource.activate(authenticatedUserId)
     if (!authenticatedUserId) return
     if (initialSession?.analysisId && state.data.analysisId !== initialSession.analysisId) analysisResource.setData(authenticatedUserId, initialSession)
     else void analysisResource.load(authenticatedUserId, loadLatestAnalysis)
-  }, [authLoading, authenticatedUserId, initialSession, isDemoMode, state.data.analysisId])
-
-  const session = useMemo(() => {
-    if (!isDemoMode) return state.data
-    const scope = getAnalysisSessionScope(isDemoMode, authenticatedUserId)
-    const storedSession = loadAnalysisSession(scope)
-    const stagedSession = {
-      role: demoAnalysisSession.role,
-      jobDescription: demoAnalysisSession.jobDescription,
-      ...(hasReachedDemoStage(demoJourneyStage, 'resume-uploaded') ? { upload: demoAnalysisSession.upload } : {}),
-      ...(hasReachedDemoStage(demoJourneyStage, 'analyzed') ? { matchScore: demoAnalysisSession.matchScore, analysis: demoAnalysisSession.analysis, analyzedAt: demoAnalysisSession.analyzedAt, processingTimeMs: demoAnalysisSession.processingTimeMs } : {}),
-      ...(hasReachedDemoStage(demoJourneyStage, 'trust-card-generated') ? { trustCard: demoAnalysisSession.trustCard } : {}),
-    }
-    return { ...stagedSession, ...storedSession }
-  }, [authenticatedUserId, demoJourneyStage, isDemoMode, state.data])
+  }, [authLoading, authenticatedUserId, initialSession, state.data.analysisId])
 
   const retry = useCallback(() => {
     if (authenticatedUserId) void refreshAuthenticatedAnalysisSession(authenticatedUserId)
   }, [authenticatedUserId])
 
   return {
-    session,
-    loading: isDemoMode ? false : authLoading || state.loading || (Boolean(authenticatedUserId) && !state.loaded),
-    error: !isDemoMode && !authenticatedUserId && !authLoading ? new FriendlyRequestError('auth', 'Your session is unavailable. Sign in again to load resume analysis.', 401) : state.error,
-    notFound: isDemoMode ? false : state.notFound,
+    session: state.data,
+    loading: authLoading || state.loading || (Boolean(authenticatedUserId) && !state.loaded),
+    error: !authenticatedUserId && !authLoading ? new FriendlyRequestError('auth', 'Your session is unavailable. Sign in again to load resume analysis.', 401) : state.error,
+    notFound: state.notFound,
     retry,
   }
 }

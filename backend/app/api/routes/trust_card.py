@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.security import get_current_user
-from app.models.schemas import TrustCardRequest, TrustCardResponse
+from app.models.schemas import PublicTrustPassport, TrustCardRequest, TrustCardResponse, TrustPassportCreate, TrustPassportStatus
 from app.services.analysis_reliability import assess_analysis_reliability
 from app.services.referral_requests import ReferralError, ReferralForbidden, ReferralRequestService
 from app.services.student_persistence import (
@@ -22,11 +22,13 @@ from app.services.trust_card_cache import (
     persisted_trust_card_response,
 )
 from app.services.trust_card_engine import InsufficientJobRequirements, build_trust_card
+from app.services.trust_passport import PassportError, PassportForbidden, PassportNotFound, TrustPassportService
 
 
 router = APIRouter(prefix="/trust-card", tags=["trust-card"])
 referral_service = ReferralRequestService()
 persistence_service = StudentPersistenceService()
+passport_service = TrustPassportService()
 logger = logging.getLogger(__name__)
 
 
@@ -63,6 +65,40 @@ def _persisted_response(card: dict) -> dict:
     response = persisted_trust_card_response(card)
     response.setdefault("education", {"college": None, "degree": None, "branch": None, "graduationYear": None})
     return response
+
+
+def _passport_error(exc: Exception):
+    if isinstance(exc, PassportForbidden): raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if isinstance(exc, PassportNotFound): raise HTTPException(status_code=404, detail="Trust Passport is unavailable") from exc
+    if isinstance(exc, PassportError): raise HTTPException(status_code=422, detail=str(exc)) from exc
+    logger.exception("Trust Passport request failed error_type=%s", type(exc).__name__)
+    raise HTTPException(status_code=503, detail="Trust Passport is temporarily unavailable. Please retry.") from exc
+
+
+@router.get("/passport", response_model=TrustPassportStatus)
+def passport_status(trustCardId: UUID, user: dict = Depends(get_current_user)):
+    try: return passport_service.status(user["sub"], str(trustCardId))
+    except Exception as exc: _passport_error(exc)
+
+
+@router.post("/passport", response_model=TrustPassportStatus, status_code=201)
+def create_passport(payload: TrustPassportCreate, user: dict = Depends(get_current_user)):
+    try: return passport_service.create(user["sub"], str(payload.trustCardId), payload.visibility, payload.expiresInDays)
+    except Exception as exc: _passport_error(exc)
+
+
+@router.delete("/passport/{trust_card_id}", status_code=204)
+def revoke_passport(trust_card_id: UUID, user: dict = Depends(get_current_user)):
+    try: passport_service.revoke(user["sub"], str(trust_card_id))
+    except Exception as exc: _passport_error(exc)
+
+
+@router.get("/passport/public/{token}", response_model=PublicTrustPassport)
+def public_passport(token: str):
+    if len(token) < 32 or len(token) > 200:
+        raise HTTPException(status_code=404, detail="Trust Passport is unavailable")
+    try: return passport_service.public(token)
+    except Exception as exc: _passport_error(exc)
 
 
 @router.get("/current", response_model=TrustCardResponse)

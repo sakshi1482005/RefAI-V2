@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bell, CheckCheck, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useDemoMode } from '../../context/DemoModeContext'
+import { useAuthSession } from '../../context/AuthSessionContext'
 import { api } from '../../lib/apiClient'
 import { friendlyErrorMessage } from '../../lib/requestSafety'
 import type { InAppNotification } from '../../types'
@@ -9,29 +9,38 @@ import { EmptyState, InlineFeedback, SecondaryButton, Skeleton } from './primiti
 
 export default function NotificationCentre() {
   const navigate = useNavigate()
-  const { isDemoMode, authenticatedUserId, authLoading } = useDemoMode()
+  const { authenticatedUserId, authLoading } = useAuthSession()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<InAppNotification[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [loaded, setLoaded] = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const requestController = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
-    if (isDemoMode || authLoading || !authenticatedUserId) return
+    if (authLoading || !authenticatedUserId) return
+    requestController.current?.abort()
+    const controller = new AbortController()
+    requestController.current = controller
     setLoading(true); setError(null)
     try {
-      const { data } = await api.get<InAppNotification[]>('/notifications')
+      const { data } = await api.get<InAppNotification[]>('/notifications', { signal: controller.signal })
+      if (controller.signal.aborted) return
       setItems(data); setLoaded(true)
-    } catch (loadError) { setError(loadError) }
-    finally { setLoading(false) }
-  }, [authLoading, authenticatedUserId, isDemoMode])
+    } catch (loadError) {
+      if (!controller.signal.aborted) setError(loadError)
+    } finally {
+      if (!controller.signal.aborted) setLoading(false)
+    }
+  }, [authLoading, authenticatedUserId])
 
   useEffect(() => {
-    if (!isDemoMode && !authLoading && authenticatedUserId) void load()
-  }, [authLoading, authenticatedUserId, isDemoMode, load])
-  useEffect(() => { if (open && loaded) void load() }, [open])
+    if (!authLoading && authenticatedUserId) void load()
+  }, [authLoading, authenticatedUserId, load])
+  useEffect(() => () => requestController.current?.abort(), [])
 
-  if (isDemoMode || authLoading || !authenticatedUserId) return null
+  if (authLoading || !authenticatedUserId) return null
 
   const unread = items.filter((item) => !item.readAt).length
   const markRead = async (item: InAppNotification) => {
@@ -50,10 +59,20 @@ export default function NotificationCentre() {
       setItems((current) => current.map((item) => item.readAt ? item : { ...item, readAt }))
     } catch (readError) { setError(readError) }
   }
+  const clearAll = async () => {
+    if (clearing || !items.length) return
+    setClearing(true); setError(null)
+    try {
+      await api.patch('/notifications/clear-all')
+      setItems([])
+      setLoaded(true)
+    } catch (clearError) { setError(clearError) }
+    finally { setClearing(false) }
+  }
 
   return <div className="relative">
-    <button type="button" onClick={() => setOpen((value) => !value)} aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`} aria-expanded={open} className="relative inline-flex size-10 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"><Bell className="size-[18px]" />{unread ? <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-slate-950 px-1 text-center text-[10px] font-semibold leading-4 text-white">{unread > 9 ? '9+' : unread}</span> : null}</button>
-    {open ? <div className="absolute right-0 top-12 z-[70] w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl"><div className="flex items-center justify-between gap-3 px-1 pb-3"><div><p className="text-sm font-semibold">Notifications</p><p className="text-xs text-slate-500">In-app updates only</p></div>{unread ? <button type="button" onClick={markAllRead} className="inline-flex items-center text-xs font-semibold text-slate-600 hover:text-black"><CheckCheck className="mr-1 size-3.5" />Mark all read</button> : null}</div>
+    <button type="button" onClick={() => setOpen((value) => !value)} aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`} aria-expanded={open} aria-busy={loading || undefined} className="relative inline-flex size-10 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"><Bell className="size-[18px]" />{unread ? <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-slate-950 px-1 text-center text-[10px] font-semibold leading-4 text-white">{unread > 9 ? '9+' : unread}</span> : null}</button>
+    {open ? <div className="absolute right-0 top-12 z-[70] w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl"><div className="flex items-center justify-between gap-3 px-1 pb-3"><div><p className="text-sm font-semibold">Notifications</p><p className="text-xs text-slate-500">In-app updates only</p></div><div className="flex items-center gap-2">{unread ? <button type="button" onClick={markAllRead} className="inline-flex items-center text-xs font-semibold text-slate-600 hover:text-black"><CheckCheck className="mr-1 size-3.5" />Mark all read</button> : null}{items.length ? <button type="button" onClick={() => { void clearAll() }} disabled={clearing} aria-busy={clearing || undefined} className="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-black disabled:cursor-not-allowed disabled:opacity-50">{clearing ? 'Clearing…' : 'Clear all'}</button> : null}</div></div>
       {loading && !loaded ? <div className="space-y-2"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div> : null}
       {error ? <InlineFeedback tone="error">{friendlyErrorMessage(error, 'Notifications are temporarily unavailable.')}<SecondaryButton className="ml-2 h-8 px-2" onClick={load}><RefreshCw className="mr-1 size-3" />Retry</SecondaryButton></InlineFeedback> : null}
       {!loading && !error && items.length === 0 ? <EmptyState className="py-7" icon={Bell} title="No notifications yet" description="Referral and resume updates will appear here." /> : null}

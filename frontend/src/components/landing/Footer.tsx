@@ -18,7 +18,7 @@ export default function Footer() {
         <div className="footer-col">
           <div className="footer-heading">Product</div>
           <a href="#how-it-works">How It Works</a>
-          <a href="#demo">AI Preview</a>
+          <a href="#trust-card-preview">AI Preview</a>
         </div>
 
         <div className="footer-col">

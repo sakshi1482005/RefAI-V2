@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/feedback/ToastProvider";
@@ -27,9 +27,7 @@ import { Avatar, Badge, Card, EmptyState, IconButton, InlineFeedback, Logo, Prim
 import { useAnalysisSessionResource } from "../hooks/useAnalysisSession";
 import { useTrustCardResource } from "../hooks/useTrustCardResource";
 import StudentNavigation from "../components/dashboard/StudentNavigation";
-import { hasReachedDemoStage, useDemoMode } from "../context/DemoModeContext";
-import DemoModeBanner from "../components/dashboard/DemoModeBanner";
-import { demoEmployee, demoReferral, demoReferralRequestNote } from "../lib/demoData";
+import { useAuthSession } from "../context/AuthSessionContext";
 import NetworkStatusBanner from "../components/feedback/NetworkStatusBanner";
 import { useSectionReveal } from "../hooks/useSectionReveal";
 import ProfileMenu from "../components/dashboard/ProfileMenu";
@@ -37,12 +35,14 @@ import ConfettiBurst from "../components/feedback/ConfettiBurst";
 import { getStudentWorkflowState } from "../lib/studentWorkflow";
 import { api } from "../lib/apiClient";
 import { friendlyErrorMessage } from "../lib/requestSafety";
-import type { EmployeeDirectoryItem, EmployeeReliabilityBadge as EmployeeReliabilityBadgeData, ReferralCompatibility, ReferralMessageAction, ReferralMessageResult, ReferralMessageTone, ReferralQuality, ReferralRequestSummary, ReferralStatus } from "../types";
+import type { EmployeeDirectoryItem, EmployeeDiscoveryRecommendation, EmployeeReliabilityBadge as EmployeeReliabilityBadgeData, ReferralCompatibility, ReferralMessageAction, ReferralMessageResult, ReferralMessageTone, ReferralQuality, ReferralRequestSummary, ReferralStatus } from "../types";
 import ReferralJourneyTimeline from "../components/dashboard/ReferralJourneyTimeline";
 import ReferralReadinessGate from "../components/dashboard/ReferralReadinessGate";
 import { calculateReferralReadiness } from "../lib/referralReadiness";
 import NotificationCentre from "../components/dashboard/NotificationCentre";
 import EmployeeReliabilityBadge from "../components/dashboard/EmployeeReliabilityBadge";
+import CandidateIntelligencePanel from "../components/dashboard/CandidateIntelligencePanel";
+import MoreInformationResponsePanel from "../components/dashboard/MoreInformationResponsePanel";
 import { educationLines } from "../lib/education";
 
 /*
@@ -57,22 +57,14 @@ import { educationLines } from "../lib/education";
 // Types
 // -----------------------------------------------------------------------------
 
-type BadgeTone =
-  | "neutral"
-  | "dark"
-  | "success"
-  | "warning"
-  | "danger"
-  | "info";
-
 type Status = "Draft" | "Submitted" | "Under Review" | "More Info Requested" | "Approved for Referral" | "Referral Submitted" | "Declined" | "Withdrawn" | "Expired";
 
 interface Employee {
   id: string;
   name: string;
   initials: string;
-  company: string;
-  designation: string;
+  company: string | null;
+  designation: string | null;
   avatarClass: string;
   photoUrl: string | null;
   department: string | null;
@@ -106,27 +98,11 @@ interface ReferralRequest {
   referralDate?: string | null;
   referralConfirmationNumber?: string | null;
   referralNoteToStudent?: string | null;
+  updatedAt: string;
+  moreInformationQuestion?: string | null;
+  studentResponse?: string | null;
+  studentResponseProofEntries?: import('../types').ProofEntry[];
 }
-
-const statusTones: Record<Status, BadgeTone> = {
-  "Approved for Referral": "success",
-  "Referral Submitted": "success",
-  Draft: "neutral",
-  Submitted: "warning",
-  "Under Review": "info",
-  Declined: "danger",
-  "More Info Requested": "info",
-  Withdrawn: "neutral",
-  Expired: "danger",
-};
-
-const demoReliabilityBadge: EmployeeReliabilityBadgeData = {
-  badgeType: 'reliable_referrer', label: 'Reliable Referrer', reliabilityLevel: 'Strong',
-  basis: 'Demo history illustrates consistent, transparent referral responses.',
-  relevantCounts: { meaningfulResponses: 12, completedReferrals: 5, recentMeaningfulResponses: 3, overdueUnansweredRequests: 0 },
-  lastCalculatedAt: '2026-07-30T12:00:00Z',
-  limitations: ['Demo data is isolated and does not represent a real employee record.'],
-};
 
 // -----------------------------------------------------------------------------
 // Dashboard
@@ -137,30 +113,35 @@ export default function StudentDashboard() {
   const location = useLocation();
   const { toast } = useToast();
   const { profile, loading: profileLoading } = useCurrentUser();
-  const { isDemoMode, authLoading, authenticatedUserId, demoDecision, demoJourneyStage, setDemoJourneyStage } = useDemoMode();
+  const { authLoading, authenticatedUserId } = useAuthSession();
   const analysisResource = useAnalysisSessionResource();
   const analysisSession = analysisResource.session;
   const { prefetch: prefetchTrustCard } = useTrustCardResource({ analysisId: analysisSession.analysisId, initialCard: analysisSession.trustCard, autoLoad: false });
-  const initialStudentDataLoading = !isDemoMode && (authLoading || profileLoading || analysisResource.loading);
+  const initialStudentDataLoading = authLoading || profileLoading || analysisResource.loading;
   const [persistedEmployees, setPersistedEmployees] = useState<EmployeeDirectoryItem[]>([]);
+  const [employeeRecommendations, setEmployeeRecommendations] = useState<EmployeeDiscoveryRecommendation[]>([]);
   const [persistedRequests, setPersistedRequests] = useState<ReferralRequestSummary[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [sendingReferral, setSendingReferral] = useState(false);
   const [readinessGateOpen, setReadinessGateOpen] = useState(false);
-  const demoAnalysisReady = isDemoMode && hasReachedDemoStage(demoJourneyStage, 'analyzed');
-  const matchingSkills = demoAnalysisReady ? ["React", "TypeScript", "FastAPI", "SQL", "Problem Solving", "Team Collaboration"] : analysisSession.analysis?.matchedSkills ?? [];
+  const matchingSkills = analysisSession.analysis?.matchedSkills ?? [];
   const priorityActionPlan = analysisSession.trustCard?.actionPlan ?? analysisSession.analysis?.actionPlan ?? [];
-  const employeeDiscoveryReady = isDemoMode && hasReachedDemoStage(demoJourneyStage, 'trust-card-generated');
-  const demoReferralSent = isDemoMode && hasReachedDemoStage(demoJourneyStage, 'referral-sent');
-  const referralSent = isDemoMode ? demoReferralSent : persistedRequests.length > 0;
+  const referralSent = persistedRequests.length > 0;
   const workflow = useMemo(() => getStudentWorkflowState({ profile, session: analysisSession, hasReferralRequest: referralSent }), [analysisSession, profile, referralSent]);
-  const employees: Employee[] = isDemoMode
-    ? (employeeDiscoveryReady ? [{ id: 'demo-employee', name: demoEmployee.name, initials: demoEmployee.initials, photoUrl: null, company: demoEmployee.company, designation: demoEmployee.designation, department: 'Engineering', yearsExperience: 5, verifiedEmployee: true, linkedinUrl: null, companyProfileUrl: null, portfolioUrl: null, avatarClass: "bg-slate-950 text-white", supportedRoles: [], supportedDepartments: [], referralCategories: [], referralGuidelines: null, acceptingRequests: true, activeRequestCount: 0, maxActiveRequests: 5, preferredCandidateLevels: ['student', 'fresher'], reliabilityBadge: demoReliabilityBadge }] : [])
-    : persistedEmployees.map((employee) => ({ id: employee.id, name: employee.name, initials: employee.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(), photoUrl: employee.photoUrl, company: employee.company || 'Company not listed', designation: employee.designation || 'Employee', department: employee.department, yearsExperience: employee.yearsExperience, verifiedEmployee: employee.verifiedEmployee, linkedinUrl: employee.linkedinUrl, companyProfileUrl: employee.companyProfileUrl, portfolioUrl: employee.portfolioUrl, avatarClass: "bg-slate-950 text-white", supportedRoles: employee.supportedRoles, supportedDepartments: employee.supportedDepartments, referralCategories: employee.referralCategories, referralGuidelines: employee.referralGuidelines, acceptingRequests: employee.acceptingRequests, activeRequestCount: employee.activeRequestCount, maxActiveRequests: employee.maxActiveRequests, preferredCandidateLevels: employee.preferredCandidateLevels, reliabilityBadge: employee.reliabilityBadge }));
+  const employees: Employee[] = persistedEmployees.map((employee) => ({ id: employee.id, name: employee.name, initials: employee.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(), photoUrl: employee.photoUrl, company: employee.company, designation: employee.designation, department: employee.department, yearsExperience: employee.yearsExperience, verifiedEmployee: employee.verifiedEmployee, linkedinUrl: employee.linkedinUrl, companyProfileUrl: employee.companyProfileUrl, portfolioUrl: employee.portfolioUrl, avatarClass: "bg-slate-950 text-white", supportedRoles: employee.supportedRoles, supportedDepartments: employee.supportedDepartments, referralCategories: employee.referralCategories, referralGuidelines: employee.referralGuidelines, acceptingRequests: employee.acceptingRequests, activeRequestCount: employee.activeRequestCount, maxActiveRequests: employee.maxActiveRequests, preferredCandidateLevels: employee.preferredCandidateLevels, reliabilityBadge: employee.reliabilityBadge }));
   const statusLabel = (status: ReferralStatus): Status => ({ draft: 'Draft', submitted: 'Submitted', pending: 'Submitted', under_review: 'Under Review', more_info_requested: 'More Info Requested', approved: 'Approved for Referral', declined: 'Declined', referred: 'Referral Submitted', withdrawn: 'Withdrawn', expired: 'Expired' })[status] as Status;
-  const referralRequests: ReferralRequest[] = isDemoMode
-    ? (demoReferralSent ? [{ id: 'demo-referral', employee: demoReferral.employee, initials: demoReferral.employeeInitials, employeeCompany: demoEmployee.company, company: demoReferral.company, role: demoReferral.role, date: demoReferral.requestedAt, status: demoDecision === 'pending' ? 'Submitted' : demoDecision === 'approved' ? 'Approved for Referral' : demoDecision === 'more_info_requested' ? 'More Info Requested' : 'Declined' }] : [])
-    : persistedRequests.map((request) => { const employee = employees.find((item) => item.id === request.employeeId); return { id: request.id, employee: employee?.name || 'Assigned employee', initials: employee?.initials || 'AE', employeeCompany: request.employeeCompanySnapshot || employee?.company || null, company: request.targetCompany, role: request.targetRole, date: new Date(request.createdAt).toLocaleDateString(), status: statusLabel(request.status), journeyStatus: request.status, decisionMessage: request.decisionMessage, referralDate: request.referralDate, referralConfirmationNumber: request.referralConfirmationNumber, referralNoteToStudent: request.referralNoteToStudent }; });
+  const referralRequests: ReferralRequest[] = persistedRequests.map((request) => { const employee = employees.find((item) => item.id === request.employeeId); return { id: request.id, employee: employee?.name || 'Assigned employee', initials: employee?.initials || 'AE', employeeCompany: request.employeeCompanySnapshot || employee?.company || null, company: request.targetCompany, role: request.targetRole, date: new Date(request.createdAt).toLocaleDateString(), updatedAt: request.updatedAt, status: statusLabel(request.status), journeyStatus: request.status, decisionMessage: request.decisionMessage, referralDate: request.referralDate, referralConfirmationNumber: request.referralConfirmationNumber, referralNoteToStudent: request.referralNoteToStudent, moreInformationQuestion: request.moreInformationQuestion, studentResponse: request.studentResponse, studentResponseProofEntries: request.studentResponseProofEntries }; });
+  const referralTrackerSummary = useMemo(() => {
+    const statuses = persistedRequests.map((request) => request.status)
+    const active = statuses.filter((status) => !['draft', 'referred', 'declined', 'withdrawn', 'expired'].includes(status)).length
+    const approved = statuses.filter((status) => status === 'approved').length
+    const awaitingResponse = statuses.filter((status) => status === 'submitted' || status === 'pending').length
+    return [
+      active ? `${active} Active` : null,
+      approved ? `${approved} Approved` : null,
+      awaitingResponse ? `${awaitingResponse} Awaiting response` : null,
+    ].filter((item): item is string => Boolean(item))
+  }, [persistedRequests])
   const readinessScore = analysisSession.trustCard?.trustScore ?? null;
   const referralReadiness = useMemo(() => analysisSession.trustCard ? calculateReferralReadiness(analysisSession.trustCard) : null, [analysisSession.trustCard]);
   const educationDetails = educationLines({
@@ -181,7 +162,7 @@ export default function StudentDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [copied, setCopied] = useState(false);
-  const [referralRequestNote, setReferralRequestNote] = useState(() => isDemoMode ? demoReferralRequestNote : "");
+  const [referralRequestNote, setReferralRequestNote] = useState("");
   const [referralCompany, setReferralCompany] = useState(analysisSession.company || "");
   const [referralRole, setReferralRole] = useState(analysisSession.role || "");
   const [referralJobDescription, setReferralJobDescription] = useState(analysisSession.jobDescription || "");
@@ -200,22 +181,25 @@ export default function StudentDashboard() {
   const [referralCelebration, setReferralCelebration] = useState(false);
   const [showReferralSuccess, setShowReferralSuccess] = useState(false);
   const employeeSearchRef = useRef<HTMLInputElement>(null);
-  useSectionReveal();
+  const referralMessageCache = useRef(new Map<string, ReferralMessageResult>());
+  const messageRequestInFlight = useRef(false);
   useEffect(() => {
-    setReferralRequestNote(isDemoMode ? demoReferralRequestNote : "");
-  }, [isDemoMode]);
+    referralMessageCache.current.clear();
+    messageRequestInFlight.current = false;
+  }, [authenticatedUserId]);
+  useSectionReveal();
   useEffect(() => {
     setReferralCompany(analysisSession.company || "");
     setReferralRole(analysisSession.role || "");
     setReferralJobDescription(analysisSession.jobDescription || "");
   }, [analysisSession.company, analysisSession.jobDescription, analysisSession.role]);
   useEffect(() => {
-    if (!isDemoMode && authenticatedUserId && !analysisResource.loading && analysisSession.analysisId && analysisSession.matchScore) {
+    if (authenticatedUserId && !analysisResource.loading && analysisSession.analysisId && analysisSession.matchScore) {
       void prefetchTrustCard();
     }
-  }, [analysisResource.loading, analysisSession.analysisId, analysisSession.matchScore, authenticatedUserId, isDemoMode, prefetchTrustCard]);
+  }, [analysisResource.loading, analysisSession.analysisId, analysisSession.matchScore, authenticatedUserId, prefetchTrustCard]);
   useEffect(() => {
-    if (isDemoMode || !profile?.id) return;
+    if (!profile?.id) return;
     let active = true;
     Promise.all([
       api.get<EmployeeDirectoryItem[]>('/referral/employees'),
@@ -228,7 +212,15 @@ export default function StudentDashboard() {
       if (active) toast({ title: 'Referral data unavailable', description: friendlyErrorMessage(error, 'Your saved referral data could not be loaded.'), tone: 'error' });
     });
     return () => { active = false; };
-  }, [isDemoMode, profile?.id, toast]);
+  }, [profile?.id, toast]);
+  useEffect(() => {
+    if (!analysisSession.trustCard?.id || !analysisSession.role?.trim() || !analysisSession.company?.trim()) { setEmployeeRecommendations([]); return; }
+    let active = true;
+    api.post<EmployeeDiscoveryRecommendation[]>('/referral/employees/recommendations', { trustCardId: analysisSession.trustCard.id, targetRole: analysisSession.role.trim(), targetCompany: analysisSession.company.trim(), jobDescription: analysisSession.jobDescription?.trim() || '' })
+      .then(({ data }) => { if (active) setEmployeeRecommendations(data); })
+      .catch(() => { if (active) setEmployeeRecommendations([]); });
+    return () => { active = false; };
+  }, [analysisSession.company, analysisSession.jobDescription, analysisSession.role, analysisSession.trustCard?.id]);
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -244,7 +236,6 @@ export default function StudentDashboard() {
     return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   }, []);
   const firstName = profile?.fullName?.split(/\s+/)[0] || "there";
-  const scoreReasons = analysisSession.trustCard?.scoreReasons ?? analysisSession.analysis?.scoreReasons ?? [];
   const primaryNextAction = workflow.primaryAction;
   const isPrimaryWorkflowAction = (href: string) => href === primaryNextAction.href;
   const profileEvidenceCompleteness = useMemo(() => {
@@ -260,15 +251,16 @@ export default function StudentDashboard() {
   }, [analysisSession.trustCard, analysisSession.upload, profile]);
   const activeRequestCount = referralRequests.filter((request) => !['Declined', 'Withdrawn', 'Expired', 'Referral Submitted'].includes(request.status)).length;
 
+  const recommendationsByEmployee = useMemo(() => new Map(employeeRecommendations.map((item) => [item.employeeId, item])), [employeeRecommendations]);
   const filteredEmployees = useMemo(() => employees.filter((employee) =>
     `${employee.name} ${employee.company} ${employee.designation} ${employee.supportedRoles.join(' ')} ${employee.supportedDepartments.join(' ')}`
       .toLowerCase()
       .includes(employeeQuery.toLowerCase()),
-  ), [employeeQuery, employees]);
+  ).sort((left, right) => (employeeRecommendations.findIndex((item) => item.employeeId === left.id) < 0 ? Number.MAX_SAFE_INTEGER : employeeRecommendations.findIndex((item) => item.employeeId === left.id)) - (employeeRecommendations.findIndex((item) => item.employeeId === right.id) < 0 ? Number.MAX_SAFE_INTEGER : employeeRecommendations.findIndex((item) => item.employeeId === right.id))), [employeeQuery, employeeRecommendations, employees]);
   const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId) ?? null;
 
   useEffect(() => {
-    if (isDemoMode || !selectedEmployeeId || !analysisSession.trustCard?.id || !referralRole.trim() || !referralCompany.trim()) {
+    if (!selectedEmployeeId || !analysisSession.trustCard?.id || !referralRole.trim() || !referralCompany.trim()) {
       setCompatibility(null);
       setCompatibilityError(null);
       setCompatibilityLoading(false);
@@ -299,11 +291,20 @@ export default function StudentDashboard() {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [analysisSession.trustCard?.id, compatibilityReloadKey, isDemoMode, referralCompany, referralJobDescription, referralRequestNote, referralRole, selectedEmployeeId]);
+  }, [analysisSession.trustCard?.id, compatibilityReloadKey, referralCompany, referralJobDescription, referralRequestNote, referralRole, selectedEmployeeId]);
 
   const existingEmployeeRequest = persistedRequests.find((request) => request.employeeId === selectedEmployeeId);
   const followUpAvailable = Boolean(existingEmployeeRequest);
   const referralMessageWordCount = referralRequestNote.trim() ? referralRequestNote.trim().split(/\s+/).length : 0;
+  const referralMessageCacheKey = useMemo(() => [
+    authenticatedUserId || '',
+    analysisSession.trustCard?.id || '',
+    selectedEmployeeId || '',
+    referralCompany.trim().toLocaleLowerCase(),
+    referralRole.trim().toLocaleLowerCase(),
+    referralJobDescription.trim(),
+    referralTone,
+  ].join('\u001f'), [analysisSession.trustCard?.id, authenticatedUserId, referralCompany, referralJobDescription, referralRole, referralTone, selectedEmployeeId]);
   const qualityPayload = (message: string) => ({
     employeeId: selectedEmployeeId,
     trustCardId: analysisSession.trustCard?.id,
@@ -313,7 +314,7 @@ export default function StudentDashboard() {
     studentMessage: message.trim(),
   });
   const checkReferralQuality = async (message = referralRequestNote, silent = false): Promise<ReferralQuality | null> => {
-    if (isDemoMode || !selectedEmployeeId || !analysisSession.trustCard?.id || !referralCompany.trim() || !referralRole.trim() || !message.trim()) {
+    if (!selectedEmployeeId || !analysisSession.trustCard?.id || !referralCompany.trim() || !referralRole.trim() || !message.trim()) {
       setReferralQuality(null);
       return null;
     }
@@ -331,12 +332,20 @@ export default function StudentDashboard() {
     }
   };
   const generateReferralMessage = async (action: ReferralMessageAction) => {
-    if (!selectedEmployeeId || !analysisSession.trustCard?.id || !referralCompany.trim() || !referralRole.trim() || messageGenerating) return;
-    if (isDemoMode) {
-      setReferralRequestNote(demoReferralRequestNote);
-      setReferralWizardStep(3);
-      return;
+    if (!selectedEmployeeId || !analysisSession.trustCard?.id || !referralCompany.trim() || !referralRole.trim() || messageGenerating || messageRequestInFlight.current) return;
+    if (action === 'generate') {
+      const cached = referralMessageCache.current.get(referralMessageCacheKey);
+      if (cached) {
+        setReferralRequestNote(cached.message);
+        setReferralReviewed(false);
+        setMessageGrounding(cached);
+        setReferralWizardStep(3);
+        await checkReferralQuality(cached.message);
+        toast({ title: 'Saved AI draft reused', description: 'This grounded draft matches the selected opportunity and employee. Review it before sending.', tone: 'success' });
+        return;
+      }
     }
+    messageRequestInFlight.current = true;
     setMessageGenerating(true);
     try {
       const { data } = await api.post<ReferralMessageResult>('/referral/message', {
@@ -354,21 +363,23 @@ export default function StudentDashboard() {
       setReferralReviewed(false);
       setMessageGrounding(data);
       setReferralWizardStep(3);
+      referralMessageCache.current.set(referralMessageCacheKey, data);
       await checkReferralQuality(data.message);
       toast({ title: data.usedFallback ? 'Safe referral draft prepared' : 'AI referral draft prepared', description: 'Review and edit every claim before continuing.', tone: 'success' });
     } catch (error) {
       toast({ title: 'Could not prepare the message', description: friendlyErrorMessage(error, 'The grounded message generator is unavailable.'), tone: 'error' });
     } finally {
       setMessageGenerating(false);
+      messageRequestInFlight.current = false;
     }
   };
 
   useEffect(() => {
-    if (isDemoMode || referralWizardStep !== 3 || !referralRequestNote.trim()) return;
+    if (referralWizardStep !== 3 || !referralRequestNote.trim()) return;
     setReferralReviewed(false);
     const timer = window.setTimeout(() => { void checkReferralQuality(referralRequestNote, true); }, 450);
     return () => window.clearTimeout(timer);
-  }, [analysisSession.trustCard?.id, isDemoMode, referralCompany, referralJobDescription, referralRequestNote, referralRole, referralWizardStep, selectedEmployeeId]);
+  }, [analysisSession.trustCard?.id, referralCompany, referralJobDescription, referralRequestNote, referralRole, referralWizardStep, selectedEmployeeId]);
 
   useEffect(() => {
     setReadinessGateOpen(false);
@@ -386,27 +397,7 @@ export default function StudentDashboard() {
     }
   };
 
-  const reviewReferralNote = () => {
-    if (!isDemoMode || !referralRequestNote.trim()) return;
-    if (!hasReachedDemoStage(demoJourneyStage, 'message-reviewed')) setDemoJourneyStage('message-reviewed');
-    toast({ title: "Request note reviewed", description: "Your referral request is ready to send.", tone: "success" });
-  };
-
-  const sendDemoReferral = () => {
-    if (!isDemoMode || !hasReachedDemoStage(demoJourneyStage, 'message-reviewed') || !referralRequestNote.trim()) return;
-    if (referralSent) {
-      scrollToSection("referral-requests");
-      return;
-    }
-    setDemoJourneyStage('referral-sent');
-    setReferralCelebration(true);
-    setShowReferralSuccess(true);
-    toast({ title: "Referral request sent", description: "Referral history and Meera Shah’s employee queue were updated locally.", tone: "success" });
-    window.requestAnimationFrame(() => scrollToSection("referral-requests"));
-  };
-
   const sendReferral = async (readinessConfirmed = false) => {
-    if (isDemoMode) return sendDemoReferral();
     const employee = selectedEmployee;
     if (!employee || !analysisSession.trustCard?.id || !referralRole.trim() || !referralCompany.trim() || !referralRequestNote.trim() || sendingReferral) return;
     if (!employee.acceptingRequests) {
@@ -501,7 +492,6 @@ export default function StudentDashboard() {
         )}
       </header>
       <NetworkStatusBanner />
-      <DemoModeBanner />
 
       <main id="main-content" tabIndex={-1} className="mx-auto flex max-w-[1440px] flex-col gap-6 px-4 py-6 outline-none sm:px-6 sm:py-8 lg:px-8">
         {/* Compact dashboard strip */}
@@ -537,7 +527,7 @@ export default function StudentDashboard() {
             <Card className="p-6 sm:p-7">
               <div className="flex items-center justify-between gap-4"><h3 className="text-xl font-semibold">Latest resume analysis</h3><FileText className="size-5 text-slate-400" /></div>
               {initialStudentDataLoading ? <div className="mt-6 space-y-3"><Skeleton className="h-20 w-full" /><Skeleton className="h-4 w-2/3" /></div> : analysisResource.error ? <div className="mt-6"><InlineFeedback tone="error">{friendlyErrorMessage(analysisResource.error, 'Your latest analysis could not be loaded.')} <button type="button" className="font-semibold underline" onClick={analysisResource.retry}>Retry</button></InlineFeedback></div> : analysisSession.upload && analysisSession.matchScore ? <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{analysisSession.upload.fileName}</p><p className="mt-1 text-xs text-slate-500">{analysisSession.role || "Target role not saved"}</p></div><Badge tone="success">{analysisSession.matchScore.overall}% match</Badge></div>
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{analysisSession.upload.fileName}</p><p className="mt-1 text-xs text-slate-500">{analysisSession.role || "Target role not saved"}</p></div><Badge tone="success">Analysis complete</Badge></div>
                 <div className="mt-4 flex items-center justify-between text-xs text-slate-500"><span>{analysisSession.analyzedAt ? new Date(analysisSession.analyzedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Current session"}</span><button type="button" onClick={() => navigate("/dashboard/resume-analysis")} className="cursor-pointer font-semibold text-slate-900 hover:underline">View analysis</button></div>
               </div> : <EmptyState className="mt-6" icon={FileSearch} title="No analyzed resumes yet" description="Upload a PDF resume, choose a target role and company, and RefAI will calculate role fit, proof strength, and skill gaps." />}
             </Card>
@@ -553,143 +543,32 @@ export default function StudentDashboard() {
             description="Check how RefAI summarizes your role fit, supporting proof, and gaps before you send a referral request."
           />
 
-          <div className="grid overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[0.62fr_1.38fr]">
-            <div className="border-b border-slate-800 bg-slate-950 p-7 text-white sm:p-9 lg:border-b-0 lg:border-r">
-              <div className="flex items-center justify-between gap-3">
-                <Logo inverse />
-                <Badge className="border-white/10 bg-white/10 text-white">
-                  Employee view
-                </Badge>
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.45)]">
+            <div className="grid lg:grid-cols-[17rem_minmax(0,1fr)]">
+              <aside className="border-b border-slate-800 bg-slate-950 p-6 text-white sm:p-7 lg:border-b-0 lg:border-r">
+                <div className="flex items-center justify-between gap-3"><Logo inverse /><Badge className="border-white/10 bg-white/10 text-white">Candidate credential</Badge></div>
+                <div className="mt-8 flex items-center gap-3"><Avatar initials={profile?.initials ?? "—"} size="md" className="border-2 border-white/10 bg-white text-black" /><div className="min-w-0"><h3 className="truncate text-lg font-semibold">{analysisSession.trustCard?.candidateName || profile?.fullName || "Candidate"}</h3><p className="mt-0.5 truncate text-xs text-slate-400">{analysisSession.trustCard?.role || analysisSession.role || "Target role not available"}</p></div></div>
+                <div className="mt-7 flex items-end justify-between"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Candidate Trust Score</p><p className="mt-1 text-5xl font-semibold tracking-[-0.05em] tabular-nums">{analysisSession.trustCard?.trustScore ?? "—"}<span className="ml-1 text-base font-medium text-slate-500">/100</span></p></div><div className="flex size-10 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-400/10"><ShieldCheck className="size-5 text-emerald-300" /></div></div>
+                <div className="mt-6 space-y-3 border-t border-white/10 pt-5"><div className="flex items-center gap-2 text-xs text-slate-300"><BriefcaseBusiness className="size-3.5 text-slate-500" /><span className="truncate">{analysisSession.company || "Target company not recorded"}</span></div><div className="flex items-start gap-2 text-xs leading-5 text-slate-400"><GraduationCap className="mt-0.5 size-3.5 shrink-0 text-slate-500" /><span>{profileLoading ? "Loading profile details…" : educationDetails[0] || profileSummary || "Profile details not available"}</span></div></div>
+                <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.045] p-3"><p className="text-[11px] font-semibold text-white">Evidence status</p><p className="mt-1 text-xs leading-5 text-slate-400">{analysisSession.trustCard?.analysisReliability?.label || "Reliability not recorded"}</p></div>
+              </aside>
+
+              <div className="min-w-0 p-6 sm:p-7"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Employee-ready summary</p><h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">Evidence at a glance</h3></div><div className="flex flex-wrap gap-2"><Badge tone={analysisSession.trustCard?.referralReadiness === 'Ready to request referral' ? 'success' : 'warning'}>{analysisSession.trustCard?.referralReadiness || 'Readiness not recorded'}</Badge><Badge tone="neutral">{analysisSession.trustCard?.analysisReliability?.label || 'Evidence status unavailable'}</Badge></div></div>
+                <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_14rem]"><div><div className="space-y-2">{(analysisSession.trustCard?.scoreBreakdown ?? []).map((factor) => { const maximum = factor.maximumScore ?? factor.weight; const progress = maximum > 0 ? (factor.contribution / maximum) * 100 : 0; return <div key={factor.key} className="grid grid-cols-[minmax(0,1fr)_3.5rem] items-center gap-3"><div className="min-w-0"><div className="flex justify-between gap-3 text-xs"><span className="truncate font-medium text-slate-700">{factor.label}</span><span className="shrink-0 text-slate-500">{factor.contribution}/{maximum}</span></div><div className="mt-1.5"><ProgressBar value={progress} /></div></div></div> })}</div>
+                    <div className="mt-5"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Top skills</p><div className="mt-2 flex flex-wrap gap-1.5">{matchingSkills.slice(0, 6).map((skill) => <Badge key={skill} tone="neutral">{skill}</Badge>)}{matchingSkills.length === 0 ? <span className="text-xs text-slate-500">No structured skills recorded.</span> : null}</div></div>
+                  </div><div className="rounded-xl border border-slate-200 bg-slate-100/70 p-4"><p className="text-xs font-semibold text-slate-800">Strongest evidence</p><div className="mt-3 space-y-2">{(analysisSession.trustCard?.strengths?.length ? analysisSession.trustCard.strengths : analysisSession.trustCard?.evidence ?? []).slice(0, 2).map((item) => <p key={item} className="text-xs leading-5 text-slate-600">✓ {item}</p>)}{!(analysisSession.trustCard?.strengths?.length || analysisSession.trustCard?.evidence?.length) ? <p className="text-xs leading-5 text-slate-500">No structured evidence summary recorded.</p> : null}</div><div className="mt-4 border-t border-slate-200 pt-3"><p className="text-xs font-semibold text-slate-800">Next evidence</p>{priorityActionPlan.slice(0, 2).map((item) => <p key={item.requirement} className="mt-1.5 text-xs leading-5 text-slate-600">• {item.requirement}</p>)}{priorityActionPlan.length === 0 ? <p className="mt-1.5 text-xs text-slate-500">No priority improvement recorded.</p> : null}</div></div></div>
+                {(analysisSession.trustCard?.scoreBreakdown ?? []).length > 0 ? <details className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"><summary className="cursor-pointer text-sm font-semibold text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-inset">How this score was calculated</summary><ScoreExplanation className="mt-4" title="Candidate Trust Score details" points={analysisSession.trustCard!.scoreBreakdown.map((factor) => factor.reason)} /></details> : null}
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row"><SecondaryButton onClick={() => navigate(workflow.trustCardAction.href)} onMouseEnter={() => { void prefetchTrustCard() }} onFocus={() => { void prefetchTrustCard() }}>{workflow.trustCardAction.label}<ArrowRight className="ml-2 size-4" /></SecondaryButton><SecondaryButton onClick={() => navigate(workflow.evidenceAction.href)}><GitBranch className="mr-2 size-4" />{workflow.evidenceAction.label}</SecondaryButton></div>
               </div>
-
-              <div className="mt-10">
-                <Avatar
-                  initials={profile?.initials ?? "—"}
-                  size="lg"
-                  className="border-4 border-white/10 bg-white text-black"
-                />
-                <h3 className="mt-5 text-2xl font-semibold">{analysisSession.trustCard?.candidateName || profile?.fullName || "Candidate"}</h3>
-                <p className="mt-1.5 text-sm text-slate-400">
-                  {profileLoading ? "Loading profile details..." : profileSummary || "Profile details not available"}
-                </p>
-
-                <div className="mt-6 flex items-center gap-2">
-                  <BriefcaseBusiness className="size-4 text-slate-400" />
-                  <span className="text-sm">Target: {analysisSession.trustCard?.role || analysisSession.role || "Not available"}</span>
-                </div>
-                <div className="mt-3 flex items-start gap-2">
-                  <GraduationCap className="mt-1 size-4 shrink-0 text-slate-400" />
-                  <div className="text-sm">{educationDetails.length ? educationDetails.map((line) => <p key={line}>{line}</p>) : <span>Educational data not available</span>}</div>
-                </div>
-              </div>
-
-              <div className="my-8 h-px bg-white/10" />
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
-                    Trust Score
-                  </p>
-                  <p className="mt-2 text-4xl font-semibold">{analysisSession.trustCard?.trustScore ?? "—"}</p>
-                </div>
-                <div className="flex size-14 items-center justify-center rounded-full border-4 border-emerald-400 text-emerald-300">
-                  <Check className="size-6" />
-                </div>
-              </div>
-
-              <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-4">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="size-4 text-emerald-400" />
-                  <span className="text-sm font-semibold">
-                    {analysisSession.trustCard ? "Trust Card generated" : "Trust Card unavailable"}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-slate-400">
-                  {analysisSession.trustCard ? "Generated by the Trust Card API." : "Generate a Trust Card to view evidence."}
-                </p>
-              </div>
-            </div>
-
-            <div className="p-7 sm:p-9">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    AI-generated assessment
-                  </p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-tight">
-                    Referral evidence overview
-                  </h3>
-                </div>
-
-                <Badge tone={analysisSession.trustCard ? "success" : "neutral"}>
-                  <ShieldCheck className="mr-1.5 size-3.5" />
-                  {analysisSession.trustCard?.referralReadiness || "Not generated"}
-                </Badge>
-              </div>
-
-              <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                {(analysisSession.trustCard ? [
-                  { label: "Overall Match", value: `${analysisSession.trustCard.overallMatch}%`, score: analysisSession.trustCard.overallMatch },
-                  { label: "Role Fit", value: `${analysisSession.trustCard.roleFit}%`, score: analysisSession.trustCard.roleFit },
-                  { label: "Proof", value: `${analysisSession.trustCard.proofScore}%`, score: analysisSession.trustCard.proofScore },
-                  { label: "Gaps", value: `${analysisSession.trustCard.gapScore}%`, score: analysisSession.trustCard.gapScore },
-                ] : []).map((signal) => (
-                  <div
-                    key={signal.label}
-                    className="rounded-xl border border-slate-200 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-slate-500">
-                        {signal.label}
-                      </span>
-                      <span className="text-sm font-semibold">{signal.value}</span>
-                    </div>
-                    <div className="mt-3">
-                      <ProgressBar value={signal.score} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {scoreReasons.length > 0 ? <ScoreExplanation className="mt-7" title="Why these Trust Card signals?" points={scoreReasons} /> : null}
-              {!analysisSession.trustCard ? <EmptyState className="mt-7" icon={ShieldCheck} title="Generate your Trust Card" description="Complete a resume analysis to turn match scores and supporting evidence into an employee-ready referral summary." /> : null}
-
-              <div className="mt-7">
-                <p className="text-sm font-semibold">Top Skills</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {matchingSkills.slice(0, 5).map((skill) => (
-                    <Badge key={skill}>{skill}</Badge>
-                  ))}
-                  {matchingSkills.length === 0 ? <p className="text-sm text-slate-500">Verified skill evidence will appear when the analysis API returns structured skills.</p> : null}
-                </div>
-              </div>
-
-              <div className="mt-7 rounded-xl border border-slate-200 bg-slate-50 p-5">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="size-4" />
-                  <p className="text-sm font-semibold">AI Trust Summary</p>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                  {analysisSession.trustCard?.aiSummary || "No AI Trust Card summary is available."}
-                </p>
-              </div>
-
-              {!isPrimaryWorkflowAction(workflow.trustCardAction.href) ? <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <SecondaryButton onClick={() => navigate(workflow.trustCardAction.href)} onMouseEnter={() => { void prefetchTrustCard() }} onFocus={() => { void prefetchTrustCard() }}>
-                  {workflow.trustCardAction.label}
-                  <ArrowRight className="ml-2 size-4" />
-                </SecondaryButton>
-                <SecondaryButton onClick={() => navigate(workflow.evidenceAction.href)}>
-                  <GitBranch className="mr-2 size-4" />
-                  {workflow.evidenceAction.label}
-                </SecondaryButton>
-              </div> : null}
             </div>
           </div>
         </section> : null}
 
-        {workflow.hasAnalysis ? <section className="order-3">
+        {workflow.hasTrustCard ? <div className="order-3"><CandidateIntelligencePanel analysisId={analysisSession.analysisId} enabled={workflow.hasTrustCard} /></div> : null}
+
+        {workflow.hasAnalysis ? <section className="order-4">
           <SectionHeading
-            eyebrow="3 · Highest-Priority Improvements"
+            eyebrow="4 · Highest-Priority Improvements"
             title="What would improve your evidence most"
             description="Focused actions from your current deterministic analysis. Potential points are not guaranteed."
           />
@@ -722,50 +601,22 @@ export default function StudentDashboard() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filteredEmployees.map((employee) => (
-              <Card
-                key={employee.id}
-                className={`p-5 transition-transform hover:-translate-y-0.5 ${selectedEmployeeId === employee.id ? 'ring-2 ring-black' : ''}`}
-              >
-                <div className="flex items-start justify-between">
-                  <Avatar
-                    initials={employee.initials}
-                    photoUrl={employee.photoUrl}
-                    className={employee.avatarClass}
-                  />
-                  <EmployeeReliabilityBadge badge={employee.reliabilityBadge} />
-                </div>
-
-                <h3 className="mt-5 font-semibold">{employee.name}</h3>
-                <p className="mt-1 text-sm font-medium text-slate-700">
-                  {employee.company}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {employee.designation}
-                </p>
-                {!isDemoMode && (employee.department || employee.yearsExperience !== null) ? <p className="mt-1 text-xs text-slate-500">{[employee.department, employee.yearsExperience !== null ? `${employee.yearsExperience} years experience` : null].filter(Boolean).join(' · ')}</p> : null}
-
-                <div className="mt-5 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-xs font-medium text-slate-600">
-                  <UserCheck className="size-4 text-emerald-600" />
-                  {employee.acceptingRequests ? `${employee.activeRequestCount}/${employee.maxActiveRequests} active requests` : 'Not accepting requests'}
-                </div>
-                {employee.supportedRoles.length ? <p className="mt-3 text-xs text-slate-500">Roles: {employee.supportedRoles.slice(0, 3).join(' · ')}</p> : null}
-                {employee.referralCategories.length ? <p className="mt-2 text-xs text-slate-500">Supports: {employee.referralCategories.slice(0, 3).map((item) => item.replace(/_/g, ' ')).join(' · ')}</p> : null}
-                {employee.referralGuidelines ? <p className="mt-2 line-clamp-2 text-xs text-slate-500">{employee.referralGuidelines}</p> : null}
-                {!isDemoMode ? <details className="mt-4 rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer text-xs font-semibold text-slate-700">View profile preview</summary><div className="mt-3 space-y-3">
-                  <p className="text-xs leading-5 text-slate-600">{employee.reliabilityBadge.basis}</p>
-                  <div className="grid grid-cols-2 gap-2 text-center"><div className="rounded-md bg-slate-50 p-2"><p className="text-sm font-semibold">{employee.reliabilityBadge.relevantCounts.meaningfulResponses}</p><p className="text-[10px] text-slate-500">Meaningful responses</p></div><div className="rounded-md bg-slate-50 p-2"><p className="text-sm font-semibold">{employee.reliabilityBadge.relevantCounts.completedReferrals}</p><p className="text-[10px] text-slate-500">Completed referrals</p></div></div>
-                  {employee.preferredCandidateLevels.length ? <p className="text-xs text-slate-500">Preferred levels: {employee.preferredCandidateLevels.map((item) => item.replace(/_/g, ' ')).join(' · ')}</p> : null}
-                  <div className="flex flex-wrap gap-2">{employee.linkedinUrl ? <a href={employee.linkedinUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">LinkedIn</a> : null}{employee.companyProfileUrl ? <a href={employee.companyProfileUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Company profile</a> : null}{employee.portfolioUrl ? <a href={employee.portfolioUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold underline">Portfolio</a> : null}</div>
-                  {employee.reliabilityBadge.limitations.map((limitation) => <p key={limitation} className="text-[11px] leading-4 text-slate-400">{limitation}</p>)}
-                </div></details> : null}
-
-                <PrimaryButton className="mt-4 w-full" disabled={!employee.acceptingRequests} disabledReason="This employee is not currently accepting requests" onClick={() => { setSelectedEmployeeId(employee.id); if (isDemoMode && !hasReachedDemoStage(demoJourneyStage, 'employee-selected')) setDemoJourneyStage('employee-selected'); scrollToSection("referral-message"); }}>
-                  {selectedEmployeeId === employee.id ? 'Selected' : 'Request Referral'}
-                  <ArrowRight className="ml-2 size-4" />
+            {filteredEmployees.map((employee) => {
+              const selected = selectedEmployeeId === employee.id
+              const signals = employeeSelectionSignals(employee)
+              const recommendation = recommendationsByEmployee.get(employee.id)
+              return <Card key={employee.id} className={`p-4 transition-all hover:-translate-y-0.5 ${selected ? 'border-slate-900 ring-1 ring-slate-900' : ''}`}>
+                <div className="flex items-start gap-3"><Avatar initials={employee.initials} photoUrl={employee.photoUrl} size="sm" className={employee.avatarClass} /><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h3 className="truncate text-sm font-semibold">{employee.name}</h3><p className="mt-0.5 truncate text-xs text-slate-600">{employeeDirectoryIdentity(employee)}</p>{employee.department ? <p className="mt-1 text-[11px] text-slate-500">{employee.department}</p> : null}</div><EmployeeReliabilityBadge badge={employee.reliabilityBadge} /></div></div></div>
+                <div className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${employee.acceptingRequests ? 'bg-emerald-50 text-emerald-900' : 'bg-slate-100 text-slate-600'}`}><UserCheck className={`size-3.5 ${employee.acceptingRequests ? 'text-emerald-700' : 'text-slate-400'}`} />{employee.acceptingRequests ? 'Accepting referral requests' : 'Not accepting requests'}</div>
+                <div className="mt-3 flex flex-wrap gap-1.5">{signals.map((signal) => <Badge key={signal} tone="neutral">{signal}</Badge>)}</div>
+                {recommendation ? <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-slate-800">Why this employee?</p><Badge tone={recommendation.compatibility.label === 'Strong fit' || recommendation.compatibility.label === 'Good fit' ? 'success' : 'warning'}>{recommendation.compatibility.score}/100 · {recommendation.compatibility.label}</Badge></div><div className="mt-2 space-y-1">{recommendation.matchReasons.slice(0, 3).map((reason) => <p key={reason} className="text-xs leading-5 text-slate-600">✓ {reason}</p>)}{recommendation.concern ? <p className="text-xs leading-5 text-amber-800">Caution: {recommendation.concern}</p> : null}</div></div> : null}
+                {selected ? <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">{compatibilityLoading ? <div className="space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-4 w-full" /></div> : compatibility ? <><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-slate-800">Referral compatibility</p><span className="text-xs font-semibold tabular-nums text-slate-900">{compatibility.score}/100 · {compatibility.label}</span></div><div className="mt-2 space-y-1">{compatibility.positiveFactors.slice(0, 3).map((reason) => <p key={reason} className="text-xs leading-5 text-slate-600">✓ {reason}</p>)}{compatibility.missingOrConflictingFactors.slice(0, 1).map((reason) => <p key={reason} className="text-xs leading-5 text-amber-800">Caution: {reason}</p>)}</div></> : compatibilityError ? <p className="text-xs text-red-700">{compatibilityError}</p> : <p className="text-xs text-slate-500">Compatibility will appear when the current opportunity details are available.</p>}</div> : null}
+                <details className="mt-3 rounded-lg border border-slate-200 bg-white/70 px-3 py-2"><summary className="cursor-pointer text-xs font-semibold text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-black">Match details</summary><div className="mt-3 space-y-2"><p className="text-xs leading-5 text-slate-600">{employee.reliabilityBadge.basis}</p>{employee.referralGuidelines ? <p className="text-xs leading-5 text-slate-600"><span className="font-semibold">Guideline:</span> {employee.referralGuidelines}</p> : null}{employee.preferredCandidateLevels.length ? <p className="text-xs leading-5 text-slate-600"><span className="font-semibold">Preferred levels:</span> {employee.preferredCandidateLevels.map((item) => item.replace(/_/g, ' ')).join(' · ')}</p> : null}{employee.reliabilityBadge.limitations.slice(0, 1).map((limitation) => <p key={limitation} className="text-[11px] leading-4 text-slate-500">Limit: {limitation}</p>)}</div></details>
+                <PrimaryButton className="mt-3 w-full" disabled={!employee.acceptingRequests} disabledReason="This employee is not currently accepting requests" onClick={() => { if (selected) scrollToSection("referral-message"); else setSelectedEmployeeId(employee.id) }}>
+                  {selected ? 'Continue with selected employee' : 'Select employee'}<ArrowRight className="ml-2 size-4" />
                 </PrimaryButton>
               </Card>
-            ))}
+            })}
           </div>
 
           {filteredEmployees.length === 0 && <EmptyState className="mt-4" icon={Users} title={employees.length === 0 ? "Prepare for employee discovery" : "No employees match your search"} description={employees.length === 0 ? "Build a Trust Card while the employee-directory integration is being connected." : "Adjust the name, company, or role, or clear the current search."} action={<div className="flex flex-wrap justify-center gap-2">{!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : null}{employeeQuery ? <SecondaryButton onClick={() => setEmployeeQuery("")}>Clear Search</SecondaryButton> : <SecondaryButton onClick={() => navigate('/dashboard#referral-requests')}>Referral Requests</SecondaryButton>}</div>} />}
@@ -808,13 +659,13 @@ export default function StudentDashboard() {
               {priorityActionPlan.length === 0 ? <p className="text-sm leading-6 text-emerald-900">{analysisSession.analysis ? 'No priority requirement gaps were identified.' : 'Complete resume analysis to generate a ranked Action Plan.'}</p> : null}
             </div>
             {priorityActionPlan.length > 0 ? <SecondaryButton className="mt-4" onClick={() => navigate('/dashboard/action-plan')}>View full Action Plan</SecondaryButton> : null}
-            {!isDemoMode && selectedEmployee ? <div className="mt-6 space-y-3 border-t border-emerald-200 pt-5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-emerald-950">Employee Reliability</p><EmployeeReliabilityBadge badge={selectedEmployee.reliabilityBadge} /></div><p className="text-xs leading-5 text-emerald-800">{selectedEmployee.reliabilityBadge.basis}</p></div> : null}
-            {!isDemoMode ? <div className="mt-5 rounded-xl border border-emerald-200 bg-white/75 p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-emerald-950">Referral Compatibility</p><p className="mt-1 text-xs text-emerald-700">Is this request appropriate for this employee?</p></div>{compatibility ? <div className="text-right"><p className="text-lg font-semibold text-emerald-950">{compatibility.score}/100</p><Badge tone={compatibility.label === 'Strong fit' || compatibility.label === 'Good fit' ? 'success' : 'warning'}>{compatibility.label}</Badge></div> : null}</div>
+            {selectedEmployee ? <div className="mt-6 space-y-3 border-t border-emerald-200 pt-5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-emerald-950">Employee Reliability</p><EmployeeReliabilityBadge badge={selectedEmployee.reliabilityBadge} /></div><p className="text-xs leading-5 text-emerald-800">{selectedEmployee.reliabilityBadge.basis}</p></div> : null}
+            <div className="mt-5 rounded-xl border border-emerald-200 bg-white/75 p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-emerald-950">Referral Compatibility</p><p className="mt-1 text-xs text-emerald-700">Is this request appropriate for this employee?</p></div>{compatibility ? <div className="text-right"><p className="text-lg font-semibold text-emerald-950">{compatibility.score}/100</p><Badge tone={compatibility.label === 'Strong fit' || compatibility.label === 'Good fit' ? 'success' : 'warning'}>{compatibility.label}</Badge></div> : null}</div>
               {compatibilityLoading ? <div className="mt-4 space-y-2"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-4 w-1/2" /></div> : null}
               {compatibilityError ? <div className="mt-4"><InlineFeedback tone="error">{compatibilityError}<SecondaryButton className="ml-3" onClick={() => setCompatibilityReloadKey((value) => value + 1)}>Retry</SecondaryButton></InlineFeedback></div> : null}
               {compatibility ? <details className="mt-4"><summary className="cursor-pointer text-xs font-semibold text-emerald-900">View compatibility details</summary><div className="mt-3 space-y-3"><div className="grid gap-2 sm:grid-cols-2">{compatibility.components.map((component) => <div key={component.key} className="rounded-lg bg-emerald-50 p-3"><div className="flex justify-between gap-2 text-xs font-semibold text-emerald-950"><span>{component.label}</span><span>{component.score}/{component.maximumScore}</span></div></div>)}</div>{compatibility.positiveFactors.slice(0, 3).map((factor) => <p key={factor} className="text-xs leading-5 text-emerald-800">✓ {factor}</p>)}{compatibility.missingOrConflictingFactors.slice(0, 3).map((factor) => <p key={factor} className="text-xs leading-5 text-amber-800">Caution: {factor}</p>)}{compatibility.suggestedImprovements.slice(0, 2).map((item) => <p key={item} className="text-xs leading-5 text-slate-600">Improve: {item}</p>)}{compatibility.limitations.map((item) => <p key={item} className="text-[11px] leading-4 text-slate-500">{item}</p>)}</div></details> : null}
               {compatibility && compatibility.score < 45 ? <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><p className="font-semibold">Low compatibility warning</p><p>This does not predict rejection. You can reconsider the employee or improve the request, and you may still continue.</p><SecondaryButton className="mt-2" onClick={() => scrollToSection('find-referrers')}>Reconsider employee</SecondaryButton></div> : null}
-            </div> : null}
+            </div>
           </Card>
 
           <Card className="p-6 sm:p-8">
@@ -841,7 +692,7 @@ export default function StudentDashboard() {
             </div> : null}
 
             {referralWizardStep === 2 ? <div className="mt-6">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-semibold">{selectedEmployee?.name}</p><p className="mt-1 text-xs text-slate-500">{selectedEmployee?.designation} · {selectedEmployee?.company}</p></div>{selectedEmployee ? <EmployeeReliabilityBadge badge={selectedEmployee.reliabilityBadge} /> : null}</div></div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-semibold">{selectedEmployee?.name}</p><p className="mt-1 text-xs text-slate-500">{selectedEmployee ? employeeDirectoryIdentity(selectedEmployee) : 'Profile details not provided'}</p></div>{selectedEmployee ? <EmployeeReliabilityBadge badge={selectedEmployee.reliabilityBadge} /> : null}</div></div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 {([
                   ['professional_concise', 'Professional and concise'],
@@ -859,12 +710,13 @@ export default function StudentDashboard() {
               <textarea id="referral-request-note" value={referralRequestNote} onChange={(event) => { setReferralRequestNote(event.target.value); setReferralReviewed(false); setReadinessGateOpen(false); }} maxLength={1000} disabled={!workflow.hasTrustCard} className="mt-6 min-h-32 w-full resize-y rounded-xl border border-slate-300 bg-white p-4 text-sm leading-7 text-slate-700 outline-none transition focus:border-black focus:ring-2 focus:ring-black/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500" placeholder="Generate a grounded draft or write your own message." />
               <div className={`mt-2 flex items-center justify-between gap-3 text-xs ${referralMessageWordCount > 120 ? 'text-amber-700' : 'text-slate-500'}`}><span>{referralMessageWordCount > 120 ? 'Consider shortening this message; length is a non-blocking quality warning.' : 'Review every claim. RefAI never sends automatically.'}</span><span className="shrink-0">{referralMessageWordCount}/120 words</span></div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <PrimaryButton onClick={() => generateReferralMessage(referralRequestNote ? 'regenerate' : 'generate')} loading={messageGenerating}><Sparkles className="mr-2 size-4" />{referralRequestNote ? 'Regenerate' : 'Generate Referral Message with AI'}</PrimaryButton>
-                <SecondaryButton onClick={() => generateReferralMessage('shorter')} disabled={!referralRequestNote.trim()}>Make shorter</SecondaryButton>
-                <SecondaryButton onClick={() => generateReferralMessage('more_formal')} disabled={!referralRequestNote.trim()}>Make more formal</SecondaryButton>
-                <SecondaryButton onClick={() => generateReferralMessage('add_strongest_project')}>Add strongest project</SecondaryButton>
-                <SecondaryButton onClick={() => generateReferralMessage('remove_weak_claims')} disabled={!referralRequestNote.trim()}>Remove weak claims</SecondaryButton>
+                <PrimaryButton onClick={() => generateReferralMessage(referralRequestNote ? 'regenerate' : 'generate')} loading={messageGenerating} disabled={messageGenerating} disabledReason="Preparing your grounded draft"><Sparkles className="mr-2 size-4" />{referralRequestNote ? 'Regenerate' : 'Generate with AI'}</PrimaryButton>
+                <SecondaryButton onClick={() => generateReferralMessage('shorter')} disabled={messageGenerating || !referralRequestNote.trim()} disabledReason={messageGenerating ? 'Preparing your grounded draft' : 'Generate or write a message first'}>Make shorter</SecondaryButton>
+                <SecondaryButton onClick={() => generateReferralMessage('more_formal')} disabled={messageGenerating || !referralRequestNote.trim()} disabledReason={messageGenerating ? 'Preparing your grounded draft' : 'Generate or write a message first'}>More professional</SecondaryButton>
+                <SecondaryButton onClick={() => generateReferralMessage('add_strongest_project')} disabled={messageGenerating} disabledReason="Preparing your grounded draft">Add strongest verified project</SecondaryButton>
+                <SecondaryButton onClick={() => generateReferralMessage('remove_weak_claims')} disabled={messageGenerating || !referralRequestNote.trim()} disabledReason={messageGenerating ? 'Preparing your grounded draft' : 'Generate or write a message first'}>Remove weak claims</SecondaryButton>
               </div>
+              {messageGenerating ? <p className="mt-3 text-xs text-slate-500" role="status">Preparing a grounded draft from your saved profile and selected opportunity…</p> : null}
               {messageGrounding ? <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><summary className="cursor-pointer text-xs font-semibold">Grounding details · {messageGrounding.usedFacts.length} facts used</summary><div className="mt-3 space-y-2">{messageGrounding.usedFallback ? <p className="text-xs text-amber-700">Deterministic fallback used.</p> : null}{messageGrounding.groundingLimitations.map((item) => <p key={item} className="text-xs leading-5 text-slate-600">{item}</p>)}{messageGrounding.usedFacts.slice(0, 6).map((fact) => <p key={fact.id} className="text-xs leading-5 text-slate-600"><span className="font-semibold">{fact.sourceType}:</span> {fact.value}</p>)}</div></details> : null}
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">Referral Message Quality Score</p><p className="mt-1 text-xs text-slate-500">Separate from Referral Compatibility and Candidate Trust Score.</p></div>{referralQuality ? <div className="text-right"><p className="text-xl font-semibold">{referralQuality.score}/100</p><Badge tone={referralQuality.canSubmit ? 'success' : 'danger'}>{referralQuality.label}</Badge></div> : null}</div>
@@ -891,19 +743,17 @@ export default function StudentDashboard() {
                 {copied ? "Copied" : "Copy"}
               </SecondaryButton>
 
-              {isDemoMode && referralRequestNote.trim() && !hasReachedDemoStage(demoJourneyStage, 'message-reviewed') ? <SecondaryButton onClick={reviewReferralNote}>Review Note</SecondaryButton> : null}
-
               <SecondaryButton onClick={() => scrollToSection('referral-requests')}>
                 Track Referral Status
               </SecondaryButton>
 
-              {!referralReviewed && !isDemoMode ? <PrimaryButton className="sm:ml-auto" onClick={async () => { const result = await checkReferralQuality(); if (result) { setReferralReviewed(true); toast({ title: 'Quality check ready', description: result.canSubmit ? 'Review the score and warnings before sending.' : 'Resolve the blocking factual-integrity errors before sending.', tone: result.canSubmit ? 'success' : 'error' }); } }} loading={qualityLoading} disabled={!referralRequestNote.trim()}>Continue to quality check</PrimaryButton> : null}
-              {referralReviewed || isDemoMode ? <PrimaryButton className="sm:ml-auto" onClick={() => { void sendReferral(); }} loading={sendingReferral && !readinessGateOpen} disabled={!referralRequestNote.trim() || !workflow.hasTrustCard || (!isDemoMode && (!selectedEmployeeId || !referralQuality || !referralQuality.canSubmit)) || (isDemoMode && !hasReachedDemoStage(demoJourneyStage, 'message-reviewed'))} disabledReason={!workflow.hasTrustCard ? "Generate a Trust Card first" : !isDemoMode && referralQuality?.blockingErrors.length ? "Remove blocking factual-integrity errors and recheck" : !isDemoMode && !selectedEmployeeId ? "Select an employee first" : "Review your request note before sending"}>
-                {isDemoMode ? <CheckCircle2 className="mr-2 size-4" /> : <Send className="mr-2 size-4" />}
-                {isDemoMode ? referralSent ? "View Sent Request" : "Send Referral Request" : "Review referral readiness"}
+              {!referralReviewed ? <PrimaryButton className="sm:ml-auto" onClick={async () => { const result = await checkReferralQuality(); if (result) { setReferralReviewed(true); toast({ title: 'Quality check ready', description: result.canSubmit ? 'Review the score and warnings before sending.' : 'Resolve the blocking factual-integrity errors before sending.', tone: result.canSubmit ? 'success' : 'error' }); } }} loading={qualityLoading} disabled={!referralRequestNote.trim()}>Continue to quality check</PrimaryButton> : null}
+              {referralReviewed ? <PrimaryButton className="sm:ml-auto" onClick={() => { void sendReferral(); }} loading={sendingReferral && !readinessGateOpen} disabled={!referralRequestNote.trim() || !workflow.hasTrustCard || !selectedEmployeeId || !referralQuality || !referralQuality.canSubmit} disabledReason={!workflow.hasTrustCard ? "Generate a Trust Card first" : referralQuality?.blockingErrors.length ? "Remove blocking factual-integrity errors and recheck" : !selectedEmployeeId ? "Select an employee first" : "Review your request note before sending"}>
+                <Send className="mr-2 size-4" />
+                Review referral readiness
               </PrimaryButton> : null}
             </div>
-            {!isDemoMode && readinessGateOpen && referralReadiness ? <ReferralReadinessGate readiness={referralReadiness} submitting={sendingReferral} onImprove={() => navigate('/dashboard/action-plan')} onContinue={() => { void sendReferral(true); }} /> : null}
+            {readinessGateOpen && referralReadiness ? <ReferralReadinessGate readiness={referralReadiness} submitting={sendingReferral} onImprove={() => navigate('/dashboard/action-plan')} onContinue={() => { void sendReferral(true); }} /> : null}
             {showReferralSuccess ? <div role="status" className="toast-enter mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" /><div><p className="font-semibold text-emerald-950">Referral request sent</p><p className="mt-1 text-sm leading-6 text-emerald-800">The request is saved as Submitted and is available in the assigned employee’s review queue.</p></div></div></div> : null}
             </> : null}
           </Card>
@@ -911,57 +761,30 @@ export default function StudentDashboard() {
 
         {/* Referral requests */}
         <section id="referral-requests" className="order-4 scroll-mt-24">
-          <SectionHeading
-            eyebrow="4 · Referral Requests"
-            title="Track every referral in one place"
-            description="Stay informed from the moment you share your Trust Card."
-          />
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">4 · Referral Requests</p><h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-950">Track every referral in one place</h2></div>
+            {referralTrackerSummary.length ? <div className="flex flex-wrap gap-1.5" aria-label="Referral request summary">{referralTrackerSummary.map((item) => <Badge key={item} tone="neutral">{item}</Badge>)}</div> : null}
+          </div>
 
-          <Card className="overflow-hidden">
-            <div className="hidden grid-cols-[1.3fr_1fr_1.4fr_0.8fr_0.7fr] gap-4 border-b border-slate-200 bg-slate-50 px-6 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 md:grid">
-              <span>Employee</span>
-              <span>Company</span>
-              <span>Role</span>
-              <span>Date</span>
-              <span>Status</span>
-            </div>
-
-            <div className="divide-y divide-slate-200">
-              {referralRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="grid gap-4 px-5 py-5 hover:bg-slate-50 md:grid-cols-[1.3fr_1fr_1.4fr_0.8fr_0.7fr] md:items-center md:px-6"
-                >
-                  <div className="flex items-center gap-3">
-                    <Avatar initials={request.initials} size="sm" />
-                    <span className="min-w-0 text-sm font-semibold">
-                      <span className="block truncate">{request.employee}</span>
-                      <span className="block truncate text-xs font-normal text-slate-500">{request.employeeCompany || 'Company not listed'}</span>
-                    </span>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-2.5 shadow-[0_12px_30px_-26px_rgba(15,23,42,0.38)] sm:p-3">
+            <div className="space-y-2">
+              {referralRequests.map((request) => {
+                const statusMessage = referralTrackerStatusMessage(request.journeyStatus)
+                const persistedRequest = persistedRequests.find((item) => item.id === request.id)
+                return (
+                <article key={request.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-[0_5px_14px_-14px_rgba(15,23,42,0.35)] transition-colors hover:border-slate-300 sm:px-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{request.company} <span className="font-normal text-slate-300">·</span> {request.role}</p><p className="mt-1 truncate text-xs text-slate-500">{request.employee}</p></div>
+                    <div className="flex items-center gap-2"><time dateTime={request.updatedAt} className="text-xs text-slate-500">{formatReferralUpdate(request.updatedAt)}</time><Badge tone={referralTrackerBadgeTone(request.status)}>{request.status}</Badge></div>
                   </div>
-
-                  <MobileTableCell label="Company">
-                    {request.company}
-                  </MobileTableCell>
-                  <MobileTableCell label="Role">{request.role}</MobileTableCell>
-                  <MobileTableCell label="Date">{request.date}</MobileTableCell>
-
-                  <div className="flex items-center justify-between md:block">
-                    <span className="text-xs text-slate-500 md:hidden">
-                      Status
-                    </span>
-                    <Badge tone={statusTones[request.status]}>
-                      {request.status}
-                    </Badge>
-                  </div>
-                  {!isDemoMode && request.journeyStatus ? <div className="md:col-span-5 rounded-xl border border-slate-200 p-4"><ReferralJourneyTimeline requestId={request.id} currentStatus={request.journeyStatus} /></div> : null}
-                  {request.decisionMessage ? <div className="md:col-span-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">{request.decisionMessage}</div> : null}
-                  {request.status === "Referral Submitted" ? <div className="md:col-span-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900"><p><span className="font-semibold">Submitted by {request.employee}</span>{request.referralDate ? ` on ${new Date(`${request.referralDate}T00:00:00`).toLocaleDateString()}` : ''}.</p>{request.referralConfirmationNumber ? <p className="mt-1">Confirmation: {request.referralConfirmationNumber}</p> : null}{request.referralNoteToStudent ? <p className="mt-1">{request.referralNoteToStudent}</p> : <p className="mt-1">Next step: monitor your email or application portal for updates from {request.company}.</p>}</div> : null}
-                </div>
-              ))}
-              {referralRequests.length === 0 ? <EmptyState className="m-4 py-6 md:m-5" icon={Activity} title="No referral requests yet" description="Requests will appear here after you choose an employee and submit your evidence-backed message." action={!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : undefined} /> : null}
+                  {statusMessage ? <p className="mt-3 border-t border-slate-100 pt-2.5 text-xs text-slate-600"><span className="font-medium text-slate-800">{statusMessage}</span></p> : request.journeyStatus ? <div className="mt-3 border-t border-slate-100 pt-2.5"><ReferralInlineProgress status={request.journeyStatus} /></div> : null}
+                  <details className="group mt-2.5"><summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"><span>Details</span><span aria-hidden="true" className="transition group-open:rotate-180">⌄</span></summary><div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3.5"><ReferralJourneyTimeline requestId={request.id} currentStatus={request.journeyStatus || 'submitted'} />{request.decisionMessage ? <p className="mt-3 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-700">{request.decisionMessage}</p> : null}{persistedRequest ? <MoreInformationResponsePanel request={persistedRequest} onSubmitted={(updated) => setPersistedRequests((current) => current.map((item) => item.id === updated.id ? updated : item))} /> : null}{request.status === "Referral Submitted" ? <div className="mt-3 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-700"><p><span className="font-semibold">Submitted by {request.employee}</span>{request.referralDate ? ` on ${new Date(`${request.referralDate}T00:00:00`).toLocaleDateString()}` : ''}.</p>{request.referralConfirmationNumber ? <p className="mt-1">Confirmation: {request.referralConfirmationNumber}</p> : null}{request.referralNoteToStudent ? <p className="mt-1">{request.referralNoteToStudent}</p> : <p className="mt-1">Next step: monitor your email or application portal for updates from {request.company}.</p>}</div> : null}</div></details>
+                </article>
+                )
+              })}
+              {referralRequests.length === 0 ? <EmptyState className="border-slate-200 bg-white py-7" icon={Activity} title="No referral requests yet" description="Requests appear here after you choose an employee and submit an evidence-backed message." action={!isPrimaryWorkflowAction(workflow.findEmployeesAction.href) ? <PrimaryButton onClick={() => navigate(workflow.findEmployeesAction.href)}>{workflow.findEmployeesAction.label}</PrimaryButton> : undefined} /> : null}
             </div>
-          </Card>
+          </div>
         </section>
 
         {analysisSession.analyzedAt || referralRequests.length > 0 ? <section className="order-6">
@@ -992,17 +815,43 @@ export default function StudentDashboard() {
   );
 }
 
-function MobileTableCell({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between md:block">
-      <span className="text-xs text-slate-500 md:hidden">{label}</span>
-      <span className="text-sm text-slate-700">{children}</span>
-    </div>
-  );
+function ReferralInlineProgress({ status }: { status: ReferralStatus }) {
+  const stages = [
+    { label: 'Requested', state: status === 'draft' ? 'current' : 'complete' },
+    { label: 'Review', state: ['submitted', 'pending', 'under_review'].includes(status) ? 'current' : ['approved', 'referred'].includes(status) ? 'complete' : 'pending' },
+    { label: 'Approved', state: status === 'approved' ? 'current' : status === 'referred' ? 'complete' : 'pending' },
+    { label: 'Submitted', state: status === 'referred' ? 'current' : 'pending' },
+  ] as const
+  return <ol aria-label={`Referral progress. Current stage: ${stages.find((stage) => stage.state === 'current')?.label ?? 'Pending'}`} className="grid grid-cols-4 gap-2">{stages.map((stage) => <li key={stage.label} className="min-w-0"><div className={`h-px ${stage.state === 'current' ? 'bg-blue-600' : stage.state === 'complete' ? 'bg-slate-400' : 'bg-slate-100'}`} /> <p className={`mt-1.5 flex items-center gap-1 truncate text-[10px] font-medium ${stage.state === 'current' ? 'text-blue-700' : stage.state === 'complete' ? 'text-slate-600' : 'text-slate-400'}`}>{stage.state === 'complete' ? <Check className="size-3 shrink-0" aria-hidden="true" /> : null}{stage.label}</p></li>)}</ol>
+}
+
+function referralTrackerBadgeTone(status: Status): 'neutral' | 'info' {
+  return ['Declined', 'Withdrawn', 'Expired', 'Referral Submitted'].includes(status) ? 'neutral' : 'info'
+}
+
+function referralTrackerStatusMessage(status: ReferralStatus | undefined) {
+  if (status === 'more_info_requested') return 'Additional information requested'
+  if (status === 'declined') return 'Request declined'
+  if (status === 'withdrawn') return 'Request withdrawn'
+  if (status === 'expired') return 'Request expired'
+  return null
+}
+
+function formatReferralUpdate(value: string) {
+  const updated = new Date(value)
+  return Number.isNaN(updated.getTime()) ? 'Latest update' : `Updated ${updated.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+}
+
+function employeeSelectionSignals(employee: Employee) {
+  const signals = [
+    employee.supportedRoles.length ? `Roles: ${employee.supportedRoles.slice(0, 2).join(' · ')}` : null,
+    employee.department ? `Department: ${employee.department}` : null,
+    employee.preferredCandidateLevels.length ? `Levels: ${employee.preferredCandidateLevels.slice(0, 2).map((item) => item.replace(/_/g, ' ')).join(' · ')}` : null,
+    employee.reliabilityBadge.label,
+  ].filter((item): item is string => Boolean(item))
+  return signals.slice(0, 3)
+}
+
+function employeeDirectoryIdentity(employee: Employee) {
+  return [employee.designation, employee.company].filter((value): value is string => Boolean(value?.trim())).join(' · ') || 'Profile details not provided'
 }

@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, ChevronDown, FileQuestion, FileText, Lightbulb, ShieldCheck } from 'lucide-react'
+import { ChevronDown, FileQuestion, FileText, Lightbulb, ShieldCheck } from 'lucide-react'
 import type { AnalysisReliabilityLabel, TrustScoreEvidenceItem, TrustScoreEvidenceStatus, TrustScoreFactor } from '../../types'
 import { Badge, ProgressBar } from './primitives'
 
@@ -9,8 +9,10 @@ type Props = {
 }
 
 const statusLabel = (status: TrustScoreEvidenceStatus) => {
-  if (status === 'Resume supported') return 'Extracted resume evidence'
-  if (status === 'Self-declared') return 'Self-declared claim'
+  if (status === 'Verified evidence') return 'Verified'
+  if (status === 'Resume supported') return 'Resume evidence'
+  if (status === 'Self-declared') return 'Self-declared'
+  if (status === 'Needs clarification') return 'Needs clarity'
   return status
 }
 
@@ -62,7 +64,7 @@ export default function TrustScoreComponentPanel({ factor, displayScore, reliabi
   const missing = evidenceItems.filter((item) => item.status === 'Missing evidence')
   const evidenceStatus = componentStatus(evidenceItems)
   const potential = factor.potentialImprovementPoints ?? Math.max(0, maximum - displayScore)
-  const isStrong = basisPercentage >= 70
+  const status = basisPercentage >= 70 ? 'Strong' : basisPercentage >= 40 ? 'Developing' : 'Needs improvement'
   const formula = factor.formulaOrBasis
     ?? `${factor.reason} Weighted contribution: ${displayScore} of ${maximum} points.`
   const action = factor.improvementAction
@@ -71,27 +73,12 @@ export default function TrustScoreComponentPanel({ factor, displayScore, reliabi
     ?? 'This older saved score contains a summary but not the newer structured evidence references.'
 
   return (
-    <details data-testid={`trust-score-component-${factor.key}`} className="group rounded-xl border border-slate-200 bg-white shadow-sm transition open:border-slate-300 open:shadow-md">
-      <summary aria-label={`Review ${factor.label}: ${displayScore} of ${maximum} points`} className="flex cursor-pointer list-none items-start gap-3 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-inset sm:items-center sm:gap-4 sm:p-5">
-        <div className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full sm:mt-0 ${isStrong ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-          {isStrong ? <CheckCircle2 className="size-4.5" aria-hidden="true" /> : <AlertTriangle className="size-4.5" aria-hidden="true" />}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <h3 className="text-[15px] font-semibold text-slate-950 sm:text-base">{factor.label}</h3>
-              <p className="mt-1 text-sm leading-5 text-slate-600">{factor.reason}</p>
-            </div>
-            <div className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1.5 text-right"><p className="text-lg font-semibold leading-none text-slate-950">{displayScore}<span className="text-sm font-medium text-slate-500"> / {maximum}</span></p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">points</p></div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Badge tone={statusTone(evidenceStatus)}>{statusLabel(evidenceStatus)}</Badge>
-            <span className="text-xs text-slate-500">{reliabilityLabel ?? 'Reliability not recorded'}</span>
-            <span className="text-xs text-slate-400">Maximum {maximum} points</span>
-          </div>
-          <div className="mt-3"><ProgressBar value={basisPercentage} /></div>
-        </div>
-        <ChevronDown className="mt-2 size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180 sm:mt-0" aria-hidden="true" />
+    <details data-testid={`trust-score-component-${factor.key}`} className="group rounded-xl border border-slate-200 bg-white transition open:border-slate-300 open:shadow-sm">
+      <summary aria-label={`Review ${factor.label}: ${displayScore} of ${maximum} points`} className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 p-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-inset sm:grid-cols-[minmax(0,1fr)_minmax(145px,0.7fr)_auto_auto] sm:items-center sm:gap-x-4">
+        <div className="min-w-0"><div className="flex items-center gap-2"><h3 className="truncate text-sm font-semibold text-slate-950">{factor.label}</h3><span className={`size-1.5 shrink-0 rounded-full ${basisPercentage >= 70 ? 'bg-emerald-500' : basisPercentage >= 40 ? 'bg-amber-500' : 'bg-slate-400'}`} aria-hidden="true" /></div><p className="mt-1 truncate text-xs leading-5 text-slate-500" title={factor.reason}>{factor.reason}</p></div>
+        <div className="col-span-2 sm:col-span-1 sm:col-start-2 sm:row-start-1"><ProgressBar value={basisPercentage} /></div>
+        <div className="flex items-center gap-2 sm:col-start-3 sm:row-start-1"><Badge tone={statusTone(evidenceStatus)}>{statusLabel(evidenceStatus)}</Badge><span className="text-[11px] font-medium text-slate-500">{reliabilityLabel ? `${status} · ${reliabilityLabel}` : status}</span></div>
+        <div className="col-start-2 row-start-1 flex items-center gap-2 sm:col-start-4"><span className="text-sm font-semibold tabular-nums text-slate-950">{displayScore}<span className="text-xs font-medium text-slate-400">/{maximum}</span></span><ChevronDown className="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true" /></div>
       </summary>
 
       <div className="border-t border-slate-100 px-4 pb-5 pt-4 sm:px-5">

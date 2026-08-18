@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from typing import Any, Callable
 
@@ -18,6 +20,62 @@ _FORBIDDEN = re.compile(
     r"should definitely receive|auto[- ]?(?:approve|reject))", re.I,
 )
 _NUMBER = re.compile(r"\b\d+(?:\.\d+)?%?\b")
+
+
+def _stable_cache_value(value: Any) -> Any:
+    """Normalize only for a non-reversible Copilot input fingerprint."""
+    if isinstance(value, dict):
+        return {str(key): _stable_cache_value(item) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
+    if isinstance(value, list):
+        return [_stable_cache_value(item) for item in value]
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)
+
+
+def build_employee_review_copilot_input_key(
+    *,
+    employee_id: str,
+    request: dict[str, Any],
+    trust_card: dict[str, Any],
+    analysis: dict[str, Any] | None,
+    verified_profile: dict[str, Any],
+    proofs: list[dict[str, Any]],
+) -> str:
+    """Return a user-scoped, opaque key for exactly the Copilot grounding inputs.
+
+    The fingerprint is persisted instead of the underlying candidate content. Any
+    relevant request, analysis, Trust Card, profile, or Proof Vault change creates
+    a new key and therefore a new Copilot result on the next explicit request.
+    """
+    snapshot = {
+        "copilotVersion": COPILOT_VERSION,
+        "employeeId": employee_id,
+        "request": {
+            "id": request.get("id"),
+            "targetRole": request.get("target_role"),
+            "targetCompany": request.get("target_company"),
+            "jobDescription": request.get("job_description"),
+            "studentResponse": request.get("student_response"),
+            "updatedAt": request.get("updated_at"),
+        },
+        "trustCard": {
+            "id": trust_card.get("id"),
+            "analysisId": trust_card.get("analysis_id"),
+            "updatedAt": trust_card.get("updated_at"),
+            "scoreVersion": (trust_card.get("payload") or {}).get("scoreVersion"),
+            "payload": trust_card.get("payload") or {},
+        },
+        "analysis": {
+            "id": (analysis or {}).get("id"),
+            "updatedAt": (analysis or {}).get("updated_at"),
+            "resumeTextDigest": hashlib.sha256(str((analysis or {}).get("resume_text") or "").encode("utf-8")).hexdigest(),
+        },
+        "verifiedProfile": verified_profile,
+        "proofState": proofs,
+    }
+    serialized = json.dumps(_stable_cache_value(snapshot), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def _flatten_strings(value: Any) -> list[str]:

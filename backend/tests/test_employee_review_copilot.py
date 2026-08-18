@@ -96,6 +96,38 @@ class EmployeeReviewCopilotTests(unittest.TestCase):
         second = self.service.employee_review_copilot(self.repository.employee, self.request_id)
         self.assertTrue(first["usedFallback"])
         self.assertEqual(first, second)
+        self.assertEqual(generator.call_count, 1)
+
+    @patch("app.services.referral_requests.generate_employee_review_summary", side_effect=grounded_generator)
+    def test_same_employee_and_unchanged_evidence_reuses_persisted_summary(self, generator):
+        first = self.service.employee_review_copilot(self.repository.employee, self.request_id)
+        second = self.service.employee_review_copilot(self.repository.employee, self.request_id)
+        self.assertEqual(first, second)
+        self.assertEqual(generator.call_count, 1)
+        self.assertEqual(len(self.repository.copilot_cache), 1)
+        employee_id, request_id, input_key = next(iter(self.repository.copilot_cache))
+        self.assertEqual(employee_id, self.repository.employee)
+        self.assertEqual(request_id, self.request_id)
+        self.assertRegex(input_key, r"^[0-9a-f]{64}$")
+
+    @patch("app.services.referral_requests.generate_employee_review_summary", side_effect=grounded_generator)
+    def test_explicit_refresh_regenerates_the_advisory_summary(self, generator):
+        self.service.employee_review_copilot(self.repository.employee, self.request_id)
+        self.service.employee_review_copilot(self.repository.employee, self.request_id, refresh=True)
+        self.assertEqual(generator.call_count, 2)
+
+    @patch("app.services.referral_requests.generate_employee_review_summary", side_effect=grounded_generator)
+    def test_changed_trust_card_or_proof_state_invalidates_cached_summary(self, generator):
+        self.service.employee_review_copilot(self.repository.employee, self.request_id)
+        self.repository.cards[self.repository.card_id]["payload"]["scoreVersion"] = "trust-score-v3"
+        self.service.employee_review_copilot(self.repository.employee, self.request_id)
+        proof_id = "proof-cache-invalidation"
+        self.repository.proofs[proof_id] = {
+            "id": proof_id, "owner_id": self.repository.student,
+            "trust_card_id": self.repository.card_id, "title": "Deployment evidence",
+        }
+        self.service.employee_review_copilot(self.repository.employee, self.request_id)
+        self.assertEqual(generator.call_count, 3)
 
     def test_unauthorized_employee_access_is_denied(self):
         with self.assertRaises(ReferralForbidden):

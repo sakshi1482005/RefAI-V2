@@ -32,6 +32,7 @@ class NotificationService:
     def list(self, actor_id: str, limit: int = 30) -> list[dict[str, Any]]:
         rows = (
             supabase.table("notifications").select("*").eq("recipient_id", actor_id)
+            .is_("cleared_at", "null")
             .order("created_at", desc=True).limit(limit).execute().data or []
         )
         return [self._response(row) for row in rows]
@@ -49,6 +50,15 @@ class NotificationService:
         rows = (
             supabase.table("notifications").update({"read_at": read_at})
             .eq("recipient_id", actor_id).is_("read_at", "null").execute().data or []
+        )
+        return len(rows)
+
+    def clear_all(self, actor_id: str) -> int:
+        """Soft-clear only this authenticated recipient's visible notifications."""
+        cleared_at = datetime.now(timezone.utc).isoformat()
+        rows = (
+            supabase.table("notifications").update({"cleared_at": cleared_at})
+            .eq("recipient_id", actor_id).is_("cleared_at", "null").execute().data or []
         )
         return len(rows)
 

@@ -95,7 +95,11 @@ export function createUserScopedResource<T>(emptyData: () => T) {
       })
       .catch((error: unknown) => {
         if (entry.generation !== generation || controller.signal.aborted) return
-        const status = typeof error === 'object' && error !== null && 'status' in error ? (error as { status?: unknown }).status : undefined
+        const status = typeof error === 'object' && error !== null
+          ? ('status' in error
+            ? (error as { status?: unknown }).status
+            : (error as { response?: { status?: unknown } }).response?.status)
+          : undefined
         publish(entry, {
           ...entry.state,
           loading: false,

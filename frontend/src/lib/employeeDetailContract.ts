@@ -21,6 +21,8 @@ const compatibility = (value: unknown) => value === null || (object(value)
   && Array.isArray(value.limitations) && value.limitations.every((item) => typeof item === 'string')
   && Array.isArray(value.suggestedImprovements) && value.suggestedImprovements.every((item) => typeof item === 'string')
   && Array.isArray(value.components) && value.components.length === 5)
+const proofEntries = (value: unknown) => Array.isArray(value) && value.every((entry) => object(entry)
+  && typeof entry.id === 'string' && typeof entry.title === 'string' && typeof entry.urlOrReference === 'string')
 
 function analysis(value: unknown): value is EmployeeAnalysisSummary | null {
   if (value === null) return true
@@ -40,6 +42,8 @@ export function parseEmployeeRequestDetail(value: unknown): EmployeeReferralRequ
     || !nullableString(value.referralDate) || !nullableString(value.referralConfirmationNumber)
     || !nullableString(value.referralNoteToStudent) || !nullableString(value.referralSubmittedAt)
     || !nullableString(value.referralSubmittedBy)
+    || !nullableString(value.moreInformationQuestion) || !nullableString(value.studentResponse)
+    || !proofEntries(value.studentResponseProofEntries) || !nullableString(value.studentRespondedAt)
     || !compatibility(value.compatibility)
     || typeof value.createdAt !== 'string' || typeof value.updatedAt !== 'string'
     || typeof value.candidate.studentId !== 'string' || !nullableString(value.candidate.studentName)

@@ -168,6 +168,10 @@ export interface ReferralRequestSummary {
   referralNoteToStudent: string | null
   referralSubmittedAt: string | null
   referralSubmittedBy: string | null
+  moreInformationQuestion: string | null
+  studentResponse: string | null
+  studentResponseProofEntries: ProofEntry[]
+  studentRespondedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -195,6 +199,7 @@ export interface EmployeeReferralQueueItem extends ReferralRequestSummary {
   overallMatch: number | null
   resumeExists: boolean
   trustCardExists: boolean
+  studentResponseAvailable: boolean
 }
 
 export interface EmployeeCandidateProfile {
@@ -237,6 +242,10 @@ export interface EmployeeReferralRequestView {
   referralNoteToStudent: string | null
   referralSubmittedAt: string | null
   referralSubmittedBy: string | null
+  moreInformationQuestion: string | null
+  studentResponse: string | null
+  studentResponseProofEntries: ProofEntry[]
+  studentRespondedAt: string | null
   compatibility: ReferralCompatibility | null
   createdAt: string
   updatedAt: string
@@ -312,11 +321,11 @@ export interface ReferralStatusHistoryEntry {
   newStatus: ReferralStatus
   changedBy: string
   note: string | null
-  eventType: 'request_created' | 'status_changed' | 'employee_viewed'
+  eventType: 'request_created' | 'status_changed' | 'employee_viewed' | 'student_responded'
   createdAt: string
 }
 
-export type NotificationEventType = 'employee_viewed_request' | 'more_information_requested' | 'request_approved' | 'referral_submitted' | 'request_declined' | 'employee_stopped_accepting' | 'resume_reanalysis_completed'
+export type NotificationEventType = 'employee_viewed_request' | 'more_information_requested' | 'request_approved' | 'referral_submitted' | 'request_declined' | 'employee_stopped_accepting' | 'resume_reanalysis_completed' | 'student_responded'
 
 export interface InAppNotification {
   id: string
@@ -649,4 +658,121 @@ export interface ImprovementSimulatorResult {
     scoreVersion: string
   }
   limitations: string[]
+  intelligenceSnapshot?: {
+    fuzzySuitabilityScore: number
+    semanticJobMatchScore: number
+    hybridScore: number
+    algorithmVersion: string
+    availableSkillScenarios: Array<{ skill: string; priority: 'High' | 'Medium' | 'Low' }>
+  } | null
+  simulation?: {
+    isSimulation: true
+    currentScore: number
+    simulatedScore: number
+    difference: number
+    affectedComponents: Array<{
+      key: string
+      label: string
+      currentScore: number
+      simulatedScore: number
+      difference: number
+      whyChanged: string
+    }>
+    whyScoreChanged: string[]
+    limitations: string[]
+  } | null
+}
+
+export interface EmployeeDiscoveryRecommendation {
+  employeeId: string
+  compatibility: ReferralCompatibility
+  matchReasons: string[]
+  concern: string | null
+  acceptingRequests: boolean
+  reliabilityLabel: string
+}
+
+export interface CreditBalance { balance: number }
+export interface CreditLedgerEntry { id: number; action: string; amount: number; balanceAfter: number; createdAt: string }
+
+export interface CandidateIntelligenceResult {
+  trustScore: number
+  trustScoreVersion: string | null
+  trustScoreBreakdown: TrustScoreFactor[]
+  hybrid: {
+    algorithm_version: string
+    hybrid_score: number
+    label: 'Low' | 'Moderate' | 'High'
+    component_scores: Record<string, number>
+    contribution_breakdown: Array<{ key: string; label: string; score: number; weight: number; contribution: number; basis: string; limitation: string | null }>
+    positive_factors: string[]
+    risk_gap_factors: string[]
+    explanation: string
+  }
+  fuzzy: {
+    algorithm_version: string
+    fuzzy_suitability_score: number
+    label: 'Low' | 'Moderate' | 'High'
+    input_memberships: Record<string, { low: number; medium: number; high: number }>
+    activated_rules: Array<{ id: string; rule: string; consequent: 'Low' | 'Moderate' | 'High'; activation: number }>
+    strongest_positive_factors: Array<{ input: string; value: number; dominant_membership: 'Low' | 'Medium' | 'High'; membership: number }>
+    weakest_factors: Array<{ input: string; value: number; dominant_membership: 'Low' | 'Medium' | 'High'; membership: number }>
+    explanation: string
+    inputValuesUsed: Record<string, number>
+    inputSources: Record<string, string>
+  }
+  semantic: {
+    semantic_match_version: string
+    semantic_match_score: number
+    matched_skills: string[]
+    missing_skills: string[]
+    strongest_matching_evidence: Array<{ resume_evidence: string; compared_to: string; match_type: 'semantic' | 'required_skill'; normalized_similarity: number | null }>
+    weak_missing_evidence: string[]
+    role_relevance_explanation: string
+    relevance_source: 'job_description' | 'role_context'
+    limitations: string[]
+  }
+  skillGaps: {
+    missing_skills: string[]
+    recommendations: Array<{ skill: string; priority: 'High' | 'Medium' | 'Low'; reason: string; learning_order: number; estimated_suitability_impact: number; project_improvement: string; evidence_basis: string }>
+    recommended_learning_order: string[]
+    limitations: string[]
+  }
+}
+
+export interface ModelComparisonComponent {
+  key: string
+  label: string
+  value: number
+  maximumScore: number | null
+  unit: 'points' | 'normalized_input' | 'membership' | 'count'
+  basis: string
+}
+
+export interface ModelComparisonResult {
+  comparisonVersion: 'model-comparison-v1'
+  targetRole: string | null
+  relevanceSource: 'job_description' | 'role_context'
+  models: Array<{
+    key: 'trust_score_v2' | 'fuzzy_suitability' | 'semantic_job_match' | 'hybrid_candidate_intelligence'
+    label: string
+    score: number
+    maximumScore: 100
+    algorithmVersion: string
+    measures: string
+    components: ModelComparisonComponent[]
+    limitations: string[]
+  }>
+  activatedFuzzyRules: Array<{ id: string; rule: string; consequent: 'Low' | 'Moderate' | 'High'; activation: number }>
+  fuzzyExplanation: string | null
+  semanticEvidence: Array<{ resume_evidence: string; compared_to: string; match_type: 'semantic' | 'required_skill'; normalized_similarity: number | null }>
+  semanticExplanation: string | null
+  semanticMatchedSkills: string[]
+  semanticMissingSkills: string[]
+  semanticWeakEvidence: string[]
+  hybridContributions: Array<{ key: string; label: string; score: number; weight: number; contribution: number; basis: string; limitation: string | null }>
+  hybridExplanation: string | null
+  hybridPositiveFactors: string[]
+  hybridRiskGapFactors: string[]
+  methodologyNote: string
 }

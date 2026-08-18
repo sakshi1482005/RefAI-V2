@@ -1,22 +1,44 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { useAuthSession } from '../context/AuthSessionContext'
 import { api } from '../lib/apiClient'
+import { createUserScopedResource, type UserScopedResourceState } from '../lib/userScopedResource'
+
+const employeeRequestResource = createUserScopedResource<unknown | null>(() => null)
+const EMPTY_STATE: UserScopedResourceState<unknown | null> = {
+  userId: null, data: null, loading: false, loaded: false, notFound: false, error: null,
+}
 
 export function useEmployeeRequestResource<T>(endpoint: string | null, parse: (value: unknown) => T) {
-  const [data, setData] = useState<T | null>(null)
-  const [error, setError] = useState<unknown>(null)
-  const [loading, setLoading] = useState(Boolean(endpoint))
-  const [version, setVersion] = useState(0)
-  const retry = useCallback(() => setVersion((value) => value + 1), [])
+  const { authenticatedUserId, authLoading } = useAuthSession()
+  // The employee identity is part of every key. The same assigned-request
+  // lookup is consequently reused across Candidate Review, Resume Viewer,
+  // Trust Card details, and the decision confirmation page without allowing
+  // an account switch to show a previous employee's data.
+  const key = authenticatedUserId && endpoint ? `${authenticatedUserId}:${endpoint}` : ''
+  const subscribe = useCallback((listener: () => void) => key ? employeeRequestResource.subscribe(key, listener) : () => undefined, [key])
+  const getSnapshot = useCallback(() => key ? employeeRequestResource.getSnapshot(key) : EMPTY_STATE, [key])
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   useEffect(() => {
-    if (!endpoint) { setData(null); setError(null); setLoading(false); return }
-    let active = true
-    setLoading(true); setError(null)
-    api.get<unknown>(endpoint).then((response) => { if (active) setData(parse(response.data)) })
-      .catch((resourceError) => { if (active) { setData(null); setError(resourceError) } })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [endpoint, parse, version])
+    if (authLoading || !key || !endpoint) return
+    void employeeRequestResource.load(key, async (signal) => {
+      const response = await api.get<unknown>(endpoint, { signal })
+      return response.data
+    })
+  }, [authLoading, endpoint, key])
 
-  return { data, error, loading, retry }
+  const retry = useCallback(() => {
+    if (!key || !endpoint) return
+    void employeeRequestResource.load(key, async (signal) => {
+      const response = await api.get<unknown>(endpoint, { signal })
+      return response.data
+    }, true)
+  }, [endpoint, key])
+
+  return {
+    data: state.data === null ? null : parse(state.data),
+    error: state.error,
+    loading: authLoading || (Boolean(key) && !state.loaded) || state.loading,
+    retry,
+  }
 }

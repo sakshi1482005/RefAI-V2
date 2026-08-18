@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { useDemoMode, type AuthenticatedRole } from '../../context/DemoModeContext'
+import { useAuthSession, type AuthenticatedRole } from '../../context/AuthSessionContext'
 
 function ProtectedRouteLoader() {
   return (
@@ -16,11 +16,9 @@ function ProtectedRouteLoader() {
 
 export default function ProtectedRoute({ requiredRole }: { requiredRole: AuthenticatedRole }) {
   const location = useLocation()
-  const { authLoading, isDemoMode, hasAuthenticatedUser, authenticatedRole } = useDemoMode()
+  const { authLoading, hasAuthenticatedUser, authenticatedRole } = useAuthSession()
 
   if (authLoading) return <ProtectedRouteLoader />
-  if (isDemoMode) return <Outlet />
-
   if (!hasAuthenticatedUser) {
     return <Navigate to="/auth" replace state={{ from: `${location.pathname}${location.search}${location.hash}` }} />
   }

@@ -12,6 +12,7 @@ export const referralJourneyLabel: Record<ReferralStatus, string> = {
 
 export function referralHistoryEventLabel(event: Pick<ReferralStatusHistoryEntry, 'previousStatus' | 'newStatus' | 'eventType'>) {
   if (event.eventType === 'employee_viewed') return 'Employee Viewed'
+  if (event.eventType === 'student_responded') return 'Student Responded'
   if (event.previousStatus === null) return 'Request Created'
   return referralJourneyLabel[event.newStatus]
 }
@@ -33,9 +34,8 @@ export function parseReferralHistory(value: unknown): ReferralStatusHistoryEntry
       newStatus: entry.newStatus as ReferralStatus,
       changedBy: entry.changedBy,
       note: null,
-      eventType: entry.eventType === 'employee_viewed' || entry.eventType === 'request_created' ? entry.eventType : 'status_changed',
+      eventType: entry.eventType === 'employee_viewed' || entry.eventType === 'request_created' || entry.eventType === 'student_responded' ? entry.eventType : 'status_changed',
       createdAt: entry.createdAt,
     }
   })
 }
-

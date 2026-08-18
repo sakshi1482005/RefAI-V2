@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.improvement_simulator import build_improvement_simulator
+from app.services.improvement_simulator import attach_intelligence_snapshot, build_improvement_simulator, simulate_hypothetical_improvements
 
 
 def component(key, label, score, maximum, missing=None, found=None):
@@ -65,6 +65,51 @@ class ImprovementSimulatorTests(unittest.TestCase):
         result = build_improvement_simulator(self.payload(), self.payload(version="trust-score-v3"))
         self.assertIsNone(result["comparison"])
         self.assertIn("same target role, company, and score version", result["limitations"][-1])
+
+    def _intelligence(self):
+        fuzzy = {
+            "fuzzy_suitability_score": 50, "label": "Moderate",
+            "inputValuesUsed": {"skill_match": 50, "project_relevance": 50, "experience": 50, "education": 50, "evidence_strength": 50, "resume_quality": 50},
+        }
+        semantic = {"semantic_match_score": 45, "missing_skills": ["Docker"], "matched_skills": [], "weak_missing_evidence": [], "limitations": []}
+        hybrid = {"hybrid_score": 55, "algorithm_version": "hybrid-candidate-intelligence-v1"}
+        card = {"trustScore": 60}
+        claims = {"claims": []}
+        recommendations = [{"skill": "Docker", "priority": "High"}]
+        return fuzzy, semantic, hybrid, card, claims, recommendations
+
+    def test_snapshot_preserves_existing_trust_score_and_exposes_academic_signals(self):
+        fuzzy, semantic, hybrid, *_ = self._intelligence()
+        result = attach_intelligence_snapshot(build_improvement_simulator(self.payload()), fuzzy_suitability=fuzzy, semantic_job_match=semantic, hybrid_intelligence=hybrid, recommendations=[{"skill": "Docker", "priority": "High"}])
+        self.assertEqual(result["currentScore"], 60)
+        self.assertEqual(result["intelligenceSnapshot"]["hybridScore"], 55)
+        self.assertEqual(result["intelligenceSnapshot"]["availableSkillScenarios"][0]["skill"], "Docker")
+        self.assertIsNone(result["simulation"])
+
+    def test_hypothetical_skill_and_project_evidence_are_in_memory_and_deterministic(self):
+        fuzzy, semantic, hybrid, card, claims, recommendations = self._intelligence()
+        baseline = build_improvement_simulator(self.payload())
+        result = simulate_hypothetical_improvements(
+            baseline, fuzzy_suitability=fuzzy, semantic_job_match=semantic, hybrid_intelligence=hybrid,
+            trust_card=card, claim_verification=claims, recommendations=recommendations,
+            selected_skills=["Docker"], add_project_evidence=True,
+        )
+        simulation = result["simulation"]
+        self.assertTrue(simulation["isSimulation"])
+        self.assertGreater(simulation["simulatedScore"], simulation["currentScore"])
+        self.assertEqual(card, {"trustScore": 60})
+        self.assertEqual(fuzzy["inputValuesUsed"]["skill_match"], 50)
+        self.assertIn("does not modify", " ".join(simulation["limitations"]))
+        self.assertIn("Candidate Trust Score v2", " ".join(item["whyChanged"] for item in simulation["affectedComponents"]))
+
+    def test_unknown_or_unavailable_skill_cannot_be_simulated(self):
+        fuzzy, semantic, hybrid, card, claims, recommendations = self._intelligence()
+        with self.assertRaises(ValueError):
+            simulate_hypothetical_improvements(
+                build_improvement_simulator(self.payload()), fuzzy_suitability=fuzzy, semantic_job_match=semantic,
+                hybrid_intelligence=hybrid, trust_card=card, claim_verification=claims, recommendations=recommendations,
+                selected_skills=["Invented skill"], add_project_evidence=False,
+            )
 
 
 if __name__ == "__main__":

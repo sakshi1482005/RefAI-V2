@@ -120,6 +120,19 @@ class ReferralMessageTests(unittest.TestCase):
         result = self.service.generate_message(self.repository.student, self.payload())
         self.assertEqual(result["wordCount"], 120)
 
+    @patch("app.services.referral_requests.generate_referral_message", return_value="Please review my grounded evidence.")
+    def test_cached_message_reuse_does_not_charge_twice(self, generator):
+        self.service.generate_message(self.repository.student, self.payload())
+        self.service.generate_message(self.repository.student, self.payload())
+        self.assertEqual(generator.call_count, 1)
+        self.assertEqual(self.repository.credit_accounts[self.repository.student], 9)
+
+    @patch("app.services.referral_requests.generate_referral_message", side_effect=AIServiceUnavailable("offline"))
+    def test_provider_failure_uses_fallback_without_charging(self, generator):
+        result = self.service.generate_message(self.repository.student, self.payload())
+        self.assertTrue(result["usedFallback"])
+        self.assertEqual(self.repository.credit_accounts[self.repository.student], 10)
+
 
 if __name__ == "__main__":
     unittest.main()

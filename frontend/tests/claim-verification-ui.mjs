@@ -18,6 +18,7 @@ try {
   const { default: ClaimVerificationPanel } = await vite.ssrLoadModule(
     '/src/components/dashboard/ClaimVerificationPanel.tsx',
   )
+  const { AuthSessionProvider } = await vite.ssrLoadModule('/src/context/AuthSessionContext.tsx')
   const result = {
     statusVersion: 'claim-verification-v2-significant-claims',
     interpretationSource: 'deterministic_fallback',
@@ -42,7 +43,8 @@ try {
     ],
   }
 
-  const html = renderToStaticMarkup(React.createElement(ClaimVerificationPanel, { initialResult: result }))
+  const renderPanel = (initialResult) => renderToStaticMarkup(React.createElement(AuthSessionProvider, null, React.createElement(ClaimVerificationPanel, { initialResult })))
+  const html = renderPanel(result)
   assert.ok(html.includes('Claim Verification'))
   assert.ok(html.includes('Evidence supported'))
   assert.ok(html.includes('Partially supported'))
@@ -61,7 +63,7 @@ try {
     limitation: 'Legacy result.',
     claims: [{ claim: 'Python', status: 'Resume supported', reason: 'Saved resume support.', resumeEvidence: ['Built a Python API.'], proofEvidence: [] }],
   }
-  const legacyHtml = renderToStaticMarkup(React.createElement(ClaimVerificationPanel, { initialResult: legacy }))
+  const legacyHtml = renderPanel(legacy)
   assert.ok(legacyHtml.includes('Partially supported'))
   assert.ok(legacyHtml.includes('Built a Python API.'))
   assert.ok(legacyHtml.includes('No exact resume context was saved for this legacy claim.'))

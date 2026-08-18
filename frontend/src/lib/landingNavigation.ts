@@ -1,4 +1,3 @@
-export const DEMO_ENTRY_PATH = '/dashboard?demo=1'
 export const HOW_IT_WORKS_SECTION_ID = 'how-it-works'
 export const HOW_IT_WORKS_PATH = `/#${HOW_IT_WORKS_SECTION_ID}`
 

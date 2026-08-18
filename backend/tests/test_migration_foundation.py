@@ -44,6 +44,9 @@ class MigrationFoundationTests(unittest.TestCase):
             "202608030001_employee_company_consistency.sql",
             "202608030002_ai_apply_goals.sql",
             "202608030003_ai_apply_safeguards.sql",
+            "202608110001_more_information_responses.sql",
+            "202608110002_employee_review_copilot_cache.sql",
+            "202608110003_refai_credits.sql",
         ])
 
     def test_every_required_persisted_object_has_an_earlier_creator_and_rls(self):
@@ -54,6 +57,8 @@ class MigrationFoundationTests(unittest.TestCase):
             "ai_apply_goals", "ai_apply_match_runs", "ai_apply_matches",
             "ai_apply_credit_accounts", "ai_apply_submission_batches",
             "ai_apply_credit_ledger", "ai_apply_submission_attempts",
+            "employee_review_copilot_cache",
+            "refai_credit_accounts", "refai_credit_operations", "refai_credit_ledger", "refai_ai_output_cache",
         }
         for table in required_tables:
             with self.subTest(table=table):
@@ -238,6 +243,14 @@ class MigrationFoundationTests(unittest.TestCase):
         self.assertIn("to service_role", sql)
         self.assertIn("from public, anon, authenticated", sql)
         self.assertIn("where ai_apply_match_id is not null", sql)
+
+    def test_employee_review_copilot_cache_is_employee_scoped_and_opaque(self):
+        sql = (MIGRATIONS / "202608110002_employee_review_copilot_cache.sql").read_text(encoding="utf-8").lower()
+        self.assertIn("unique (employee_id, referral_request_id, input_key)", sql)
+        self.assertIn("input_key ~ '^[0-9a-f]{64}$'", sql)
+        self.assertIn("alter table public.employee_review_copilot_cache enable row level security", sql)
+        self.assertIn("employee_id = auth.uid()", sql)
+        self.assertIn("grant all on public.employee_review_copilot_cache to service_role", sql)
 
 
 if __name__ == "__main__":

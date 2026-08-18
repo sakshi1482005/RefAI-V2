@@ -14,6 +14,8 @@ assert.match(auth, /id="su-company"[\s\S]*autoComplete="organization"/, 'employe
 assert.match(dashboard, /company\.trim\(\)\.replace\(\/\\s\+\/g, ' '\)/, 'employee profile updates must normalize company whitespace')
 assert.match(types, /employeeCompanySnapshot: string \| null/, 'referral contracts must expose the immutable employee-company snapshot')
 assert.match(studentDashboard, /request\.employeeCompanySnapshot \|\| employee\?\.company \|\| null/, 'saved referrals must prefer the immutable company snapshot')
-assert.match(studentDashboard, /request\.employeeCompany \|\| 'Company not listed'/, 'the absent-company label must only be used after canonical and snapshot values are exhausted')
+assert.doesNotMatch(studentDashboard, /company: employee\.company \|\| 'Company not listed'/, 'employee selection cards must not fabricate an employer label')
+assert.doesNotMatch(studentDashboard, /designation: employee\.designation \|\| 'Employee'/, 'employee selection cards must not fabricate a title')
+assert.match(studentDashboard, /employeeDirectoryIdentity\(employee\)/, 'selection cards must use the neutral identity formatter for missing real fields')
 
-console.log('Employee company consistency assertions: 7 passed')
+console.log('Employee company consistency assertions: 9 passed')

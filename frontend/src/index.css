@@ -24,9 +24,10 @@ p { text-wrap: pretty; }
 }
 
 @keyframes confetti-fall {
-  0% { opacity: 0; transform: translate3d(0, -8px, 0) rotate(0); }
-  12% { opacity: 1; }
-  100% { opacity: 0; transform: translate3d(var(--confetti-drift), 150px, 0) rotate(var(--confetti-rotate)); }
+  0% { opacity: 0; transform: translate3d(0, -3vh, 0) rotate(0); }
+  8% { opacity: 1; }
+  84% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--confetti-drift), 112vh, 0) rotate(var(--confetti-rotate)); }
 }
 
 .route-transition { animation: route-enter 280ms cubic-bezier(.22, 1, .36, 1) both; }
@@ -40,9 +41,10 @@ p { text-wrap: pretty; }
 .metric-tooltip-content { pointer-events: none; position: absolute; bottom: calc(100% + .55rem); left: 0; z-index: 60; width: min(16rem, 70vw); border: 1px solid rgb(226 232 240); border-radius: .65rem; background: rgb(15 23 42); padding: .6rem .75rem; color: white; font-size: .75rem; font-weight: 500; line-height: 1.35; opacity: 0; transform: translateY(4px); box-shadow: 0 10px 30px rgb(15 23 42 / .16); transition: opacity 140ms ease, transform 140ms ease; }
 .metric-tooltip:has(.metric-tooltip-trigger:hover) .metric-tooltip-content, .metric-tooltip:has(.metric-tooltip-trigger:focus-visible) .metric-tooltip-content { opacity: 1; transform: translateY(0); }
 .employee-reliability-badge .metric-tooltip-content { left: auto; right: 0; }
-.confetti-burst { pointer-events: none; position: fixed; inset: 4rem 0 auto; z-index: 90; height: 170px; overflow: hidden; }
-.confetti-piece { position: absolute; left: var(--confetti-left); top: 0; width: 6px; height: 10px; border-radius: 2px; animation: confetti-fall 1.35s cubic-bezier(.2, .7, .25, 1) var(--confetti-delay) both; }
+.confetti-burst { pointer-events: none; position: fixed; inset: 0; z-index: 9999; overflow: hidden; }
+.confetti-piece { position: absolute; left: var(--confetti-left); top: 0; width: 6px; height: 10px; border-radius: 2px; animation: confetti-fall var(--confetti-duration) cubic-bezier(.2, .7, .25, 1) var(--confetti-delay) both; will-change: transform, opacity; }
 .confetti-piece-0 { background: rgb(15 23 42); } .confetti-piece-1 { background: rgb(16 185 129); } .confetti-piece-2 { background: rgb(245 158 11); } .confetti-piece-3 { background: rgb(148 163 184); }
+@media (max-width: 640px) { .confetti-piece { width: 5px; height: 8px; } }
 
 button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
 button, [role="button"], a { touch-action: manipulation; }

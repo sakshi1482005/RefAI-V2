@@ -1,10 +1,8 @@
 import { Link } from 'react-router-dom'
-import { useDemoMode } from '../../context/DemoModeContext'
-import { DEMO_ENTRY_PATH, HOW_IT_WORKS_PATH, HOW_IT_WORKS_SECTION_ID, scrollToLandingSection } from '../../lib/landingNavigation'
+import { HOW_IT_WORKS_PATH, HOW_IT_WORKS_SECTION_ID, scrollToLandingSection } from '../../lib/landingNavigation'
 import RefAILogo from '../branding/RefAILogo'
 
 export default function Navbar() {
-  const { enterDemoMode } = useDemoMode()
   return (
     <header className="nav-wrap">
       <nav className="nav shell" aria-label="Primary navigation">
@@ -19,7 +17,7 @@ export default function Navbar() {
         </div>
         <div className="nav-actions">
           <a className="btn btn-plain" href="/login">Login</a>
-          <Link className="btn btn-primary" to={DEMO_ENTRY_PATH} onClick={enterDemoMode}>Get Started</Link>
+          <Link className="btn btn-primary" to="/auth">Get Started</Link>
         </div>
       </nav>
     </header>

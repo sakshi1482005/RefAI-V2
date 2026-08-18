@@ -4,7 +4,7 @@ from uuid import uuid4
 import unittest
 from pydantic import ValidationError
 
-from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeProfessionalProfileUpdate, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView, ReferralCompatibilityRequest, ReferralMessageRequest, ReferralRequestDetail, ReferralSubmissionUpdate
+from app.models.schemas import CreateReferralRequest, EmployeeDecisionUpdate, EmployeeDiscoveryRecommendationRequest, EmployeeProfessionalProfileUpdate, EmployeeReferralRequestView, EmployeeResumeAccess, EmployeeTrustCardView, MoreInformationResponseInput, ReferralCompatibilityRequest, ReferralMessageRequest, ReferralRequestDetail, ReferralSubmissionUpdate
 from app.services.referral_requests import InvalidReferralTransition, ReferralForbidden, ReferralRequestService, SupabaseReferralRepository
 
 
@@ -30,6 +30,9 @@ class FakeRepository:
         self.resumes = {self.student: {"path": f"{self.student}/resume.pdf", "file_name": "resume.pdf"}}
         self.requests, self.history_rows = {}, []
         self.private_notes = {}
+        self.more_information_responses, self.proofs, self.copilot_cache = {}, {}, {}
+        self.feedback_outcomes = {}
+        self.ai_message_cache, self.credit_accounts, self.credit_operations, self.credit_ledger = {}, {}, {}, []
 
     def get_role(self, user_id): return self.roles.get(user_id)
     def get_trust_card(self, trust_card_id): return self.cards.get(trust_card_id)
@@ -83,6 +86,23 @@ class FakeRepository:
         if any(item.get("event_type") == "employee_viewed" and item["referral_request_id"] == request_id for item in self.history_rows): return False
         self.history_rows.append({"id": len(self.history_rows) + 1, "referral_request_id": request_id, "previous_status": row["status"], "new_status": row["status"], "changed_by": actor_id, "note": None, "event_type": "employee_viewed", "created_at": datetime.now(timezone.utc).isoformat()})
         return True
+    def respond_to_more_information(self, actor_id, request_id, response, proof_entry_ids):
+        row = self.requests[request_id]
+        if row["student_id"] != actor_id: raise ReferralForbidden("Referral request access denied")
+        if row["status"] != "more_info_requested": raise InvalidReferralTransition("invalid referral status transition")
+        for proof_id in proof_entry_ids:
+            proof = self.proofs.get(proof_id)
+            if not proof or proof["owner_id"] != actor_id or proof["trust_card_id"] != row["trust_card_id"]:
+                raise ReferralForbidden("Proof entry access denied")
+        now = datetime.now(timezone.utc).isoformat()
+        self.more_information_responses[request_id] = {"referral_request_id": request_id, "student_response": response, "proof_entry_ids": proof_entry_ids, "responded_at": now}
+        row.update(status="under_review", updated_at=now)
+        self.history_rows.append({"id": len(self.history_rows) + 1, "referral_request_id": request_id, "previous_status": "more_info_requested", "new_status": "under_review", "changed_by": actor_id, "note": None, "event_type": "student_responded", "created_at": now})
+        return row
+    def get_more_information_response(self, request_id): return self.more_information_responses.get(request_id)
+    def list_more_information_responses(self, request_ids): return [item for request_id, item in self.more_information_responses.items() if request_id in request_ids]
+    def get_proofs_by_ids(self, proof_ids): return [self.proofs[proof_id] for proof_id in proof_ids if proof_id in self.proofs]
+    def list_proofs(self, trust_card_id): return [proof for proof in self.proofs.values() if proof.get("trust_card_id") == trust_card_id]
     def employee_response_time_data(self, employee_id):
         requests = [{"id": row["id"], "created_at": row["created_at"]} for row in self.requests.values() if row["employee_id"] == employee_id]
         history = [event for event in self.history_rows if any(request["id"] == event["referral_request_id"] and request["employee_id"] == employee_id for request in self.requests.values())]
@@ -110,6 +130,32 @@ class FakeRepository:
             }
             for employee_id in employee_ids
         }
+    def get_employee_review_copilot_cache(self, employee_id, request_id, input_key):
+        return self.copilot_cache.get((employee_id, request_id, input_key))
+    def save_employee_review_copilot_cache(self, employee_id, request_id, input_key, payload):
+        row = {"employee_id": employee_id, "referral_request_id": request_id, "input_key": input_key, "payload": payload}
+        self.copilot_cache[(employee_id, request_id, input_key)] = row
+        return row
+    def get_ai_message_cache(self, user_id, input_key): return self.ai_message_cache.get((user_id, input_key))
+    def reserve_ai_credit(self, user_id, action, operation_key, cost):
+        self.credit_accounts.setdefault(user_id, 10)
+        if operation_key in self.credit_operations: return {"ok": False, "replay": True}
+        if self.credit_accounts[user_id] < cost: return {"ok": False, "reason": "no_credit"}
+        self.credit_accounts[user_id] -= cost; self.credit_operations[operation_key] = (user_id, action, cost)
+        return {"ok": True}
+    def finish_ai_credit(self, user_id, operation_key, input_key, payload, charge):
+        self.ai_message_cache[(user_id, input_key)] = {"payload": payload}
+        if not charge:
+            self.credit_accounts[user_id] += self.credit_operations[operation_key][2]
+        return {"ok": True}
+    def credit_balance(self, user_id): return {"balance": self.credit_accounts.setdefault(user_id, 10)}
+    def credit_history(self, user_id): return []
+    def purchase_credits(self, user_id, plan, key, credits):
+        self.credit_accounts.setdefault(user_id, 10)
+        if key not in self.credit_operations:
+            self.credit_operations[key] = (user_id, plan, credits); self.credit_accounts[user_id] += credits
+        return {"ok": True, "balance": self.credit_accounts[user_id]}
+    def persist_feedback_outcome(self, values): self.feedback_outcomes[values["referral_request_id"]] = values
 
 
 class ReferralRequestTests(unittest.TestCase):
@@ -128,6 +174,14 @@ class ReferralRequestTests(unittest.TestCase):
         self.assertEqual(created["employeeCompanySnapshot"], "Acme")
         self.assertEqual(self.repository.requests[str(created["id"])]["employee_company_snapshot"], "Acme")
         ReferralRequestDetail.model_validate(created)
+
+    def test_employee_recommendations_are_owned_deterministic_and_explainable(self):
+        results = self.service.employee_recommendations(self.repository.student, EmployeeDiscoveryRecommendationRequest(trustCardId=self.repository.card_id, targetRole="Software Engineer", targetCompany="Acme"))
+        self.assertEqual(results[0]["employeeId"], self.repository.employee)
+        self.assertIn("compatibility", results[0])
+        self.assertLessEqual(len(results[0]["matchReasons"]), 3)
+        with self.assertRaises(ReferralForbidden):
+            self.service.employee_recommendations(self.repository.other_student, EmployeeDiscoveryRecommendationRequest(trustCardId=self.repository.card_id, targetRole="Software Engineer", targetCompany="Acme"))
     def test_compatibility_is_calculated_before_create_and_persisted(self):
         self.repository.employee_profiles[self.repository.employee].update(
             department="Engineering",
@@ -183,6 +237,49 @@ class ReferralRequestTests(unittest.TestCase):
         request = self.create(); self.service.update_status(self.repository.employee, str(request["id"]), EmployeeDecisionUpdate(status="more_info_requested", reason="clarification_required", question="Please share testing evidence.", note="Review started"))
         history = self.service.history(self.repository.employee, str(request["id"]))
         self.assertEqual([(item["previousStatus"], item["newStatus"]) for item in history], [(None, "submitted"), ("submitted", "more_info_requested")])
+
+    def test_structured_decline_feedback_is_private_and_persists_actionable_tags(self):
+        request_id = str(self.create()["id"])
+        result = self.service.update_status(self.repository.employee, request_id, EmployeeDecisionUpdate(status="declined", reason="skill_mismatch", note="Internal hiring context"))
+        self.assertIn("truthful role-relevant project evidence", result["decisionMessage"])
+        self.assertEqual(self.repository.feedback_outcomes[request_id]["actionable_tags"], ["skill_gap", "role_alignment"])
+        self.assertNotIn("Internal hiring context", result["decisionMessage"])
+
+    def test_student_response_returns_request_to_review_persists_proofs_and_history(self):
+        request_id = str(self.create()["id"])
+        self.service.update_status(self.repository.employee, request_id, EmployeeDecisionUpdate(status="more_info_requested", reason="clarification_required", question="Please share testing evidence."))
+        proof_id = str(uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        self.repository.proofs[proof_id] = {"id": proof_id, "owner_id": self.repository.student, "trust_card_id": self.repository.card_id, "proof_type": "github_repository", "title": "Test suite", "url_or_reference": "https://github.com/example/tests", "created_at": now, "updated_at": now}
+        result = self.service.respond_to_more_information(self.repository.student, request_id, MoreInformationResponseInput(response="I added integration tests for the API.", proofEntryIds=[proof_id]))
+        self.assertEqual(result["status"], "under_review")
+        self.assertEqual(result["studentResponse"], "I added integration tests for the API.")
+        self.assertEqual(result["studentResponseProofEntries"][0]["title"], "Test suite")
+        history = self.service.history(self.repository.employee, request_id)
+        self.assertEqual(history[-1]["eventType"], "student_responded")
+        self.assertEqual(history[-1]["changedBy"], self.repository.student)
+        employee_view = self.service.employee_request_detail(self.repository.employee, request_id)
+        self.assertEqual(employee_view["studentResponse"], "I added integration tests for the API.")
+
+    def test_more_information_response_rejects_unrelated_student_invalid_state_and_foreign_proof(self):
+        request_id = str(self.create()["id"])
+        payload = MoreInformationResponseInput(response="Here is more context.")
+        with self.assertRaises(ReferralForbidden): self.service.respond_to_more_information(self.repository.other_student, request_id, payload)
+        with self.assertRaises(InvalidReferralTransition): self.service.respond_to_more_information(self.repository.student, request_id, payload)
+        self.service.update_status(self.repository.employee, request_id, EmployeeDecisionUpdate(status="more_info_requested", reason="clarification_required", question="Please clarify."))
+        foreign_proof = str(uuid4())
+        self.repository.proofs[foreign_proof] = {"id": foreign_proof, "owner_id": self.repository.other_student, "trust_card_id": self.repository.card_id}
+        with self.assertRaises(ReferralForbidden): self.service.respond_to_more_information(self.repository.student, request_id, MoreInformationResponseInput(response="Here is more context.", proofEntryIds=[foreign_proof]))
+
+    def test_student_response_notifies_only_the_assigned_employee(self):
+        notifications = []
+        service = ReferralRequestService(self.repository, notifier=lambda **values: notifications.append(values))
+        request_id = str(service.create(self.repository.student, self.payload())["id"])
+        service.update_status(self.repository.employee, request_id, EmployeeDecisionUpdate(status="more_info_requested", reason="clarification_required", question="Please clarify."))
+        service.respond_to_more_information(self.repository.student, request_id, MoreInformationResponseInput(response="Here is the requested context."))
+        response_notification = [item for item in notifications if item["event_type"] == "student_responded"]
+        self.assertEqual(len(response_notification), 1)
+        self.assertEqual(response_notification[0]["recipient_id"], self.repository.employee)
 
     def test_request_history_is_empty_when_no_events_exist(self):
         request = self.create()
@@ -285,14 +382,15 @@ class ReferralRequestTests(unittest.TestCase):
         profile = self.service.employee_profile(self.repository.employee)
         self.assertEqual(directory[0]["company"], "Canonical Company")
         self.assertEqual(profile["company"], "Canonical Company")
-    def test_employee_directory_supports_legacy_company_metadata(self):
+    def test_employee_directory_does_not_use_auth_metadata_as_professional_identity(self):
         self.repository.list_employees = lambda: [{"id": self.repository.employee, "full_name": "Employee One"}]
         self.repository.employee_profiles.clear()
         self.repository.auth_metadata[self.repository.employee] = {"company_name": "  Legacy   Co  ", "headline": "Senior Engineer"}
         directory = self.service.employee_directory(self.repository.student)
-        self.assertEqual(directory[0]["company"], "Legacy Co")
-        self.assertEqual(directory[0]["designation"], "Senior Engineer")
-        self.assertEqual(self.service.employee_profile(self.repository.employee)["company"], "Legacy Co")
+        self.assertIsNone(directory[0]["company"])
+        self.assertIsNone(directory[0]["designation"])
+        self.assertFalse(directory[0]["acceptingRequests"])
+        self.assertIsNone(self.service.employee_profile(self.repository.employee)["company"])
     def test_student_preferred_company_is_not_used_as_employee_employer(self):
         self.repository.employee_profiles.clear()
         self.repository.auth_metadata[self.repository.employee] = {"preferred_company": "Not An Employer"}

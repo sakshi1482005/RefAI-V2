@@ -1,11 +1,9 @@
-import { CheckCircle2, Circle, Clock3, Database, FileSearch, ListChecks, ShieldCheck, Sparkles } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Clock3, Database, FileSearch, ListChecks, Network, ShieldCheck, Sigma, Sparkles } from 'lucide-react'
 import type { AnalysisSession } from '../../lib/analysisSession'
-import { demoEmployeeReview } from '../../lib/demoData'
 import { Badge, Card } from './primitives'
 
 type AITransparencyPanelProps = {
   session: AnalysisSession
-  isDemoMode: boolean
   audience?: 'student' | 'employee'
   includeEvidenceDetails?: boolean
   className?: string
@@ -16,70 +14,36 @@ function wordCount(value?: string) {
 }
 
 function processingTime(value?: number) {
-  if (value === undefined) return 'Not recorded for this analysis'
+  if (value === undefined) return 'Not recorded'
   return value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(2)} s`
 }
 
-export default function AITransparencyPanel({ session, isDemoMode, audience = 'student', includeEvidenceDetails = false, className = '' }: AITransparencyPanelProps) {
+export default function AITransparencyPanel({ session, audience = 'student', includeEvidenceDetails = false, className = '' }: AITransparencyPanelProps) {
   const hasResume = Boolean(session.upload?.preview)
   const hasJobDescription = Boolean(session.jobDescription?.trim()) && !session.usedGeneralRoleExpectations
-  const hasMatch = Boolean(session.matchScore)
   const analysis = session.analysis
   const hasAnalysis = analysis?.analysisStatus === 'complete'
   const hasTrustCard = Boolean(session.trustCard)
-  const steps = [
-    { label: 'Resume Parsed', complete: hasResume, detail: hasResume ? `${session.upload?.chunkCount ?? 0} extracted text chunks` : 'Upload and process a resume to complete this step' },
-    { label: 'Skills Extracted', complete: isDemoMode || hasAnalysis, detail: isDemoMode ? `${demoEmployeeReview.skills.length} structured demo skills` : hasAnalysis ? `${analysis.matchedSkills.length} matched and ${analysis.missingSkills.length} missing requirements returned by API` : 'Run the updated resume analysis to extract structured requirements' },
-    { label: 'Resume Evidence Checked', complete: hasMatch, detail: isDemoMode ? 'Strong resume evidence · Demo' : hasMatch ? 'Terminology and evidence coverage checked by the match model' : 'Waiting for resume-to-role matching' },
-    { label: 'Job Matched', complete: hasMatch, detail: hasMatch ? `${session.matchScore?.overall}% Overall Match calculated` : 'Run resume analysis to calculate the job match' },
-    { label: 'Trust Score Generated', complete: hasTrustCard, detail: hasTrustCard ? `${session.trustCard?.trustScore} Trust Score · deterministic weighted calculation${isDemoMode ? ' · Demo' : ''}` : 'Generate the Trust Card after completing resume analysis' },
-    audience === 'employee'
-      ? { label: 'AI Recommendation Created', complete: hasTrustCard, detail: hasTrustCard ? session.trustCard?.recommendation ?? 'Recommendation unavailable due to a Trust Card error' : 'Generate a Trust Card before employee decision support' }
-      : { label: 'Readiness Summary Created', complete: hasTrustCard, detail: hasTrustCard ? session.trustCard?.referralReadiness ?? 'Readiness unavailable due to a Trust Card error' : 'Generate a Trust Card to calculate referral readiness' },
+  const stages = [
+    { label: 'Resume', status: hasResume ? 'Complete' : 'Awaiting upload', complete: hasResume, model: 'Private PDF parsing', detail: hasResume ? 'Resume text was extracted for this analysis.' : 'Upload a resume to begin.' , icon: FileSearch },
+    { label: 'Evidence Extraction', status: hasAnalysis ? 'Complete' : 'Awaiting analysis', complete: hasAnalysis, model: 'Structured evidence rules', detail: hasAnalysis ? `${analysis.evidence.length} evidence item${analysis.evidence.length === 1 ? '' : 's'} and role requirements were structured.` : 'Resume evidence is not yet available.', icon: ListChecks },
+    { label: 'Semantic Match', status: hasAnalysis ? 'Context prepared' : 'Awaiting analysis', complete: hasAnalysis, model: 'Role/JD relevance context', detail: hasJobDescription ? 'Submitted JD context is available for relevance checks.' : 'General role context is used when no JD was provided.', icon: Network },
+    { label: 'Fuzzy Evaluation', status: 'On demand', complete: false, model: 'Fuzzy Candidate Suitability', detail: 'Academic suitability is a separate on-demand signal; it is not inferred here.', icon: Sigma },
+    { label: 'Trust / Hybrid Intelligence', status: hasTrustCard ? 'Trust Score complete' : 'Awaiting Trust Card', complete: hasTrustCard, model: 'Deterministic Trust Score v2', detail: hasTrustCard ? 'Five deterministic components form the saved Trust Score.' : 'Generate the Trust Card to calculate the deterministic score.', icon: ShieldCheck },
+    { label: 'Recommendations', status: hasTrustCard ? 'Complete' : 'Awaiting Trust Card', complete: hasTrustCard, model: audience === 'employee' ? 'Advisory review summary' : 'Readiness and action planning', detail: hasTrustCard ? (audience === 'employee' ? 'Advisory review context is available; employees decide manually.' : 'Readiness and next evidence actions are available.') : 'Recommendations appear after the Trust Card is saved.', icon: Sparkles },
   ]
-  const facts = [
-    { label: 'Resume processed', value: hasResume ? session.upload?.fileName ?? 'Processed resume' : 'Not processed', icon: FileSearch },
-    { label: 'Job Description processed', value: hasJobDescription ? `${wordCount(session.jobDescription)} submitted words` : 'Not processed', icon: Database },
-    { label: 'Skills extracted', value: isDemoMode ? `${demoEmployeeReview.skills.length} demo skills` : hasAnalysis ? `${analysis.matchedSkills.length} matched requirements` : 'Analysis required', icon: ListChecks },
-    { label: 'Evidence found', value: hasMatch ? `Proof signal: ${session.matchScore?.proof}%` : 'No evidence score returned', icon: CheckCircle2 },
-    { label: 'AI reasoning', value: hasMatch ? 'Role Fit, repeated Proof, and unmatched terminology' : 'No reasoning inputs available', icon: Sparkles },
-    { label: 'Analysis reliability', value: analysis?.analysisReliability?.label ?? (isDemoMode ? 'High reliability' : 'Not recorded for this saved analysis'), icon: ShieldCheck },
+  const technicalFacts = [
+    { label: 'Resume source', value: hasResume ? session.upload?.fileName ?? 'Processed resume' : 'Not processed', icon: FileSearch },
+    { label: 'Role context', value: hasJobDescription ? `${wordCount(session.jobDescription)} JD words` : session.role || 'Not recorded', icon: Database },
+    { label: 'Matched skills', value: hasAnalysis ? String(analysis.matchedSkills.length) : 'Not recorded', icon: ListChecks },
+    { label: 'Evidence items', value: hasAnalysis ? String(analysis.evidence.length) : 'Not recorded', icon: CheckCircle2 },
     { label: 'Processing time', value: processingTime(session.processingTimeMs), icon: Clock3 },
+    { label: 'Saved score version', value: session.trustCard?.scoreVersion || 'Not recorded', icon: ShieldCheck },
   ]
 
-  return (
-    <Card className={`p-6 sm:p-8 ${className}`}>
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">AI processing record</p>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight">How this output was produced</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">This record separates API-returned results, locally measured metadata, and clearly labeled demo evidence.</p>
-        </div>
-        <Badge tone={isDemoMode ? 'warning' : 'success'}>{isDemoMode ? 'Demo processing' : 'Authenticated analysis'}</Badge>
-      </div>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {steps.map((step) => {
-          const Icon = step.complete ? CheckCircle2 : Circle
-          return <div key={step.label} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center gap-2"><Icon className={`size-4 shrink-0 ${step.complete ? 'text-emerald-600' : 'text-slate-300'}`} /><p className="text-sm font-semibold">{step.label}</p></div><p className="mt-2 text-xs leading-5 text-slate-500">{step.detail}</p></div>
-        })}
-      </div>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {facts.map((fact) => {
-          const Icon = fact.icon
-          return <div key={fact.label} className="rounded-xl bg-slate-50 p-4"><Icon className="size-4 text-slate-500" /><p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{fact.label}</p><p className="mt-1 text-sm font-medium leading-5 text-slate-800">{fact.value}</p></div>
-        })}
-      </div>
-      {analysis?.analysisReliability ? <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold">{analysis.analysisReliability.label}</p><p className="mt-2 text-sm leading-6 text-slate-700">{analysis.analysisReliability.basis}</p><p className="mt-2 text-xs leading-5 text-slate-500"><span className="font-semibold">Limitations:</span> {analysis.analysisReliability.limitations}</p></div> : null}
-
-      {includeEvidenceDetails ? <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 p-5"><p className="text-sm font-semibold">Evidence Sources</p><ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600"><li>Resume: {session.upload?.fileName ?? 'Not available'}</li><li>Job Description: {hasJobDescription ? `${wordCount(session.jobDescription)} submitted words` : 'Not available'}</li></ul></div>
-        <div className="rounded-xl border border-slate-200 p-5"><p className="text-sm font-semibold">Matched Skills</p><p className="mt-3 text-sm leading-6 text-slate-600">{isDemoMode ? demoEmployeeReview.skills.join(', ') : hasAnalysis ? analysis.matchedSkills.join(', ') || 'No target requirements matched.' : 'Run the updated resume analysis to view matched requirements.'}</p></div>
-        <div className="rounded-xl border border-slate-200 p-5"><p className="text-sm font-semibold">Missing Skills</p><p className="mt-3 text-sm leading-6 text-slate-600">{isDemoMode ? 'System design depth, cloud deployment evidence' : hasAnalysis ? analysis.missingSkills.join(', ') || 'No unmatched target requirements were identified.' : 'Run the updated resume analysis to view missing requirements.'}</p></div>
-        <div className="rounded-xl border border-slate-200 p-5"><p className="text-sm font-semibold">Resume Sections Used</p><p className="mt-3 text-sm leading-6 text-slate-600">{isDemoMode ? 'Experience, Projects, Skills, Education · Demo' : hasAnalysis ? analysis.resumeSectionsUsed.join(', ') : 'Run the updated analysis to detect resume sections.'}</p></div>
-        <div className="rounded-xl border border-slate-200 p-5 md:col-span-2"><p className="text-sm font-semibold">Requirement Evidence</p>{isDemoMode ? <ul className="mt-3 grid gap-2 md:grid-cols-2">{demoEmployeeReview.evidence.map((point) => <li key={point} className="rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-600">{point} · Demo</li>)}</ul> : hasAnalysis ? <ul className="mt-3 grid gap-2 md:grid-cols-2">{analysis.evidence.map((point) => <li key={point} className="rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-600">{point}</li>)}</ul> : <p className="mt-3 text-sm leading-6 text-slate-600">Run the updated analysis to load requirement evidence.</p>}</div>
-      </div> : null}
-    </Card>
-  )
+  return <Card className={`p-5 sm:p-6 ${className}`}><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Explainability record</p><h2 className="mt-1 text-xl font-semibold tracking-tight">How RefAI analysed your profile</h2><p className="mt-1 text-sm text-slate-500">A compact record of the real analysis pipeline and its boundaries.</p></div><Badge tone="success">Authenticated analysis</Badge></div>
+    <div className="mt-5 overflow-x-auto pb-1"><ol className="flex min-w-[860px] items-stretch">{stages.map((stage, index) => { const Icon = stage.icon; return <li key={stage.label} className="relative flex min-w-[134px] flex-1 flex-col pr-3 last:pr-0"><div className="flex items-center gap-2"><span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${stage.complete ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-500'}`}><Icon className="size-3.5" aria-hidden="true" /></span>{index < stages.length - 1 ? <span className="h-px flex-1 bg-slate-200" aria-hidden="true" /> : null}</div><div className="mt-3"><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-semibold text-slate-900">{stage.label}</p><span className={`size-1.5 rounded-full ${stage.complete ? 'bg-emerald-500' : 'bg-slate-300'}`} aria-hidden="true" /></div><p className="mt-1 text-[11px] font-medium text-slate-500">{stage.status}</p><p className="mt-1 text-[11px] leading-4 text-slate-400">{stage.model}</p></div></li> })}</ol></div>
+    <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{stages.map((stage) => <div key={`${stage.label}-detail`} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3"><p className="text-xs font-semibold text-slate-800">{stage.label}</p><p className="mt-1 text-xs leading-5 text-slate-600">{stage.detail}</p></div>)}</div>
+    <details className="group mt-5 rounded-xl border border-slate-200 bg-white"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-inset">Technical details<ChevronDown className="size-4 text-slate-400 transition-transform group-open:rotate-180" /></summary><div className="border-t border-slate-200 p-4"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{technicalFacts.map((fact) => { const Icon = fact.icon; return <div key={fact.label} className="rounded-lg bg-slate-50 p-3"><Icon className="size-3.5 text-slate-500" /><p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{fact.label}</p><p className="mt-1 text-xs font-medium leading-5 text-slate-800">{fact.value}</p></div> })}</div>{analysis?.analysisReliability ? <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-800">{analysis.analysisReliability.label}</p><p className="mt-1 text-xs leading-5 text-slate-600">{analysis.analysisReliability.basis}</p><p className="mt-1 text-[11px] leading-5 text-slate-500"><span className="font-semibold">Limitation:</span> {analysis.analysisReliability.limitations}</p></div> : null}{includeEvidenceDetails ? <div className="mt-3 grid gap-3 md:grid-cols-2"><section className="rounded-lg border border-slate-200 p-3"><p className="text-xs font-semibold text-slate-800">Evidence sources</p><p className="mt-1 text-xs leading-5 text-slate-600">Resume: {session.upload?.fileName ?? 'Not available'} · Job description: {hasJobDescription ? `${wordCount(session.jobDescription)} submitted words` : 'General role context'}</p></section><section className="rounded-lg border border-slate-200 p-3"><p className="text-xs font-semibold text-slate-800">Skills and sections</p><p className="mt-1 text-xs leading-5 text-slate-600">{hasAnalysis ? `${analysis.matchedSkills.join(', ') || 'No matched requirements'} · ${analysis.resumeSectionsUsed.join(', ') || 'Sections not recorded'}` : 'Analysis required'}</p></section>{hasAnalysis ? <section className="rounded-lg border border-slate-200 p-3 md:col-span-2"><p className="text-xs font-semibold text-slate-800">Requirement evidence</p><div className="mt-2 flex flex-wrap gap-2">{analysis.evidence.map((point) => <span key={point} className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600">{point}</span>)}</div></section> : null}</div> : null}</div></details>
+  </Card>
 }

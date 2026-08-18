@@ -18,7 +18,6 @@ type ReviewSnapshotProps = {
   claimWarnings: string[]
   claimWarningsLoading?: boolean
   evidenceHref: string
-  demo?: boolean
 }
 
 function EvidenceList({ title, items, empty, href, tone }: { title: string; items: string[]; empty: string; href: string; tone: 'positive' | 'caution' }) {
@@ -35,7 +34,7 @@ export default function CandidateReviewSnapshot(props: ReviewSnapshotProps) {
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
         <div className="flex min-w-0 items-center gap-3">
           {props.photoUrl ? <img src={props.photoUrl} alt="" className="size-12 shrink-0 rounded-full border-2 border-white object-cover shadow-sm" /> : <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">{props.initials}</div>}
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-xl font-semibold">{props.candidateName}</h2><Badge tone={props.demo ? 'warning' : 'info'}>{props.statusLabel}</Badge></div><p className="mt-1 truncate text-sm text-slate-600">{props.targetRole} · {props.targetCompany}</p></div>
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-xl font-semibold">{props.candidateName}</h2><Badge tone="info">{props.statusLabel}</Badge></div><p className="mt-1 truncate text-sm text-slate-600">{props.targetRole} · {props.targetCompany}</p></div>
         </div>
         <p className="flex items-center gap-2 text-xs font-medium text-slate-600"><ShieldCheck className="size-4 text-emerald-600" aria-hidden="true" />Evidence-checked candidate — reviewed before reaching you.</p>
       </div>

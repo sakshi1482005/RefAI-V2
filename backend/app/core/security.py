@@ -1,13 +1,34 @@
 import time
+import logging
 
 import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from gotrue.errors import (
+    AuthApiError,
+    AuthInvalidCredentialsError,
+    AuthSessionMissingError,
+)
 
 from app.db.supabase_client import supabase
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
+
+
+# Only explicit GoTrue token-validation codes represent an invalid end-user
+# credential. A generic 401 from a provider can also mean a misconfigured
+# backend API key, so it must remain a service failure rather than logging the
+# user out unnecessarily.
+INVALID_TOKEN_CODES = {
+    "bad_jwt",
+    "invalid_credentials",
+    "no_authorization",
+    "session_not_found",
+    "unexpected_audience",
+    "user_not_found",
+}
 
 
 # These errors mean Supabase/network temporarily failed.
@@ -49,6 +70,13 @@ def _get_supabase_user_with_retry(token: str):
         raise last_error
 
     return None
+
+
+def _is_invalid_token_error(exc: Exception) -> bool:
+    """Identify explicit provider responses caused by the user's token only."""
+    if isinstance(exc, (AuthInvalidCredentialsError, AuthSessionMissingError)):
+        return True
+    return isinstance(exc, AuthApiError) and exc.code in INVALID_TOKEN_CODES
 
 
 def get_current_user(
@@ -109,9 +137,21 @@ def get_current_user(
             ),
         ) from exc
 
-    # Genuine Supabase auth rejection or another auth problem.
+    # Explicit invalid-token responses are safe to report as authentication
+    # failures. Do not classify all provider 401s this way: an invalid backend
+    # API key or provider-side outage must not sign a valid user out.
     except Exception as exc:
+        if _is_invalid_token_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+            ) from exc
+
+        logger.error(
+            "Supabase authentication provider failed error_type=%s",
+            type(exc).__name__,
+        )
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service is temporarily unavailable. Please retry.",
         ) from exc

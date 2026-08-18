@@ -1,16 +1,15 @@
-import { ArrowRight, BriefcaseBusiness, Check, GraduationCap, RefreshCw, ShieldCheck, Sparkles, UserCheck } from 'lucide-react'
+import { ArrowRight, BarChart3, BrainCircuit, BriefcaseBusiness, Check, ClipboardCheck, FileCheck2, FlaskConical, GraduationCap, Lightbulb, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 import PageShell from '../components/dashboard/PageShell'
-import { AnimatedNumber, Avatar, Badge, Card, EmptyState, InlineFeedback, MetricTooltip, PrimaryButton, ProgressBar, ScoreExplanation, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
+import { AnimatedNumber, Avatar, Badge, Card, EmptyState, InlineFeedback, PrimaryButton, SecondaryButton, Skeleton } from '../components/dashboard/primitives'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../components/feedback/ToastProvider'
 import { useEffect, useMemo, useState } from 'react'
 import { useAnalysisSessionResource } from '../hooks/useAnalysisSession'
 import { setAuthenticatedTrustCardResource, useTrustCardResource } from '../hooks/useTrustCardResource'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useDemoMode } from '../context/DemoModeContext'
 import ConfettiBurst from '../components/feedback/ConfettiBurst'
 import AITransparencyPanel from '../components/dashboard/AITransparencyPanel'
-import { demoClaimVerification } from '../lib/demoData'
+import { useAuthSession } from '../context/AuthSessionContext'
 import TrustScoreExplanation from '../components/dashboard/TrustScoreExplanation'
 import { getStudentWorkflowState } from '../lib/studentWorkflow'
 import ActionPlanPanel from '../components/dashboard/ActionPlanPanel'
@@ -21,12 +20,24 @@ import { friendlyErrorMessage } from '../lib/requestSafety'
 import ProofVaultPanel from '../components/dashboard/ProofVaultPanel'
 import ClaimVerificationPanel from '../components/dashboard/ClaimVerificationPanel'
 import ImprovementSimulatorPanel from '../components/dashboard/ImprovementSimulatorPanel'
+import TrustPassportPanel from '../components/dashboard/TrustPassportPanel'
 import { api } from '../lib/apiClient'
 import { parseTrustCardResponse } from '../lib/resumeContract'
 
+type TrustCardSection = 'score' | 'evidence' | 'action' | 'simulator' | 'passport' | 'processing'
+
+const sections: Array<{ id: TrustCardSection; label: string; icon: typeof BarChart3 }> = [
+  { id: 'score', label: 'Score Breakdown', icon: BarChart3 },
+  { id: 'evidence', label: 'Evidence & Claims', icon: FileCheck2 },
+  { id: 'action', label: 'Action Plan', icon: ClipboardCheck },
+  { id: 'simulator', label: 'Improvement Simulator', icon: Lightbulb },
+  { id: 'passport', label: 'Trust Passport', icon: ShieldCheck },
+  { id: 'processing', label: 'AI Processing', icon: BrainCircuit },
+]
+
 export default function TrustCard() {
   const { profile } = useCurrentUser()
-  const { isDemoMode, authenticatedUserId } = useDemoMode()
+  const { authenticatedUserId } = useAuthSession()
   const navigate = useNavigate()
   const location = useLocation()
   const { toast } = useToast()
@@ -39,9 +50,9 @@ export default function TrustCard() {
   const [copied, setCopied] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  const [activeSection, setActiveSection] = useState<TrustCardSection>('score')
   const candidateName = trustCard?.candidateName || profile?.fullName || 'Candidate'
   const summary = trustCard?.aiSummary ?? ''
-  const scoreReasons = trustCard?.scoreReasons ?? []
   const education = {
     college: trustCard?.education?.college || profile?.college || null,
     degree: trustCard?.education?.degree || profile?.degree || null,
@@ -49,21 +60,8 @@ export default function TrustCard() {
     graduationYear: trustCard?.education?.graduationYear || profile?.graduationYear || null,
   }
   const educationDetails = educationLines(education)
-  const signals = useMemo(() => trustCard ? [
-    { label: 'Trust Score', value: String(trustCard.trustScore), score: trustCard.trustScore },
-    { label: isDemoMode ? 'Resume Match' : 'Overall Match', value: `${trustCard.overallMatch}%`, score: trustCard.overallMatch },
-    { label: 'Role Fit', value: `${trustCard.roleFit}%`, score: trustCard.roleFit },
-    { label: 'Proof', value: `${trustCard.proofScore}%`, score: trustCard.proofScore },
-    { label: 'Gaps', value: `${trustCard.gapScore}%`, score: trustCard.gapScore }
-  ] : [], [isDemoMode, trustCard])
-  const metricHelp: Record<string, string> = {
-    'Overall Match': 'The average of Role Fit and repeated Proof returned by the current matching model.',
-    'Resume Match': 'Ananya’s demo resume-to-job match for the Atlassian role.',
-    'Trust Score': 'The deterministic five-component Candidate Trust Score returned by the backend.',
-    'Role Fit': 'How much meaningful job-description terminology appears in the resume.',
-    Proof: 'How consistently matched job requirements are supported by repeated resume evidence.',
-    Gaps: 'The percentage of job-description terminology not currently covered by the resume.',
-  }
+  const topStrength = useMemo(() => trustCard?.strengths[0] || trustCard?.evidence[0] || 'No evidence summary was saved for this card.', [trustCard])
+  const topImprovement = useMemo(() => trustCard?.actionPlan[0]?.requirement || trustCard?.missingSkills[0] || 'No priority improvement was identified.', [trustCard])
 
   useEffect(() => {
     if (trustCard && sessionStorage.getItem('refai_trust_card_celebration') === 'pending') {
@@ -133,15 +131,16 @@ export default function TrustCard() {
 
   return (
     <><ConfettiBurst active={celebrate} onComplete={() => setCelebrate(false)} /><PageShell
-      eyebrow="Trust card"
-      title="Review the evidence employees will see"
-      description="This Trust Card condenses your role fit, supporting proof, and remaining gaps. Check the summary before improving the evidence or sharing it with an employee."
+      eyebrow="Candidate intelligence"
+      title="Candidate Intelligence Dashboard"
+      description="A compact view of the deterministic Trust Score, evidence, and the next most useful improvement."
       action={
         <div className="flex flex-wrap gap-3">
           <SecondaryButton onClick={() => navigate('/dashboard/resume-analysis')}>Back to Analysis</SecondaryButton>
-          <SecondaryButton onClick={() => navigate('/dashboard#ai-recommendations')}>Next: AI Recommendations</SecondaryButton>
+          <SecondaryButton onClick={() => navigate('/dashboard/intelligence-lab')} disabled={!trustCard} disabledReason="Generate a Trust Card first"><FlaskConical className="mr-2 size-4" />Intelligence Lab</SecondaryButton>
+          <SecondaryButton onClick={() => navigate('/dashboard/opportunities')}>Next: AI Recommendations</SecondaryButton>
           <SecondaryButton onClick={copySummary} disabled={!summary} disabledReason="Generate a Trust Card first">{copied ? <><Check className="mr-2 size-4 text-emerald-600" />Copied</> : 'Copy summary'}</SecondaryButton>
-          {!isDemoMode && trustCard ? <SecondaryButton onClick={regenerateTrustCard} loading={regenerating}><RefreshCw className="mr-2 size-4" />Regenerate</SecondaryButton> : null}
+          {trustCard ? <SecondaryButton onClick={regenerateTrustCard} loading={regenerating}><RefreshCw className="mr-2 size-4" />Regenerate</SecondaryButton> : null}
           <PrimaryButton onClick={shareTrustCard} disabled={!trustCard} disabledReason="Generate a Trust Card first">
             Share with employee
             <ArrowRight className="ml-2 size-4" />
@@ -150,116 +149,61 @@ export default function TrustCard() {
       }
     >
       {!trustCard && trustCardResource.notFound ? <div className="mb-6"><InlineFeedback tone="info">No valid persisted Trust Card is available for this analysis. Return to the completed analysis to generate one.</InlineFeedback></div> : null}
-      {trustCard?.narrativeSource === 'deterministic_fallback' ? <div className="mb-6"><InlineFeedback tone="info">The deterministic Candidate Trust Score is complete. The optional Groq narrative was unavailable, so RefAI saved a grounded fallback summary.</InlineFeedback></div> : null}
-      <TrustScoreExplanation isDemoMode={isDemoMode} trustCard={trustCard} />
-      {isDemoMode ? <div className="mt-6"><ClaimVerificationPanel initialResult={demoClaimVerification} /></div> : trustCard?.id ? <div className="mt-6"><ClaimVerificationPanel trustCardId={trustCard.id} /></div> : null}
-      <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card className="overflow-hidden bg-slate-950 text-white">
-          <div className="border-b border-white/10 p-6 sm:p-8">
-            <div className="flex items-center justify-between">
-              <RefAILogo inverse markClassName="size-10" wordmarkClassName="text-lg font-semibold" subtitle="Candidate Trust Card" subtitleClassName="text-sm text-slate-400" />
-              <Badge className="border-white/10 bg-white/10 text-white">{isDemoMode ? 'Demo · Employee view' : 'Employee view'}</Badge>
+      <Card className="overflow-hidden border-slate-800 bg-slate-950 text-white shadow-[0_24px_60px_-32px_rgba(15,23,42,0.85)]">
+        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.15fr_0.85fr] lg:gap-10 lg:p-10">
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <RefAILogo inverse markClassName="size-9" wordmarkClassName="text-base font-semibold" subtitle="Candidate Trust Card" subtitleClassName="text-xs text-slate-400" />
+              <Badge className="border-white/10 bg-white/10 text-white">Saved employee view</Badge>
             </div>
-
-            <div className="mt-8 flex items-center gap-4">
+            <div className="mt-7 flex items-center gap-4">
               <Avatar initials={profile?.initials ?? '—'} size="lg" className="border-4 border-white/10 bg-white text-black" />
               <div>
-                <h2 className="text-2xl font-semibold">{candidateName}</h2>
+                <h2 className="text-2xl font-semibold tracking-tight">{candidateName}</h2>
                 <p className="mt-1 text-sm text-slate-400">{trustCard?.role || 'No target role available'}</p>
               </div>
             </div>
-
-            <div className="mt-8 space-y-3 text-sm text-slate-300">
-              <div className="flex items-center gap-2">
-                <BriefcaseBusiness className="size-4 text-slate-400" />
-                <span>Target: {trustCard?.role || 'Not available'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <GraduationCap className="size-4 text-slate-400" />
-                <div>{educationDetails.length ? educationDetails.map((line) => <p key={line}>{line}</p>) : <span>Educational data not available</span>}</div>
-              </div>
+            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300">
+              <span className="inline-flex items-center gap-1.5"><BriefcaseBusiness className="size-3.5 text-slate-500" />Target role: {trustCard?.role || 'Not available'}</span>
+              <span className="inline-flex items-start gap-1.5"><GraduationCap className="mt-0.5 size-3.5 shrink-0 text-slate-500" />{educationDetails.length ? educationDetails.join(' · ') : 'Education not recorded'}</span>
             </div>
           </div>
-
-          <div className="p-6 sm:p-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Trust Score</p>
-                <p className="mt-2 text-4xl font-semibold">{trustCard ? <AnimatedNumber value={trustCard.trustScore} /> : '—'}</p>
-              </div>
-              <div className="flex size-14 items-center justify-center rounded-full border-4 border-emerald-400 text-emerald-300">
-                <Check className="size-6" />
-              </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
+            <div className="col-span-2 rounded-2xl border border-white/10 bg-white/[0.06] p-5 sm:col-span-1 lg:col-span-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Candidate Trust Score</p>
+              <div className="mt-2 flex items-end gap-2"><p className="text-5xl font-semibold tracking-tight tabular-nums">{trustCard ? <AnimatedNumber value={trustCard.trustScore} /> : '—'}</p><span className="mb-1 text-sm text-slate-400">/100</span></div>
+              <p className="mt-2 text-xs text-slate-400">Five deterministic components. AI never calculates this number.</p>
             </div>
-
-            <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="size-4 text-emerald-400" />
-                <span className="text-sm font-semibold">{trustCard ? isDemoMode ? 'Demo resume evidence processed' : 'Resume evidence processed' : 'Trust Card not generated'}</span>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-slate-400">{trustCard ? 'Evidence was processed by the Trust Card API.' : 'No generated Trust Card is available.'}</p>
-            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3.5"><p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">Reliability</p><p className="mt-2 text-sm font-semibold text-white">{trustCard?.analysisReliability?.label || 'Not recorded'}</p></div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3.5"><p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">Evidence</p><p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-white"><ShieldCheck className="size-4 text-emerald-400" />{trustCard ? 'Processed' : 'Awaiting analysis'}</p></div>
           </div>
-        </Card>
+        </div>
+        <div className="grid border-t border-white/10 bg-black/15 sm:grid-cols-2">
+          <div className="border-b border-white/10 p-5 sm:border-b-0 sm:border-r sm:border-white/10 sm:px-8"><p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-300">Strongest evidence</p><p className="mt-2 text-sm leading-6 text-slate-100">{topStrength}</p></div>
+          <div className="p-5 sm:px-8"><p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-200">Highest-priority improvement</p><p className="mt-2 text-sm leading-6 text-slate-100">{topImprovement}</p></div>
+        </div>
+      </Card>
 
-        <div className="space-y-6">
-          <Card className="p-6 sm:p-8">
-            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Employee review summary</p>
-                <h3 className="mt-2 text-2xl font-semibold tracking-tight">What supports this referral request</h3>
-              </div>
-              <Badge tone={isDemoMode ? "warning" : trustCard ? "success" : "neutral"}>
-                <ShieldCheck className="mr-1.5 size-3.5" />
-                {isDemoMode ? 'Demo evidence' : trustCard ? 'Evidence available' : 'Awaiting analysis'}
-              </Badge>
-            </div>
+      {trustCard?.narrativeSource === 'deterministic_fallback' ? <div className="mt-5"><InlineFeedback tone="info">The deterministic Candidate Trust Score is complete. The optional Groq narrative was unavailable, so RefAI saved a grounded fallback summary.</InlineFeedback></div> : null}
 
-            <div className="mt-7 grid gap-3 sm:grid-cols-2">
-              {signals.map((signal) => (
-                <div key={signal.label} className="rounded-xl border border-slate-200 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-slate-500"><MetricTooltip label={signal.label} explanation={metricHelp[signal.label]} /></span>
-                    <span className="text-sm font-semibold"><AnimatedNumber value={signal.score} suffix="%" /></span>
-                  </div>
-                  <div className="mt-3"><ProgressBar value={signal.score} /></div>
-                </div>
-              ))}
-            </div>
-            {trustCard?.analysisReliability ? <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-sm font-semibold">Analysis Reliability · {trustCard.analysisReliability.label}</p><p className="mt-2 text-sm leading-6 text-slate-700">{trustCard.analysisReliability.basis}</p><p className="mt-2 text-xs leading-5 text-slate-500"><span className="font-semibold">Limitations:</span> {trustCard.analysisReliability.limitations}</p></div> : <p className="mt-4 text-xs text-slate-500">Analysis Reliability was not recorded for this older saved Trust Card.</p>}
-            {scoreReasons.length > 0 ? <ScoreExplanation className="mt-7" title="Why these referral signals?" points={scoreReasons} /> : null}
-            {signals.length === 0 ? <EmptyState className="mt-7" icon={ShieldCheck} title="Generate your first Trust Card" description="A Trust Card explains your resume match, proof strength, skill gaps, and referral readiness in an employee-friendly summary." action={<PrimaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</PrimaryButton>} /> : null}
-            {trustCard ? <div className="mt-7 rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Referral readiness</p><p className="mt-2 text-lg font-semibold">{trustCard.referralReadiness}</p><p className="mt-2 text-sm leading-6 text-slate-600">Ready at 75 or above, improve before requesting from 55–74, and not ready below 55. Current Trust Score: {trustCard.trustScore}.</p></div> : null}
-
-            <div className="mt-7 rounded-xl border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-center gap-2">
-                <Sparkles className="size-4 text-slate-700" />
-                <p className="text-sm font-semibold">How RefAI summarizes the evidence</p>
-              </div>
-              {summary ? <p className="mt-3 text-sm leading-6 text-slate-600">{summary}</p> : <EmptyState className="mt-4" icon={Sparkles} title="AI summary needs resume evidence" description="Complete a target-role analysis and RefAI will summarize the strongest evidence an employee can review." action={<PrimaryButton onClick={() => navigate(workflow.analysisAction.href)}>{workflow.analysisAction.label}</PrimaryButton>} />}
-            </div>
-          </Card>
-
-          <Card className="p-6 sm:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                <UserCheck className="size-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Proof points for employees</h3>
-                <p className="mt-1 text-sm text-slate-500">A concise snapshot of your preparation, supporting evidence, and remaining gaps.</p>
-              </div>
-            </div>
-
-            {trustCard ? <div className="mt-6 grid gap-4 md:grid-cols-2"><div className="rounded-xl border border-slate-200 p-5"><p className="text-sm font-semibold">Strengths</p><ul className="mt-3 space-y-2">{trustCard.strengths.map((item) => <li key={item} className="text-sm leading-6 text-slate-600">• {item}</li>)}</ul></div><div className="rounded-xl border border-slate-200 p-5"><p className="text-sm font-semibold">Missing requirements</p><ul className="mt-3 space-y-2">{trustCard.missingSkills.length ? trustCard.missingSkills.slice(0, 5).map((item) => <li key={item} className="text-sm leading-6 text-slate-600">• {item}</li>) : <li className="text-sm leading-6 text-slate-600">No missing requirements were identified.</li>}</ul></div></div> : <EmptyState className="mt-6" icon={UserCheck} title="Generate a Trust Card to review evidence" description="Complete resume analysis first to load strengths, missing skills, and a focused action plan." action={<PrimaryButton onClick={() => navigate(workflow.analysisAction.href)}>{workflow.analysisAction.label}</PrimaryButton>} />}
-          </Card>
-
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-100/70 p-1.5" role="tablist" aria-label="Candidate intelligence sections">
+        <div className="flex snap-x gap-1 overflow-x-auto pb-0.5">
+          {sections.map((section) => {
+            const Icon = section.icon
+            const active = activeSection === section.id
+            return <button key={section.id} id={`trust-card-tab-${section.id}`} type="button" role="tab" aria-selected={active} aria-controls={`trust-card-panel-${section.id}`} onClick={() => setActiveSection(section.id)} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 ${active ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-950'}`}><Icon className="size-4" aria-hidden="true" />{section.label}</button>
+          })}
         </div>
       </div>
-      <ActionPlanPanel className="mt-6" plan={trustCard?.actionPlan ?? []} allGaps={trustCard?.missingRequirements ?? []} />
-      {!isDemoMode ? <div className="mt-6"><ProofVaultPanel editable trustCardId={trustCard?.id} /></div> : null}
-      {!isDemoMode && trustCard?.id ? <div className="mt-6"><ImprovementSimulatorPanel /></div> : null}
-      <AITransparencyPanel session={analysisSession} isDemoMode={isDemoMode} includeEvidenceDetails />
+
+      <section id={`trust-card-panel-${activeSection}`} role="tabpanel" aria-labelledby={`trust-card-tab-${activeSection}`} className="mt-5">
+        {activeSection === 'score' ? <TrustScoreExplanation trustCard={trustCard} /> : null}
+        {activeSection === 'evidence' ? <div className="space-y-5">{trustCard?.id ? <ClaimVerificationPanel trustCardId={trustCard.id} importantSkills={analysisSession.analysis?.matchedSkills ?? []} missingRequirements={trustCard.missingRequirements} /> : <EmptyState icon={ShieldCheck} title="No saved evidence to review yet" description="Generate a Trust Card to inspect claim verification and supporting Proof Vault links." action={<PrimaryButton onClick={() => navigate(workflow.trustCardAction.href)}>{workflow.trustCardAction.label}</PrimaryButton>} />}<ProofVaultPanel editable trustCardId={trustCard?.id} /></div> : null}
+        {activeSection === 'action' ? <div className="space-y-5"><ActionPlanPanel plan={trustCard?.actionPlan ?? []} allGaps={trustCard?.missingRequirements ?? []} /><Card className="p-5 sm:p-6"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 size-4 text-slate-700" /><div><p className="text-sm font-semibold">Grounded summary</p>{summary ? <p className="mt-2 text-sm leading-6 text-slate-600">{summary}</p> : <p className="mt-2 text-sm leading-6 text-slate-500">No narrative summary was saved for this Trust Card.</p>}</div></div></Card></div> : null}
+        {activeSection === 'simulator' ? trustCard?.id ? <ImprovementSimulatorPanel /> : <EmptyState icon={Lightbulb} title="Generate a Trust Card to use the simulator" description="The simulator uses your saved analysis and Trust Card to estimate potential improvements without changing your profile." /> : null}
+        {activeSection === 'passport' ? <TrustPassportPanel trustCardId={trustCard?.id} /> : null}
+        {activeSection === 'processing' ? <AITransparencyPanel session={analysisSession} includeEvidenceDetails /> : null}
+      </section>
     </PageShell></>
   )
 }

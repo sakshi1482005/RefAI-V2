@@ -1,5 +1,6 @@
 import {
   FileText,
+  Compass,
   LayoutDashboard,
   ShieldCheck,
   type LucideIcon,
@@ -16,6 +17,7 @@ export const studentNavItems: StudentNavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Resume', href: '/dashboard/resume', icon: FileText },
   { label: 'Trust Card', href: '/dashboard/trust-card', icon: ShieldCheck },
+  { label: 'Opportunities', href: '/dashboard/opportunities', icon: Compass },
 ]
 
 const destination = (href: string) => {

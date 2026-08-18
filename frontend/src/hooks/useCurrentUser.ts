@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { useDemoMode } from '../context/DemoModeContext'
-import { demoStudent } from '../lib/demoData'
+import { useAuthSession } from '../context/AuthSessionContext'
 import { api } from '../lib/apiClient'
 import { friendlyErrorMessage } from '../lib/requestSafety'
 import { createUserScopedResource } from '../lib/userScopedResource'
@@ -88,14 +87,14 @@ export function setCurrentUserProfile(userId: string, profile: CurrentUserProfil
 }
 
 export function useCurrentUser() {
-  const { isDemoMode, authenticatedUser, authenticatedUserId, authLoading } = useDemoMode()
+  const { authenticatedUser, authenticatedUserId, authLoading } = useAuthSession()
   const userId = authenticatedUserId ?? ''
   const subscribe = useCallback((listener: () => void) => userId ? profileResource.subscribe(userId, listener) : () => undefined, [userId])
   const getSnapshot = useCallback(() => userId ? profileResource.getSnapshot(userId) : EMPTY_PROFILE_STATE, [userId])
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   useEffect(() => {
-    if (isDemoMode || authLoading) return
+    if (authLoading) return
     profileResource.activate(authenticatedUserId)
     if (!authenticatedUserId || !authenticatedUser) return
     const base = toProfile(authenticatedUser)
@@ -104,11 +103,11 @@ export function useCurrentUser() {
       const { data } = await api.get<StudentProfileResponse>('/auth/student-profile', { signal })
       return mergeStudentProfile(base, data)
     })
-  }, [authLoading, authenticatedUser, authenticatedUserId, isDemoMode])
+  }, [authLoading, authenticatedUser, authenticatedUserId])
 
   return useMemo(() => ({
-    profile: isDemoMode ? demoStudent : state.data,
-    loading: isDemoMode ? false : authLoading || state.loading || (Boolean(authenticatedUserId) && !state.loaded),
-    error: isDemoMode || !state.error ? null : friendlyErrorMessage(state.error, 'Unable to load the current user.'),
-  }), [authLoading, authenticatedUserId, isDemoMode, state.data, state.error, state.loaded, state.loading])
+    profile: state.data,
+    loading: authLoading || state.loading || (Boolean(authenticatedUserId) && !state.loaded),
+    error: !state.error ? null : friendlyErrorMessage(state.error, 'Unable to load the current user.'),
+  }), [authLoading, authenticatedUserId, state.data, state.error, state.loaded, state.loading])
 }

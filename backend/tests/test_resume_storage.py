@@ -33,6 +33,22 @@ class PersistedResumeSupabase:
         raise AssertionError("Storage listing must not run when a persisted path exists")
 
 
+class FailingBucket:
+    def upload(self, **_kwargs):
+        raise RuntimeError("provider request failed: secret-detail")
+
+    def create_signed_url(self, *_args):
+        raise RuntimeError("provider request failed: secret-detail")
+
+
+class FailingStorageSupabase:
+    class Storage:
+        def from_(self, _bucket):
+            return FailingBucket()
+
+    storage = Storage()
+
+
 class ResumeStorageTests(unittest.TestCase):
     def test_persisted_analysis_path_is_preferred_over_storage_listing(self):
         fake = PersistedResumeSupabase([{
@@ -49,6 +65,24 @@ class ResumeStorageTests(unittest.TestCase):
             "path": "student-1/resume-1.pdf",
             "file_name": "candidate.pdf",
         })
+
+    def test_upload_provider_failure_is_normalized_without_provider_detail(self):
+        with patch.object(resume_storage, "supabase", FailingStorageSupabase()), \
+             patch.object(resume_storage.settings, "resume_storage_bucket", "resumes"), \
+             patch.object(resume_storage.settings, "supabase_service_key", "service-key"):
+            with self.assertRaises(resume_storage.ResumeStorageUnavailable) as raised:
+                resume_storage.store_resume("student-1", "resume-1", b"pdf")
+        self.assertEqual(str(raised.exception), "Private resume storage is temporarily unavailable")
+        self.assertNotIn("secret-detail", str(raised.exception))
+
+    def test_signing_provider_failure_is_normalized_without_provider_detail(self):
+        with patch.object(resume_storage, "supabase", FailingStorageSupabase()), \
+             patch.object(resume_storage.settings, "resume_storage_bucket", "resumes"), \
+             patch.object(resume_storage.settings, "supabase_service_key", "service-key"):
+            with self.assertRaises(resume_storage.ResumeStorageUnavailable) as raised:
+                resume_storage.create_resume_signed_url("student-1/resume-1.pdf")
+        self.assertEqual(str(raised.exception), "Private resume storage is temporarily unavailable")
+        self.assertNotIn("secret-detail", str(raised.exception))
 
 
 if __name__ == "__main__":

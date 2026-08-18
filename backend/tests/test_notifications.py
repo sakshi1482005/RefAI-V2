@@ -1,6 +1,11 @@
 from pathlib import Path
 import unittest
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.api.routes import notifications as notification_routes
+from app.core.security import get_current_user
 from app.models.schemas import EmployeeDecisionUpdate
 from app.services.referral_requests import ReferralRequestService
 from test_referral_requests import FakeRepository
@@ -49,7 +54,39 @@ class NotificationMigrationTests(unittest.TestCase):
         self.assertIn("event_key text not null unique", sql)
         self.assertIn("grant update (read_at)", sql)
 
+    def test_soft_clear_migration_keeps_owner_only_update_access(self):
+        sql = (Path(__file__).resolve().parents[2] / "supabase" / "migrations" / "202608120001_notification_soft_clear.sql").read_text(encoding="utf-8").lower()
+        self.assertIn("add column if not exists cleared_at", sql)
+        self.assertIn("grant update (cleared_at)", sql)
+
+
+class NotificationClearRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.app = FastAPI()
+        self.app.include_router(notification_routes.router)
+        self.actor_id = "00000000-0000-0000-0000-000000000111"
+        self.app.dependency_overrides[get_current_user] = lambda: {"sub": self.actor_id}
+        self.client = TestClient(self.app)
+        self.original_service = notification_routes.service
+
+        class ServiceStub:
+            actor_id: str | None = None
+            def clear_all(self, actor_id: str) -> int:
+                self.actor_id = actor_id
+                return 2
+
+        self.service = ServiceStub()
+        notification_routes.service = self.service
+
+    def tearDown(self):
+        notification_routes.service = self.original_service
+
+    def test_clear_all_uses_only_the_authenticated_recipient(self):
+        response = self.client.patch("/notifications/clear-all")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"cleared": 2})
+        self.assertEqual(self.service.actor_id, self.actor_id)
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -6,7 +6,6 @@ import { useToast } from '../components/feedback/ToastProvider'
 import { setCurrentUserProfile, useCurrentUser } from '../hooks/useCurrentUser'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
-import { useDemoMode } from '../context/DemoModeContext'
 import { friendlyErrorMessage, requireOnline, withRequestTimeout } from '../lib/requestSafety'
 import { api } from '../lib/apiClient'
 import type { StudentProfileData } from '../types'
@@ -146,7 +145,6 @@ export default function ProfileSettings() {
   const { profile, loading, error: profileError } = useCurrentUser()
   const { toast } = useToast()
   const navigate = useNavigate()
-  const { isDemoMode } = useDemoMode()
   const [form, setForm] = useState<ProfileForm>(EMPTY_PROFILE)
   const [savedForm, setSavedForm] = useState<ProfileForm>(EMPTY_PROFILE)
   const [errors, setErrors] = useState<ProfileErrors>({})
@@ -159,7 +157,7 @@ export default function ProfileSettings() {
   const [savedNotifications, setSavedNotifications] = useState<NotificationPreferences>(DEFAULT_NOTIFICATIONS)
   const [savingNotifications, setSavingNotifications] = useState(false)
 
-  const notificationStorageKey = `refai-notifications:${isDemoMode ? 'demo-isolated' : profile?.id ?? 'current-user'}`
+  const notificationStorageKey = `refai-notifications:${profile?.id ?? 'current-user'}`
 
   useEffect(() => {
     const metadataPreferences = profile?.notificationPreferences
@@ -252,21 +250,19 @@ export default function ProfileSettings() {
 
     try {
       requireOnline()
-      if (!isDemoMode) {
-        await api.put<StudentProfileData>('/auth/student-profile', {
-          college: normalized.college.trim() || null,
-          degree: normalized.degree.trim() || null,
-          branch: normalized.branch.trim() || null,
-          graduationYear: normalized.graduationYear || null,
-          preferredRole: normalized.preferredRole.trim() || null,
-          preferredCompany: normalized.preferredCompany.trim() || null,
-          skills: normalized.skills.split(',').map((skill) => skill.trim()).filter(Boolean),
-          bio: normalized.bio.trim() || null,
-          linkedinUrl: normalized.linkedinUrl.trim() || null,
-          githubUrl: normalized.githubUrl.trim() || null,
-          portfolioUrl: normalized.portfolioUrl.trim() || null,
-        })
-      }
+      await api.put<StudentProfileData>('/auth/student-profile', {
+        college: normalized.college.trim() || null,
+        degree: normalized.degree.trim() || null,
+        branch: normalized.branch.trim() || null,
+        graduationYear: normalized.graduationYear || null,
+        preferredRole: normalized.preferredRole.trim() || null,
+        preferredCompany: normalized.preferredCompany.trim() || null,
+        skills: normalized.skills.split(',').map((skill) => skill.trim()).filter(Boolean),
+        bio: normalized.bio.trim() || null,
+        linkedinUrl: normalized.linkedinUrl.trim() || null,
+        githubUrl: normalized.githubUrl.trim() || null,
+        portfolioUrl: normalized.portfolioUrl.trim() || null,
+      })
       const { error } = await withRequestTimeout(supabase.auth.updateUser({
         data: {
           full_name: normalized.fullName,
@@ -287,7 +283,7 @@ export default function ProfileSettings() {
       }))
       if (error) throw error
 
-      if (!isDemoMode && profile) {
+      if (profile) {
         const fullName = normalized.fullName
         setCurrentUserProfile(profile.id, {
           ...profile,
@@ -321,13 +317,11 @@ export default function ProfileSettings() {
     setSavingNotifications(true)
     try {
       window.localStorage.setItem(notificationStorageKey, JSON.stringify(notifications))
-      if (!isDemoMode) {
-        requireOnline()
-        const { error } = await withRequestTimeout(supabase.auth.updateUser({ data: { notification_preferences: notifications } }))
-        if (error) throw error
-      }
+      requireOnline()
+      const { error } = await withRequestTimeout(supabase.auth.updateUser({ data: { notification_preferences: notifications } }))
+      if (error) throw error
       setSavedNotifications(notifications)
-      toast({ title: 'Notification preferences saved', description: isDemoMode ? 'Demo preferences were saved only in this browser.' : 'Your RefAI notification choices were updated.', tone: 'success' })
+      toast({ title: 'Notification preferences saved', description: 'Your RefAI notification choices were updated.', tone: 'success' })
     } catch (error) {
       toast({ title: 'Preferences could not be synced', description: friendlyErrorMessage(error, 'Your notification preferences could not be saved. Please try again.'), tone: 'error' })
     } finally {
@@ -348,7 +342,7 @@ export default function ProfileSettings() {
           <SecondaryButton onClick={cancelEditing} disabled={saving}><X className="mr-2 size-4" />Cancel</SecondaryButton>
           <PrimaryButton onClick={saveProfile} loading={saving}>Save changes</PrimaryButton>
         </div>
-      ) : <div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => navigate('/dashboard')}>Back to Dashboard</SecondaryButton><SecondaryButton onClick={() => setEditing(true)} disabled={busy || isDemoMode} disabledReason={isDemoMode ? 'The demo profile is read-only and isolated from authenticated profiles' : 'Profile details are still loading'}><Pencil className="mr-2 size-4" />Edit profile</SecondaryButton><PrimaryButton onClick={() => navigate('/dashboard/resume')}>Continue to Resume</PrimaryButton></div>}
+      ) : <div className="flex flex-wrap gap-2"><SecondaryButton onClick={() => navigate('/dashboard')}>Back to Dashboard</SecondaryButton><SecondaryButton onClick={() => setEditing(true)} disabled={busy} disabledReason="Profile details are still loading"><Pencil className="mr-2 size-4" />Edit profile</SecondaryButton><PrimaryButton onClick={() => navigate('/dashboard/resume')}>Continue to Resume</PrimaryButton></div>}
     >
       {profileError ? <InlineFeedback tone="error">{friendlyErrorMessage(profileError, 'Account details could not be loaded. Refresh the page to try again.')}</InlineFeedback> : null}
       {profileLoadError ? <InlineFeedback tone="error">{profileLoadError}</InlineFeedback> : null}

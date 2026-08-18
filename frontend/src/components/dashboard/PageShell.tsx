@@ -3,10 +3,8 @@ import { LayoutDashboard, ShieldCheck, ArrowRight, Menu, X, type LucideIcon } fr
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { IconButton, Logo } from './primitives'
 import StudentNavigation from './StudentNavigation'
-import DemoModeBanner from './DemoModeBanner'
 import NetworkStatusBanner from '../feedback/NetworkStatusBanner'
 import { useSectionReveal } from '../../hooks/useSectionReveal'
-import RecommendedNextStep from './RecommendedNextStep'
 import ProfileMenu from './ProfileMenu'
 import NotificationCentre from './NotificationCentre'
 
@@ -87,7 +85,6 @@ export default function PageShell({ title, description, eyebrow, action, childre
         ) : null}
       </header>
       <NetworkStatusBanner />
-      <DemoModeBanner />
 
       <main id="main-content" tabIndex={-1} className={`mx-auto max-w-[1440px] px-4 outline-none sm:px-6 lg:px-8 ${compact ? 'space-y-6 py-6 sm:py-8' : 'space-y-8 py-7 sm:py-10'}`}>
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -100,8 +97,6 @@ export default function PageShell({ title, description, eyebrow, action, childre
             {action ? <div>{action}</div> : null}
           </div>
         </section>
-
-        <RecommendedNextStep />
 
         {children}
       </main>
