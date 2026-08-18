@@ -8,10 +8,16 @@ const MAX_LIFT = 4
 const NEUTRAL_TRANSFORM = 'perspective(1200px) rotateX(0deg) rotateY(0deg) translate3d(0, 0, 0)'
 
 const EXAMPLE_TARGET_COMPANIES = [
-  'Atlassian · Associate Software Engineer',
-  'Capgemini · Software Engineer',
-  'Zoho · Backend Engineer',
-  'Razorpay · Product Engineer',
+  'Atlassian · ',
+  'Capgemini · ',
+  'Zoho · ',
+  'Razorpay · ',
+  'TCS · ',
+  'BNY · ',
+  'Deloitte · ',
+  'Cognifyz · ',
+  'Prodigy · ',
+  'ResponseNET · ',
 ]
 
 export default function Hero() {
@@ -144,7 +150,7 @@ export default function Hero() {
                       </div>
                       <div>
                         <span className="risk-stat-label">Resume quality</span>
-                  <span className="risk-stat-value">Strong</span>
+                        <span className="risk-stat-value">Strong</span>
                       </div>
                       <div>
                         <span className="risk-stat-label">Reviewer</span>
@@ -200,7 +206,7 @@ export default function Hero() {
             {renderCompanyMarqueeSet('b')}
           </div>
         </div>
-        
+
       </section>
     </section>
   )
